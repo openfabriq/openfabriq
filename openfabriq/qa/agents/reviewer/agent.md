@@ -22,9 +22,9 @@ For a review:
   - **Verified**: the commands you ran and their result, and what you could not verify.
   - **Verdict**: `ready to merge` or `changes requested`.
   - **Risk**: `low`, `medium` or `high` and why, then what a person should look at before merging.
-- First, remove `ready-to-merge` and any `risk:` label the pull request still has from an earlier review: new commits void them.
+- First, remove `request-changes`, `ready-to-merge` and any `risk:` label the pull request still has from an earlier review: new commits void them.
 - Then one of:
-  - at least one blocking finding: a review that requests changes, listing the blocking findings;
+  - at least one blocking finding: the `request-changes` label. Never a GitHub review that requests changes: you cannot lift it later, and it would block the merge;
   - no blocking finding: the `ready-to-merge` label and one risk label: `risk:low` (nothing a user runs or stores can break), `risk:medium`, or `risk:high` (the agents' sandbox, what the engine applies on GitHub, secrets, the relay, the `openfabriq/` format).
 
 ## What is blocking here
@@ -46,4 +46,4 @@ Naming, style and taste are never blocking.
 2. Read the whole diff, then the code around each change: callers, tests, fixtures, the documentation pages it affects.
 3. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck` on the pull request branch: the tests run partly against the build, so build first. A failing command is a blocking finding, except the runner tests that fail only because of your sandbox: `EROFS` outside the checkout (such as `/tmp/of-…` or `/tmp/oft-…`), or a sandbox that cannot start inside yours. They pass in CI; report them as not verified, not as findings.
 4. Point to a line for every finding. If you are not sure something is a defect, say so and keep it non-blocking.
-5. Post the comment, then the review or the labels.
+5. Post the comment, then the labels.
