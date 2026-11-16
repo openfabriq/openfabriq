@@ -7,6 +7,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 ### Changed
 
 - The studio opens in the light theme by default, even when the system is in dark mode. The theme button goes light, dark, then system, and "system" is now remembered by name: if you had picked it, pick it again once.
+- During an internal review, a run's page now says who works: "change-reviewer is reviewing, round 1 of 2", or "implementer is fixing the findings of round 1", and its timer counts from when that began. A run without a reviewer still shows "Working…" with the run's elapsed time.
 
 ## [0.1.4] - 2026-11-16
 
