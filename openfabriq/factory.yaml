@@ -1,5 +1,5 @@
 name: openfabriq
-description: The factory openfabriq runs on its own repository. Issues get a first answer, pull requests a review, and the documentation site follows the code. Ordered by area; people merge.
+description: The factory openfabriq runs on its own repository. Issues get a first answer, a maintainer's ready issue gets a reviewed pull request, pull requests a review, and the documentation site follows the code. Ordered by area; people merge.
 repository: openfabriq/openfabriq
 maintainers: [eixoweb] # only their actions start the factory, except where an automation says from: anyone
 model: sonnet # the default model of the agents
@@ -11,10 +11,11 @@ commands: # the project's commands, by name
   test: pnpm build && pnpm test # some tests run against the built CLI
   lint: pnpm lint
   typecheck: pnpm typecheck
-checks: [lint, typecheck] # run by the engine before any pull request leaves the machine
+checks: [lint, typecheck, test] # run by the engine before any pull request leaves the machine
 
 limits:
-  usd_per_run: 4
+  usd_per_run: 8
   usd_per_day: 30
-  minutes_per_run: 40
+  minutes_per_run: 60
+  review_rounds: 2 # rounds of internal review before a person takes over
 answer_mentions: true # the agents that open pull requests answer a maintainer's @openfabriq in a comment on them
