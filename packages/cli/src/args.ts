@@ -18,6 +18,7 @@ export function readCommandLine(args: string[]) {
 			org: { type: "string" },
 			workflows: { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
+			version: { type: "boolean", short: "v", default: false },
 		},
 	});
 	const [given, dir = "."] = positionals;

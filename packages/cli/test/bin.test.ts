@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
@@ -29,6 +29,21 @@ it.skipIf(!built)(
 		expect(result.status).toBe(1);
 		expect(result.stdout).toContain("errors in");
 	},
+);
+
+it.skipIf(!built)(
+	"--version and -v print the version and exit 0 (skipped until pnpm build makes packages/cli/dist)",
+	() => {
+		const { version } = JSON.parse(
+			readFileSync(join(ROOT, "packages/cli/package.json"), "utf8"),
+		) as { version: string };
+		for (const flag of ["--version", "-v"]) {
+			const result = openfabriq(flag);
+			expect(result.status).toBe(0);
+			expect(result.stdout.trim()).toBe(`openfabriq ${version}`);
+		}
+	},
+	60_000,
 );
 
 it.skipIf(!built)(

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { errorText, gh, localGit } from "@openfabriq/runner";
 import { type CommandLine, readCommandLine, reportsHowItWent } from "./args.js";
 import {
@@ -18,6 +19,7 @@ import { statusCommand } from "./commands/status.js";
 import { updateCommand } from "./commands/update.js";
 import { validateCommand } from "./commands/validate.js";
 import { nodeTooOld } from "./node-version.js";
+import { PACKAGE_JSON } from "./paths.js";
 import { copyToClipboard, terminalAsk, terminalConfirm } from "./prompts.js";
 import type { CommandResult } from "./result.js";
 import { canAsk, header, outcome, paintUsage, print, styled } from "./ui.js";
@@ -57,11 +59,17 @@ Commands:
   secret set <NAME> [--project owner/repo]
                            keep the value of a secret the factory declares, on this machine only
   update                   install the latest openfabriq, or say how when it came another way
+  --version, -v            print the installed version
 
 [folder] is a repository root or its openfabriq/ folder (default: current folder).`;
 
 async function main(line: CommandLine): Promise<CommandResult> {
 	const { command, dir, positionals, values } = line;
+	if (values.version)
+		return {
+			code: 0,
+			output: `openfabriq ${(JSON.parse(readFileSync(PACKAGE_JSON, "utf8")) as { version: string }).version}`,
+		};
 	// The mark and the name, where a command starts a conversation or a long run, and over the usage.
 	if (styled && ["init", "start", "connect", undefined].includes(command))
 		console.log(header(command && [command, positionals[1]].join(" ").trim()));
