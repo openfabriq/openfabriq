@@ -4,6 +4,16 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-16
+
+### Added
+
+- `openfabriq --version` (or `-v`) prints the installed version.
+
+### Changed
+
+- Releases are staged on npm by the release workflow, with provenance, and published once a maintainer approves them; the Homebrew formula follows npm by itself.
+
 ## [0.1.1] - 2026-11-16
 
 ### Changed

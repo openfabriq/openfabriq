@@ -92,7 +92,7 @@ A maintainer releases from `main`:
 1. In a pull request, set `version` in `packages/cli/package.json` and rename `[Unreleased]` in `CHANGELOG.md` to `[X.Y.Z] - YYYY-MM-DD`, with a new empty `[Unreleased]` above it.
 2. Once it is merged, tag the merge commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. Only maintainers can create `v*` tags.
 3. The `Release` workflow builds the package and creates the GitHub release, with the changelog section as notes and the npm tarball attached.
-4. The same workflow then publishes that tarball to npm, through npm's trusted publishing: no token, and the package shows its provenance. Within the hour, the formula in [`openfabriq/homebrew-tap`](https://github.com/openfabriq/homebrew-tap) follows npm's new version by itself (its `url` and `sha256`).
+4. The same workflow then stages that tarball on npm, through npm's trusted publishing: no token, and the package shows its provenance. A maintainer publishes it with their 2FA: `npm stage list openfabriq`, then `npm stage approve <id>`. Within the hour, the formula in [`openfabriq/homebrew-tap`](https://github.com/openfabriq/homebrew-tap) follows npm's new version by itself (its `url` and `sha256`).
 
 ## License
 

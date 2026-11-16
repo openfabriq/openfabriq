@@ -46,7 +46,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # npm trusts this workflow (trusted publishing): no token is stored, and the package gets its provenance.
+  # npm trusts this workflow (trusted publishing) to stage a version: no token is stored, and the package gets its provenance.
+  # The version is published only once a maintainer approves it with their 2FA (npm stage approve), so this workflow alone can never publish.
   # Only this job may ask GitHub for the identity npm checks, and it runs no code of the repository or of its dependencies.
   npm:
     needs: release
@@ -61,9 +62,9 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       # The tarball the release attached, so npm gets exactly what the release offers.
-      - name: npm publish
+      - name: npm stage publish
         run: |
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*.tgz'
-          npm publish "openfabriq-${GITHUB_REF_NAME#v}.tgz"
+          npm stage publish "openfabriq-${GITHUB_REF_NAME#v}.tgz"
         env:
           GH_TOKEN: ${{ github.token }}
