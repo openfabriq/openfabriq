@@ -1,4 +1,4 @@
-# 26: Webflow to Astro, leaving Webflow without freezing the content
+# 26: Webflow to Astro, without freezing the content
 
 A factory that moves a Webflow site to an Astro site, in the repository of the new site, close to one shot. The planner surveys the Webflow site, its CMS through the API and its published pages, settles each question with its own recommendation, and slices the work into tickets: all of it in one pull request, the plan. A maintainer reads and merges it: that is the one checkpoint. From there, each merge opens the tickets it unblocks, the builder builds each one with side by side screenshots, and before its pull request opens, the parity review compares the Webflow and the Astro pages and sends any loss back to the builder. A person merges each pull request the review approved (`ready-to-merge`, with its risk), and acts where the factory writes `needs-human`. Every Monday, the builder brings back the CMS content editors changed in Webflow that week: nobody stops writing while the site moves.
 

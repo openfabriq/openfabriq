@@ -60,7 +60,7 @@ const CATALOG: Record<
 	},
 	"02-sdlc": {
 		category: "start",
-		does: "The full flow: triage, investigation, implementation reviewed adversarially before the pull request exists, conflicts resolved, with checks and screenshots as proof.",
+		does: "The full flow: triage, investigation, implementation reviewed adversarially before the pull request exists, conflicts resolved, checks and screenshots as proof.",
 		startsOn: ["Issues", "pull requests", "Sentry", "a webhook"],
 		writes: "Labels, comments, pull requests, issues",
 	},
@@ -78,7 +78,7 @@ const CATALOG: Record<
 	},
 	"05-code-review": {
 		category: "quality",
-		does: "An advisory reviewer on every pull request, on another model.",
+		does: "An advisory reviewer on every pull request, on another model: findings with file, line, impact and fix, and a verdict.",
 		startsOn: ["pull_request.opened", "pull_request.updated"],
 		writes: "Comment, change request, ready-to-merge and a risk label",
 	},
@@ -90,13 +90,13 @@ const CATALOG: Record<
 	},
 	"07-bug-reproducer": {
 		category: "quality",
-		does: "Proves a bug with a failing test before anyone fixes it.",
+		does: "Proves a reported bug with a failing test, posted on the issue with its command and output, before anyone fixes it.",
 		startsOn: ["issue.labeled needs-repro"],
 		writes: "Comment, reproduced or cannot-reproduce",
 	},
 	"08-test-coverage": {
 		category: "quality",
-		does: "Adds behavioral tests to the least-tested module, every night.",
+		does: "Adds behavioral tests to the least-tested module, every night, in a pull request that passes your checks.",
 		startsOn: ["schedule"],
 		writes: "Pull request, or an issue when a test finds a bug",
 	},
@@ -108,7 +108,7 @@ const CATALOG: Record<
 	},
 	"10-spec-first": {
 		category: "quality",
-		does: "A spec as a pull request, approved by a human, before any code.",
+		does: "A spec as a pull request, approved by a human, before an agent writes any code for the issue.",
 		startsOn: ["issue.labeled needs-spec", "ready-for-agent"],
 		writes: "Spec PR, implementation PR reviewed against the spec",
 	},
@@ -120,13 +120,13 @@ const CATALOG: Record<
 	},
 	"12-docs-drift": {
 		category: "maintenance",
-		does: "Keeps the README and docs in line with what was merged.",
+		does: "Keeps the README and the documentation in line with what was merged, with a pull request when they drift.",
 		startsOn: ["default_branch.updated"],
 		writes: "Docs pull request, or nothing",
 	},
 	"13-release-notes": {
 		category: "maintenance",
-		does: "Writes the week's CHANGELOG entry for users.",
+		does: "Writes the week's CHANGELOG entry for users from the merged pull requests, as a pull request to review.",
 		startsOn: ["schedule, Friday"],
 		writes: "Pull request",
 	},
@@ -138,7 +138,7 @@ const CATALOG: Record<
 	},
 	"15-security-audit": {
 		category: "maintenance",
-		does: "Weekly dependency audit and review of attack surfaces.",
+		does: "A weekly audit of the dependencies and a review of the attack surfaces, with an issue for each finding.",
 		startsOn: ["schedule, Monday"],
 		writes: "One issue per finding",
 	},
@@ -156,7 +156,7 @@ const CATALOG: Record<
 	},
 	"18-tech-debt-sweeper": {
 		category: "maintenance",
-		does: "One small mechanical cleanup per pull request.",
+		does: "One small cleanup per pull request, proven to change nothing: unused code, stale TODOs, deprecated calls.",
 		startsOn: ["issue.labeled chore", "schedule"],
 		writes: "Pull request, or a chore already done closed",
 	},
@@ -208,7 +208,7 @@ const CATALOG: Record<
 	},
 	"26-webflow-to-astro": {
 		category: "projects",
-		does: "Moves a Webflow site to Astro from one plan you merge, each page checked against the old one before its pull request opens, while editors keep writing in Webflow, with a weekly content sync.",
+		does: "Moves a Webflow site to Astro from one plan you merge, each page checked against the old one, while editors keep writing in Webflow.",
 		startsOn: [
 			"A label on a migration issue",
 			"pushes to the default branch",
@@ -220,7 +220,7 @@ const CATALOG: Record<
 	},
 	"27-framer-to-astro": {
 		category: "projects",
-		does: "Moves a Framer site, which exports no code, to Astro from one plan you merge: the agents read the published pages and a CMS export, check each page against the old one before its pull request opens, and hold no Framer key.",
+		does: "Moves a Framer site, which exports no code, to Astro from one plan you merge: agents read the published pages and check each one.",
 		startsOn: [
 			"A label on a migration issue",
 			"pushes to the default branch",

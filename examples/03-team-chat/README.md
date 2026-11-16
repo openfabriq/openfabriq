@@ -1,4 +1,4 @@
-# 03: Team chat, from Slack, Linear and Sentry to GitHub
+# 03: Team chat: Slack, Linear and Sentry to GitHub
 
 The factory works where the team already talks. Someone mentions it in a Slack channel: the request becomes a GitHub issue, with its link in the thread. Someone assigns a Linear issue to openfabriq, like a teammate: an agent works in a fresh checkout of the repository, shows its progress in the issue's agent session, and answers there with the link of the pull request. A new production error in Sentry becomes a GitHub issue that explains its cause. A human reviews and merges on GitHub.
 

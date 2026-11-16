@@ -1,4 +1,4 @@
-# 27: Framer to Astro, leaving a site that exports no code
+# 27: Framer to Astro, with no code export
 
 A factory that moves a Framer site to an Astro site, in the repository of the new site, close to one shot. The planner surveys the Framer site, its CMS from an export a maintainer commits and its published pages, settles each question with its own recommendation, and slices the work into tickets: all of it in one pull request, the plan. A maintainer reads and merges it: that is the one checkpoint. From there, each merge opens the tickets it unblocks, the builder builds each one with side by side screenshots, and before its pull request opens, the parity review compares the Framer and the Astro pages and sends any loss back to the builder. A person merges each pull request the review approved (`ready-to-merge`, with its risk), and acts where the factory writes `needs-human`. When editors change the CMS in Framer, a maintainer exports it again and the builder brings the changes back: nobody stops writing while the site moves.
 
