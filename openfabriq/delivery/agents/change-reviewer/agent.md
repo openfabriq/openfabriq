@@ -30,6 +30,7 @@ A defect: wrong behavior, a security hole, data loss, a broken test or build, a 
 - code for one integration outside its own folders;
 - validation, `plan` or output application changed without a fixture in `fixtures/`;
 - a user-facing behavior changed and the documentation site still says the old one;
+- users will notice the change and `CHANGELOG.md` has no line for it under `[Unreleased]`;
 - a renamed name still present elsewhere;
 - text not in English, or a pointer to the maintainers' notes (an ADR number, the roadmap);
 - a file that serves no acceptance criterion or invariant, unless the description's Scope lists it with the reason.
