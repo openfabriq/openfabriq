@@ -4,6 +4,10 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- `openfabriq init` now asks whether an agent should review each change before the pull request opens, whichever example the factory starts from, and adds or removes the reviewer accordingly.
+
 ## [0.1.3] - 2026-11-16
 
 ### Added

@@ -37,10 +37,11 @@ Open with three or four lines of what you found. Then ask, **one question per me
 
 1. **How does work arrive?** A maintainer labels issues that are ready (→ `01-quickstart`), or every new issue goes through triage (→ `02-sdlc`). Mention Slack, Linear or Sentry only if you saw a hint or the person brings it up.
 2. **Who starts the factory?** The `maintainers`: suggest the user's login, and the regular issue authors you saw if they look like teammates.
-3. **How far does it go alone?** Only opens pull requests that a human reviews, or also reviews and fixes its own pull requests until a human merges. A human merges, unless the factory gives `merge_pull_request` with conditions: propose it only for low-risk files (`only_paths: ["docs/**"]`, imported content), never on a label alone.
-4. **What budget?** `usd_per_run` and `usd_per_day`, in API-equivalent dollars taken from their Claude subscription quota. Suggest 5 and 20.
+3. **How far does it go alone?** Only opens pull requests that a human reviews, or also comes back to its own pull requests (a review that requests changes, a conflict) until a human merges. A human merges, unless the factory gives `merge_pull_request` with conditions: propose it only for low-risk files (`only_paths: ["docs/**"]`, imported content), never on a label alone.
+4. **Does an agent review each change first?** A reviewer agent, read-only and on another model, reads the change before the pull request exists and sends it back to the implementer until it holds (`reviewed_by`); the pull request then opens with `ready-to-merge` and a risk label, or with `needs-human`. Suggest yes; it costs a review per run. `02-sdlc` has one; from `01-quickstart`, copy `02-sdlc`'s `agents/reviewer/` and add `reviewed_by: reviewer` to each automation that can `create_pull_request` or `push_to_pull_request`. On a no, remove the reviewer and every `reviewed_by`.
+5. **What budget?** `usd_per_run` and `usd_per_day`, in API-equivalent dollars taken from their Claude subscription quota. Suggest 5 and 20.
 
-Done when you know the example to start from, the maintainers, the stopping point and the limits. Four questions is the norm; ask a fifth only when the answer changes a file.
+Done when you know the example to start from, the maintainers, the stopping point, the reviewer and the limits. Five questions is the norm; ask a sixth only when the answer changes a file.
 
 ## 3. Write the factory
 
