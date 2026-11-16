@@ -32,6 +32,7 @@ For an automation with [`reviewed_by`](/factory/automations/#reviewed-by):
 
 - the chain shows the reviewer between the agent and what it wrote, with its verdict and number of rounds;
 - **Internal review** lists each round before the pull request: its verdict, the risk of an approval, the summary and the cost, opening on the findings;
+- while the run runs, the last line of the logs says who works now: *change-reviewer is reviewing, round 1 of 2*, or *implementer is fixing the findings of round 1*, with the time since that began; otherwise it reads *Working…*, with the time since the run started;
 - the logs say when each round started, between the agent's steps, and the outputs show the pull request the agent proposed last: the one the engine opened.
 
 ### Logs
