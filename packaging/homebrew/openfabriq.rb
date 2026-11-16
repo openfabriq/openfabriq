@@ -5,9 +5,9 @@
 #   curl -sL https://registry.npmjs.org/openfabriq/-/openfabriq-<version>.tgz | shasum -a 256
 class Openfabriq < Formula
   desc "Run a software factory described in your repository, with your Claude Code"
-  homepage "https://github.com/openfabriq/openfabriq"
-  url "https://registry.npmjs.org/openfabriq/-/openfabriq-0.1.0.tgz"
-  sha256 "164aaaecc79f79abe697ade6cf1996616a0ad0cda6b73039caa75e445aa0ce55"
+  homepage "https://openfabriq.dev"
+  url "https://registry.npmjs.org/openfabriq/-/openfabriq-0.1.1.tgz"
+  sha256 "b0e38a32d48fbab3c09d79979e9f8da2cad9e6dc63a3f8b48ac294356795e1b4"
   license "Apache-2.0"
 
   depends_on "gh"
