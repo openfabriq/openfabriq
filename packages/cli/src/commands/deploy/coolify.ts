@@ -21,6 +21,10 @@ const POLL_MS = 10_000;
 /** A first build of the engine's image takes several minutes on a small server. */
 const DEPLOY_TRIES = 180;
 const LOG_TRIES = 12;
+/** As the studio requires of OPENFABRIQ_STUDIO_PASSWORD. */
+const MIN_PASSWORD = 16;
+/** The engine's service in docker-compose.yml, and the port its studio serves. */
+const STUDIO_PORT = 4311;
 
 type Claude = {
 	name: "ANTHROPIC_API_KEY" | "CLAUDE_CODE_OAUTH_TOKEN";
@@ -51,6 +55,7 @@ export function engineVariables(input: {
 	repositories: string[];
 	github: { app_id: string; private_key: string };
 	claude: Claude;
+	studio?: { url: string; password: string } | undefined;
 }) {
 	const variable = (key: string, value: string, secret = false) => ({
 		key,
@@ -69,6 +74,12 @@ export function engineVariables(input: {
 			true,
 		),
 		variable(input.claude.name, input.claude.value, true),
+		...(input.studio
+			? [
+					variable("OPENFABRIQ_STUDIO_URL", input.studio.url),
+					variable("OPENFABRIQ_STUDIO_PASSWORD", input.studio.password, true),
+				]
+			: []),
 	];
 }
 
@@ -272,9 +283,12 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 					initial: "openfabriq",
 				})
 			).trim() || "openfabriq";
+		const studio = await askStudio(deps);
+		if (typeof studio === "string") return { code: 1, output: studio };
+		if (studio) secrets.push(studio.password);
 
 		deps.print(
-			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (main), on ${server.name}, in ${project.name} › ${environment.name}.`,
+			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (main), on ${server.name}, in ${project.name} › ${environment.name}${studio ? `, its studio at ${studio.url}` : ""}.`,
 		);
 		if (!(await deps.confirm("Create it and deploy?")))
 			return { code: 1, output: "Nothing was created." };
@@ -293,6 +307,14 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 				base_directory: "/",
 				name,
 				instant_deploy: false,
+				// Coolify's proxy sends the domain to that port of the engine, with a certificate.
+				...(studio
+					? {
+							docker_compose_domains: [
+								{ name: "engine", domain: `${studio.url}:${STUDIO_PORT}` },
+							],
+						}
+					: {}),
 			},
 		);
 		await api("PATCH", `/applications/${uuid}/envs/bulk`, {
@@ -300,6 +322,7 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 				repositories,
 				github: { app_id: github.app_id, private_key: github.private_key },
 				claude,
+				studio,
 			}),
 		});
 		deps.print(
@@ -350,7 +373,14 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 						? findings
 						: ["It has not logged its checks yet: read its logs in Coolify."]),
 					"",
-					"Left for you, in the documentation's Docker page: the studio's domain and password, and the relay for Slack and Linear. A factory's own secrets: openfabriq secret set <NAME> --project <owner/repo>, in the application's terminal in Coolify.",
+					...(studio
+						? [
+								`Studio: ${studio.url}, with the password you typed. Claude Desktop, claude.ai and Claude Code read the engine at ${studio.url}/mcp.`,
+							]
+						: [
+								"The studio has no address: run this command again with one, or see the documentation's Docker page.",
+							]),
+					"Left for you, in the documentation's Docker page: the relay for Slack and Linear. A factory's own secrets: openfabriq secret set <NAME> --project <owner/repo>, in the application's terminal in Coolify.",
 					"If you made the Coolify token only for this, delete it in Coolify (Keys & Tokens).",
 				].join("\n"),
 			),
@@ -361,6 +391,31 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 			output: shown(`Coolify refused a step (${errorText(error)}).`),
 		};
 	}
+}
+
+/** The studio's https address and password, or none, or why they are refused. */
+async function askStudio(
+	deps: DeployDeps,
+): Promise<{ url: string; password: string } | undefined | string> {
+	const url = (
+		await deps.ask(
+			"The studio's address, on a domain that points at the server (https://…, Enter for none): ",
+		)
+	)
+		.trim()
+		.replace(/\/+$/, "");
+	if (!url) return undefined;
+	if (!URL.canParse(url) || new URL(url).protocol !== "https:")
+		return `The studio's address is https://, such as https://factory.example.com. Nothing was created.`;
+	const password = (
+		await deps.ask(
+			`The studio's password (${MIN_PASSWORD} characters or more, kept only in Coolify): `,
+			{ secret: true },
+		)
+	).trim();
+	if (password.length < MIN_PASSWORD)
+		return `The studio's password needs ${MIN_PASSWORD} characters or more, for example from openssl rand -base64 24. Nothing was created.`;
+	return { url, password };
 }
 
 export async function deployCommand(

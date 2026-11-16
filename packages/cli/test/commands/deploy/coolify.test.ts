@@ -176,7 +176,7 @@ it("says how to fix an unknown or a refused token, and creates nothing", async (
 it("creates the application, sets its variables, deploys, and reports the engine's checks", async () => {
 	withApp();
 	const { deps, calls } = coolifyDeps({
-		// address, token, Claude, repositories (Enter keeps the current one), project 2, name
+		// address, token, Claude, repositories (Enter keeps the current one), project 2, name, studio
 		answers: [
 			`${COOLIFY}/`,
 			"ctok",
@@ -184,6 +184,8 @@ it("creates the application, sets its variables, deploys, and reports the engine
 			"acme/web-app",
 			"2",
 			"factory",
+			"https://factory.acme.dev/",
+			"a-studio-password-long-enough",
 		],
 		logs: "✓ GitHub: the engine works as the app acme-factory[bot], installed on acme/web-app\n✓ acme/web-app: factory applied",
 	});
@@ -193,6 +195,9 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"The engine is deployed on main: application factory in apps › production.",
 	);
 	expect(result.output).toContain("✓ acme/web-app: factory applied");
+	expect(result.output).toContain(
+		"Studio: https://factory.acme.dev, with the password you typed. Claude Desktop, claude.ai and Claude Code read the engine at https://factory.acme.dev/mcp.",
+	);
 	expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
 		"GET /version",
 		"GET /servers",
@@ -216,6 +221,9 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		docker_compose_location: "/docker-compose.yml",
 		name: "factory",
 		instant_deploy: false,
+		docker_compose_domains: [
+			{ name: "engine", domain: "https://factory.acme.dev:4311" },
+		],
 	});
 	const bulk = calls[5]?.body as { data: { key: string }[] } | undefined;
 	const keys = bulk?.data.map((v) => v.key);
@@ -224,10 +232,17 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"GITHUB_APP_ID",
 		"GITHUB_APP_PRIVATE_KEY",
 		"CLAUDE_CODE_OAUTH_TOKEN",
+		"OPENFABRIQ_STUDIO_URL",
+		"OPENFABRIQ_STUDIO_PASSWORD",
 	]);
 	// No secret reaches the screen.
 	const screen = [...printed, result.output].join("\n");
-	for (const secret of ["ctok", "sk-ant-oat01-secret", "MIIEsecretkeybody"])
+	for (const secret of [
+		"ctok",
+		"sk-ant-oat01-secret",
+		"MIIEsecretkeybody",
+		"a-studio-password-long-enough",
+	])
 		expect(screen).not.toContain(secret);
 });
 
@@ -254,4 +269,26 @@ it("creates nothing when the person says no", async () => {
 		output: "Nothing was created.",
 	});
 	expect(calls.some((c) => c.method !== "GET")).toBe(false);
+});
+
+it("refuses a studio address without https, or a short password, before creating anything", async () => {
+	withApp();
+	const answers = [COOLIFY, "ctok", "sk-ant-api03-k", "acme/web-app", "1", ""];
+	const http = coolifyDeps({
+		answers: [...answers, "http://factory.acme.dev"],
+	});
+	expect(await deployCommand("coolify", http.deps)).toMatchObject({
+		code: 1,
+		output: expect.stringContaining("The studio's address is https://"),
+	});
+	const short = coolifyDeps({
+		answers: [...answers, "https://factory.acme.dev", "short"],
+	});
+	expect(await deployCommand("coolify", short.deps)).toMatchObject({
+		code: 1,
+		output: expect.stringContaining("16 characters or more"),
+	});
+	expect([...http.calls, ...short.calls].some((c) => c.method !== "GET")).toBe(
+		false,
+	);
 });
