@@ -38,7 +38,7 @@ Naming, style and taste are never blocking.
 
 ## Procedure
 1. Read the issue and its comments, then the change and the code around it.
-2. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck`. A failing command is a blocking finding.
+2. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck`. A failing command is a blocking finding, except the runner tests that fail only because of your sandbox: `EROFS` outside the checkout (such as `/tmp/of-…` or `/tmp/oft-…`), or a sandbox that cannot start inside yours. They pass in CI; report them as not verified, not as findings.
 3. Check the description shows each test failing before the change for the expected reason.
 4. Check Scope, Rollback and Failure in production against the change.
 5. Call `submit_review`.

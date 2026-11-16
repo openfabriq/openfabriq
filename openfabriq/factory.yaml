@@ -11,7 +11,7 @@ commands: # the project's commands, by name
   test: pnpm build && pnpm test # some tests run against the built CLI
   lint: pnpm lint
   typecheck: pnpm typecheck
-checks: [lint, typecheck, test] # run by the engine before any pull request leaves the machine
+checks: [lint, typecheck] # run by the engine before any pull request leaves the machine; not test: some runner tests write to /tmp, outside the engine's sandbox on Linux
 
 limits:
   usd_per_run: 8

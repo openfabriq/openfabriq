@@ -40,6 +40,6 @@ Naming, style and taste are never blocking.
 ## Procedure
 1. Read the description and the linked issue, so you know what the pull request claims to do.
 2. Read the whole diff, then the code around each change: callers, tests, fixtures, the documentation pages it affects.
-3. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck` on the pull request branch: the tests run partly against the build, so build first. A failing command is a blocking finding.
+3. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck` on the pull request branch: the tests run partly against the build, so build first. A failing command is a blocking finding, except the runner tests that fail only because of your sandbox: `EROFS` outside the checkout (such as `/tmp/of-…` or `/tmp/oft-…`), or a sandbox that cannot start inside yours. They pass in CI; report them as not verified, not as findings.
 4. Point to a line for every finding. If you are not sure something is a defect, say so and keep it non-blocking.
 5. Post the comment, then the review or the labels.
