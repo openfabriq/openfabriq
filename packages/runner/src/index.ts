@@ -37,7 +37,11 @@ export * from "./github/markers.js";
 export * from "./github/timeline.js";
 export * from "./run/execute.js";
 export * from "./run/harness.js";
-export type { Finding, ReviewRound } from "./run/internal-review.js";
+export type {
+	Finding,
+	ReviewPhase,
+	ReviewRound,
+} from "./run/internal-review.js";
 export { needsCommitTool, withWikiPointer } from "./run/launch.js";
 export * from "./run/outputs/apply.js";
 export { type Outcome, summarize } from "./run/outputs/review.js";
