@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 # Formula for the openfabriq/homebrew-tap repository: brew install openfabriq/tap/openfabriq.
-# On each release, after npm publish, set url and sha256 from the published tarball:
-#   curl -sL https://registry.npmjs.org/openfabriq/-/openfabriq-<version>.tgz | shasum -a 256
+# The tap's workflow keeps url and sha256 on npm's latest version, every hour; change the rest here, then copy it to the tap.
 class Openfabriq < Formula
   desc "Run a software factory described in your repository, with your Claude Code"
   homepage "https://openfabriq.dev"

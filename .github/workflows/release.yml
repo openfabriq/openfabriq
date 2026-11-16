@@ -45,3 +45,25 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" "packages/cli/release/openfabriq-${GITHUB_REF_NAME#v}.tgz" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # npm trusts this workflow (trusted publishing): no token is stored, and the package gets its provenance.
+  # Only this job may ask GitHub for the identity npm checks, and it runs no code of the repository or of its dependencies.
+  npm:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # The tarball the release attached, so npm gets exactly what the release offers.
+      - name: npm publish
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*.tgz'
+          npm publish "openfabriq-${GITHUB_REF_NAME#v}.tgz"
+        env:
+          GH_TOKEN: ${{ github.token }}
