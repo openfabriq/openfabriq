@@ -47,8 +47,9 @@ export const viewport: Viewport = {
 	],
 };
 
-// Audience statistics with Plausible, without cookies, only when the build that publishes the site sets it.
+// Audience statistics with Plausible and Cloudflare Web Analytics, without cookies, only when the build that publishes the site sets them.
 const PLAUSIBLE_SCRIPT = process.env.PLAUSIBLE_SCRIPT;
+const CLOUDFLARE_ANALYTICS_TOKEN = process.env.CLOUDFLARE_ANALYTICS_TOKEN;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
@@ -57,13 +58,24 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 			className={`${sans.variable} ${mono.variable}`}
 			suppressHydrationWarning
 		>
-			{PLAUSIBLE_SCRIPT && (
+			{(PLAUSIBLE_SCRIPT || CLOUDFLARE_ANALYTICS_TOKEN) && (
 				<head>
-					<script
-						defer
-						data-domain={new URL(SITE_URL).host}
-						src={PLAUSIBLE_SCRIPT}
-					/>
+					{PLAUSIBLE_SCRIPT && (
+						<script
+							defer
+							data-domain={new URL(SITE_URL).host}
+							src={PLAUSIBLE_SCRIPT}
+						/>
+					)}
+					{CLOUDFLARE_ANALYTICS_TOKEN && (
+						<script
+							defer
+							src="https://static.cloudflareinsights.com/beacon.min.js"
+							data-cf-beacon={JSON.stringify({
+								token: CLOUDFLARE_ANALYTICS_TOKEN,
+							})}
+						/>
+					)}
 				</head>
 			)}
 			<body className="flex min-h-screen flex-col">
