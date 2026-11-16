@@ -10,16 +10,10 @@ export function Plan() {
 					id="plan"
 					lead={
 						<>
-							<code className="font-mono text-[0.85em] text-fd-foreground">
-								openfabriq plan
-							</code>{" "}
-							compares the folder with what runs on this machine and lists every
-							change, with new rights and tools at the top. Nothing changes
-							until you run{" "}
-							<code className="font-mono text-[0.85em] text-fd-foreground">
-								openfabriq apply
-							</code>
-							.
+							<code className="of-inline-code">openfabriq plan</code> compares
+							the folder with what runs on this machine and lists every change,
+							with new rights and tools at the top. Nothing changes until you
+							run <code className="of-inline-code">openfabriq apply</code>
 						</>
 					}
 				>

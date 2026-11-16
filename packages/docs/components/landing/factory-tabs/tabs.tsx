@@ -31,9 +31,9 @@ export const TABS: {
 		text: (
 			<>
 				Here, a label, a new production error and a failed deploy each start an
-				agent, and <code>reviewed_by</code> has a reviewer read the change
-				before the pull request opens. The engine writes only what{" "}
-				<code>can</code> lists.
+				agent, and <code className="of-inline-code">reviewed_by</code> has a
+				reviewer read the change before the pull request opens. The engine
+				writes only what <code className="of-inline-code">can</code> lists.
 			</>
 		),
 	},

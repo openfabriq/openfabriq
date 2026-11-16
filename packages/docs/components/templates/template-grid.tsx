@@ -143,9 +143,9 @@ export function TemplateGrid({
 					<p className="text-lg font-medium">No template matches “{query}”.</p>
 					<p className="mt-2 max-w-md text-fd-muted-foreground">
 						Try a trigger such as{" "}
-						<code className="font-mono text-sm">schedule</code> or a service
-						such as Slack, or describe your own factory to{" "}
-						<code className="font-mono text-sm">openfabriq init</code>.
+						<code className="of-inline-code">schedule</code> or a service such
+						as Slack, or describe your own factory to{" "}
+						<code className="of-inline-code">openfabriq init</code>
 					</p>
 					<button
 						type="button"

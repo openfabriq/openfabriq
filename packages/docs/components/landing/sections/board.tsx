@@ -13,12 +13,10 @@ export function Board() {
 					id="board"
 					lead={
 						<>
-							<code className="font-mono text-[0.85em] text-fd-foreground">
-								openfabriq start
-							</code>{" "}
-							runs the engine and serves the studio, on your machine or a
-							server. Issues, errors and failed deploys move across the board as
-							agents pick them up, finish, or hand them to you.
+							<code className="of-inline-code">openfabriq start</code> runs the
+							engine and serves the studio, on your machine or a server. Issues,
+							errors and failed deploys move across the board as agents pick
+							them up, finish, or hand them to you.
 						</>
 					}
 				>

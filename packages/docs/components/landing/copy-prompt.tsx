@@ -142,7 +142,8 @@ export function CopyPrompt({
 							</strong>{" "}
 							Paste one prompt into Claude Code on your computer: it sets the
 							server up over SSH and starts the engine. It never asks for your
-							tokens: you type them into <code>.env</code> yourself.
+							tokens: you type them into{" "}
+							<code className="of-inline-code">.env</code> yourself.
 						</>
 					) : kind === "machine" ? (
 						<>
@@ -160,7 +161,7 @@ export function CopyPrompt({
 							</strong>{" "}
 							One prompt for Claude Code installs openfabriq and what it needs,
 							writes a first factory with you and saves it. You then run one
-							command: <code>openfabriq start</code>.
+							command: <code className="of-inline-code">openfabriq start</code>
 						</>
 					)}
 				</p>

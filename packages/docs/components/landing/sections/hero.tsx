@@ -31,8 +31,9 @@ export async function Hero() {
 				your subscription or an API key, and writes to GitHub only what you
 				allowed.
 			</p>
-			{/* The way in: one action, its command beside it, the prompt as the alternative right under. */}
-			<div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+			{/* The way in: one action, its command beside it, then the film; the prompt as the alternative right under. */}
+			{/* Rhythm: the pitch (20), a step to the actions (32), a step to their two notes (20), the notes held together (8), then air before the files (40, 48). */}
+			<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 				<Link
 					href="/getting-started/quickstart/"
 					className="group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-fd-foreground px-5 text-[15px] font-medium whitespace-nowrap text-fd-background shadow-of-2 transition-[opacity,box-shadow] hover:opacity-90"
@@ -44,19 +45,14 @@ export async function Hero() {
 					/>
 				</Link>
 				<CopyCommand command={INSTALL} className="sm:w-[24.5rem]" />
-			</div>
-			<CopyPrompt compact className="mt-4" />
-			{/* What supports the decision, quieter: the film, then the fine print. */}
-			<div className="mt-5 flex flex-col gap-x-8 gap-y-4 sm:flex-row sm:flex-wrap sm:items-center">
 				<VideoButton />
-				<p className="text-sm leading-relaxed text-fd-muted-foreground">
-					Open source, Apache-2.0 · macOS and Linux · Also on npm:{" "}
-					<code className="font-mono text-[0.92em] whitespace-nowrap text-fd-foreground">
-						npm install -g openfabriq
-					</code>
-				</p>
 			</div>
-			<div className="mt-8">
+			<CopyPrompt compact className="mt-5" />
+			<p className="mt-2 text-sm leading-5 text-fd-muted-foreground">
+				Open source, Apache-2.0 · macOS and Linux · Also on npm:{" "}
+				<code className="of-inline-code">npm install -g openfabriq</code>
+			</p>
+			<div className="mt-10 sm:mt-12">
 				<FactoryTabs
 					files={files}
 					example={EXAMPLE}

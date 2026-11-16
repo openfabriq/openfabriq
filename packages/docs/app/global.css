@@ -274,6 +274,42 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	animation: of-pulse 1.6s var(--of-ease) infinite;
 }
 
+/* The film's play disc calls, slowly: a ring leaves it and fades. */
+@keyframes of-beckon {
+	0% {
+		box-shadow: 0 0 0 0
+			color-mix(in oklch, var(--color-fd-foreground) 45%, transparent);
+	}
+	/* Still clear halfway out, so the eye catches it before it fades. */
+	25% {
+		box-shadow: 0 0 0 7px
+			color-mix(in oklch, var(--color-fd-foreground) 22%, transparent);
+	}
+	/* Gone after about 1.3s; the rest of the beat is a pause. */
+	55%,
+	100% {
+		box-shadow: 0 0 0 12px transparent;
+	}
+}
+.of-beckon {
+	animation: of-beckon 2.4s var(--of-ease) infinite;
+}
+
+/* A command or a key inside a sentence: mono on a light tint of the text colour, so it reads as something to type, on any surface. */
+.of-inline-code {
+	padding: 0.12em 0.4em;
+	border: 1px solid
+		color-mix(in oklch, var(--color-fd-foreground) 9%, transparent);
+	border-radius: 6px;
+	background: color-mix(in oklch, var(--color-fd-foreground) 5%, transparent);
+	color: var(--color-fd-foreground);
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	white-space: nowrap;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+
 /* The engine's link: a signal travels from the cause to the effect. */
 @keyframes of-signal {
 	from {
@@ -339,6 +375,7 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	.of-digit,
 	.of-enter,
 	.of-pulse,
+	.of-beckon,
 	.of-signal {
 		animation: none;
 	}
