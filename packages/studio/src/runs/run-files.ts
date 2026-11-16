@@ -7,6 +7,7 @@ import {
 	jsonLines,
 	parseHunks,
 	projectDir,
+	type ReviewPhase,
 	type ReviewRound,
 	type RunRecord,
 } from "@openfabriq/runner";
@@ -29,6 +30,26 @@ export interface RunFiles {
 	changedFiles?: ShownFiles;
 	/** reviewed_by: the rounds of the internal review, as each one ends. */
 	reviews?: ReviewRound[];
+	/** reviewed_by: who works now, during a round of review or the fixes after one. */
+	phase?: ReviewPhase;
+}
+
+/** phase.json, or undefined when it is missing, cut short or of another shape. */
+export function reviewPhase(text: string | undefined): ReviewPhase | undefined {
+	if (text === undefined) return undefined;
+	try {
+		const p = JSON.parse(text) as Partial<ReviewPhase> | null;
+		return p &&
+			(p.doing === "reviewing" || p.doing === "fixing") &&
+			typeof p.agent === "string" &&
+			typeof p.round === "number" &&
+			typeof p.limit === "number" &&
+			typeof p.since === "string"
+			? (p as ReviewPhase)
+			: undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 /** reviews.json, or undefined when it is missing, cut short or of another shape. */
@@ -75,10 +96,12 @@ export function readRunFiles(run: RunRecord): RunFiles {
 	const commands = read("commands.jsonl");
 	const changed = changedFiles(read("changed-files.json"));
 	const reviews = reviewRounds(read("reviews.json"));
+	const phase = reviewPhase(read("phase.json"));
 	return {
 		...(prompt !== undefined ? { prompt } : {}),
 		...(changed ? { changedFiles: changed } : {}),
 		...(reviews ? { reviews } : {}),
+		...(phase ? { phase } : {}),
 		commands: commands !== undefined ? jsonLines<CommandRun>(commands) : [],
 		transcript: read("transcript.jsonl") ?? "",
 	};

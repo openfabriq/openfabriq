@@ -144,13 +144,13 @@ export function ToolRow({
 	);
 }
 
-export function Working({ since }: { since: string }) {
+export function Working({ label, since }: { label: string; since: string }) {
 	return (
 		<p
 			className="flex items-center gap-2 px-2 py-1.5 text-sm"
 			aria-live="polite"
 		>
-			<span className="shimmer font-medium">Working…</span>
+			<span className="shimmer font-medium">{label}</span>
 			<span className="tnum text-xs text-fg-3">
 				<Elapsed since={since} />
 			</span>

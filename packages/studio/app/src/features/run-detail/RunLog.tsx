@@ -9,6 +9,7 @@ import {
 	logEntries,
 	matches,
 	toolCalls,
+	working,
 } from "./run-log.js";
 
 /** Everything the run did, in order, on one clock that starts when it was queued. */
@@ -32,6 +33,7 @@ export function RunLog({
 		.filter(({ e }) => matches(filter)(e));
 	const outputsHref = runHref(run.id, { project, tab: "outputs" });
 	const filters = filterTabs(all);
+	const now = working(detail);
 	const replaced = replacedProposals(
 		toolCalls(detail.transcript),
 		Boolean(detail.reviews?.length),
@@ -64,7 +66,7 @@ export function RunLog({
 						replaced={e.kind === "tool" && replaced.has(e.part.toolCallId)}
 					/>
 				))}
-				{run.status === "running" && run.startedAt && (
+				{now && (
 					<Row
 						time=""
 						icon={
@@ -79,7 +81,7 @@ export function RunLog({
 							</span>
 						}
 					>
-						<Working since={run.startedAt} />
+						<Working {...now} />
 					</Row>
 				)}
 				{shown.length === 0 && (

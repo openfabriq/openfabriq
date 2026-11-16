@@ -169,3 +169,31 @@ it("links a proposed output to the Outputs tab, in the page's project", () => {
 		"#/run/r1?project=acme%2Fshop&tab=outputs",
 	);
 });
+
+it("names the reviewer and the round while a review runs, and says Working… otherwise", () => {
+	const running = {
+		status: "running" as const,
+		startedAt: "2026-11-03T10:00:10.000Z",
+	};
+	render(<RunLog detail={detail(running)} project={undefined} />);
+	expect(screen.getByText("Working…")).toBeTruthy();
+	cleanup();
+	render(
+		<RunLog
+			detail={detail(running, {
+				phase: {
+					doing: "reviewing",
+					agent: "change-reviewer",
+					round: 2,
+					limit: 2,
+					since: "2026-11-03T10:04:00.000Z",
+				},
+			})}
+			project={undefined}
+		/>,
+	);
+	expect(
+		screen.getByText("change-reviewer is reviewing, round 2 of 2"),
+	).toBeTruthy();
+	expect(screen.queryByText("Working…")).toBeNull();
+});

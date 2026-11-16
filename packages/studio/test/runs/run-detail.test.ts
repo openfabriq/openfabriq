@@ -1,7 +1,11 @@
 import type { RunRecord } from "@openfabriq/runner";
 import { expect, it } from "vitest";
 import { runDetail } from "../../src/runs/run-detail.js";
-import { changedFiles, reviewRounds } from "../../src/runs/run-files.js";
+import {
+	changedFiles,
+	reviewPhase,
+	reviewRounds,
+} from "../../src/runs/run-files.js";
 
 const run = {
 	id: "r1",
@@ -94,4 +98,33 @@ it("sends the rounds of the internal review only when the run had some, and read
 	expect(reviewRounds('[{"round":1')).toBeUndefined();
 	expect(reviewRounds("{}")).toBeUndefined();
 	expect(reviewRounds(undefined)).toBeUndefined();
+});
+
+it("sends what a reviewed run does now only while it runs, and reads a cut-short phase.json as none", () => {
+	const phase = {
+		doing: "reviewing" as const,
+		agent: "change-reviewer",
+		round: 1,
+		limit: 2,
+		since: "2026-11-13T10:00:00.000Z",
+	};
+	const running = { ...run, status: "running" } as RunRecord;
+	expect(
+		runDetail(running, [running], { ...files, phase }, undefined).phase,
+	).toEqual(phase);
+	expect(
+		runDetail(run, [run], { ...files, phase }, undefined),
+	).not.toHaveProperty("phase");
+	expect(runDetail(running, [running], files, undefined)).not.toHaveProperty(
+		"phase",
+	);
+	expect(reviewPhase(`${JSON.stringify(phase)}\n`)).toEqual(phase);
+	expect(reviewPhase('{"doing":"reviewing"')).toBeUndefined();
+	expect(
+		reviewPhase(
+			'{"doing":"sleeping","agent":"a","round":1,"limit":2,"since":"x"}',
+		),
+	).toBeUndefined();
+	expect(reviewPhase("[]")).toBeUndefined();
+	expect(reviewPhase(undefined)).toBeUndefined();
 });

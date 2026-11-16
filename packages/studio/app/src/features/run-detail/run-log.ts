@@ -29,6 +29,27 @@ export const toolCalls = (transcript: RunDetail["transcript"]): ToolCall[] =>
 		m.content.filter((p): p is ToolCall => p.type === "tool-call"),
 	);
 
+/**
+ * The last line of a running run: who works now and since when. A reviewed run names its reviewer
+ * and the round, or its author fixing the findings; otherwise "Working…" since the run started.
+ */
+export function working({
+	run,
+	phase,
+}: Pick<RunDetail, "run" | "phase">):
+	| { label: string; since: string }
+	| undefined {
+	if (run.status !== "running" || !run.startedAt) return undefined;
+	if (!phase) return { label: "Working…", since: run.startedAt };
+	return {
+		label:
+			phase.doing === "reviewing"
+				? `${phase.agent} is reviewing, round ${phase.round} of ${phase.limit}`
+				: `${phase.agent} is fixing the findings of round ${phase.round}`,
+		since: phase.since,
+	};
+}
+
 /** "1:05" since the run was queued: the log reads as one clock. */
 export function sinceQueued(queuedAt: string, at?: string): string {
 	if (!at) return "";
