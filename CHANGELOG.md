@@ -4,6 +4,13 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-16
+
+### Changed
+
+- **The documentation site is online** at [openfabriq.dev](https://openfabriq.dev), and the npm package's homepage points to it.
+- **The README** opens with "Your AI software factory, as code.", and its video plays again.
+
 ## [0.1.0] - 2026-11-16
 
 The first public release, 0.1.0, built from November 1 to 7, 2026: a factory described in a few files that runs on a developer's machine or a team's server, easy to set up and pleasant to follow.

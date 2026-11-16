@@ -77,6 +77,7 @@ writeFileSync(
 			engines: { node: ">=24" },
 			license: "Apache-2.0",
 			repository: `github:${REPOSITORY}`,
+			homepage: process.env.OPENFABRIQ_SITE_URL ?? "https://openfabriq.dev",
 			dependencies,
 		},
 		null,

@@ -1,7 +1,7 @@
 {
 	"name": "openfabriq",
 	"description": "Set up, change and diagnose the openfabriq/ folder of a repository in a conversation: agents, automations, rights, limits and runs.",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"author": { "name": "Matthieu Guirlinger" },
 	"homepage": "https://github.com/openfabriq/openfabriq",
 	"repository": "https://github.com/openfabriq/openfabriq",
