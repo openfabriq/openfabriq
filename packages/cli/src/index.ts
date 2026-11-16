@@ -143,7 +143,8 @@ async function main(line: CommandLine): Promise<CommandResult> {
 				confirm: terminalConfirm,
 				repository: async () =>
 					githubRepository(
-						await exec("git", ["remote", "get-url", "origin"], { cwd: dir }),
+						// "deploy coolify" takes no folder: the repository is the current one.
+						await exec("git", ["remote", "get-url", "origin"]),
 					),
 			});
 		case "secret":
