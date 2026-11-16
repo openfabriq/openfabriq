@@ -35,6 +35,8 @@ function coolifyDeps(options: {
 	deployment?: string[];
 	logs?: string;
 	servers?: { uuid: string; name: string; ip?: string; description?: string }[];
+	applications?: { name: string; git_repository: string }[];
+	envsStatus?: number;
 	addresses?: Record<string, string>;
 }) {
 	const calls: {
@@ -61,6 +63,7 @@ function coolifyDeps(options: {
 		confirm: async () => true,
 		repository: async () => "acme/web-app",
 		sleep: async () => {},
+		version: "1.2.3",
 		// Every host at the same address, unless the test says otherwise.
 		lookup: async (host) => options.addresses?.[host] ?? "203.0.113.10",
 		fetch: (async (url: string, init: RequestInit) => {
@@ -85,8 +88,11 @@ function coolifyDeps(options: {
 				return answer(200, {
 					environments: [{ uuid: "e1", name: "production" }],
 				});
+			if (path === "/applications")
+				return answer(200, options.applications ?? []);
 			if (path === "/applications/public") return answer(201, { uuid: "app1" });
-			if (path === "/applications/app1/envs/bulk") return answer(201, []);
+			if (path === "/applications/app1/envs/bulk")
+				return answer(options.envsStatus ?? 201, { message: "refused" });
 			if (path === "/deploy?uuid=app1")
 				return answer(200, { deployments: [{ deployment_uuid: "d1" }] });
 			if (path === "/deployments/d1")
@@ -203,6 +209,7 @@ it("creates the application, sets its variables, deploys, and reports the engine
 			"2",
 			"factory",
 			"http://factory.acme.dev",
+			"https://factory.acme.dev/studio",
 			"https://factory.acme.dev/",
 			"2",
 			"short",
@@ -222,7 +229,8 @@ it("creates the application, sets its variables, deploys, and reports the engine
 	expect(printed.filter((line) => line.startsWith("✗"))).toEqual([
 		"✗ Coolify's address is https://, such as https://coolify.example.com.",
 		"✗ Answer a number from 1 to 2.",
-		"✗ The studio's address is https://, such as https://factory.example.com, or Enter for none.",
+		"✗ The studio's address is https:// and a domain, with no path, such as https://factory.example.com, or Enter for none.",
+		"✗ The studio's address is https:// and a domain, with no path, such as https://factory.example.com, or Enter for none.",
 		"✗ The password needs 16 characters or more, for example from openssl rand -base64 24.",
 		"✗ The two passwords differ: type it again.",
 	]);
@@ -234,6 +242,7 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"GET /servers",
 		"GET /projects",
 		"GET /projects/p2",
+		"GET /applications",
 		"POST /applications/public",
 		"PATCH /applications/app1/envs/bulk",
 		"POST /deploy?uuid=app1",
@@ -242,12 +251,12 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"GET /applications/app1/logs?lines=200",
 	]);
 	expect(calls.every((c) => c.auth === "Bearer ctok")).toBe(true);
-	expect(calls[4]?.body).toMatchObject({
+	expect(calls[5]?.body).toMatchObject({
 		project_uuid: "p2",
 		server_uuid: "s1",
 		environment_uuid: "e1",
 		git_repository: "https://github.com/openfabriq/openfabriq",
-		git_branch: "main",
+		git_branch: "v1.2.3",
 		build_pack: "dockercompose",
 		docker_compose_location: "/docker-compose.yml",
 		name: "factory",
@@ -256,7 +265,7 @@ it("creates the application, sets its variables, deploys, and reports the engine
 			{ name: "engine", domain: "https://factory.acme.dev:4311" },
 		],
 	});
-	const bulk = calls[5]?.body as { data: { key: string }[] } | undefined;
+	const bulk = calls[6]?.body as { data: { key: string }[] } | undefined;
 	const keys = bulk?.data.map((v) => v.key);
 	expect(keys).toEqual([
 		"OPENFABRIQ_REPOSITORIES",
@@ -464,4 +473,36 @@ it("warns when the studio's domain points at another server than the one picked"
 	});
 	expect((await deployCommand("coolify", main.deps)).code).toBe(0);
 	expect(printed.join("\n")).not.toContain("points at");
+});
+
+it("asks before a second engine on Coolify, and creates nothing on a no", async () => {
+	withApp();
+	const { deps, calls } = coolifyDeps({
+		answers: [...BEFORE_STUDIO],
+		applications: [
+			{ name: "factory", git_repository: "openfabriq/openfabriq" },
+		],
+	});
+	deps.confirm = async (question) => !question.includes("another engine");
+	expect(await deployCommand("coolify", deps)).toEqual({
+		code: 1,
+		output: "Nothing was created.",
+	});
+	expect(printed).toContain(
+		"✗ Coolify runs the engine already: factory. Two engines on the same repositories would run every automation twice. Change or delete it in Coolify instead.",
+	);
+	expect(calls.some((c) => c.method !== "GET")).toBe(false);
+});
+
+it("names the application it created when a later step fails", async () => {
+	withApp();
+	const { deps } = coolifyDeps({
+		answers: [...BEFORE_STUDIO],
+		envsStatus: 422,
+	});
+	const result = await deployCommand("coolify", deps);
+	expect(result.code).toBe(1);
+	expect(result.output).toContain(
+		"The application openfabriq (app1) was created: fix it in Coolify, or delete it there before running this command again.",
+	);
 });

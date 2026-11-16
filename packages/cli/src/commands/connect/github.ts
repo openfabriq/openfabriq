@@ -123,6 +123,8 @@ export async function connectGithub(
 	);
 	let page = "";
 	const server = createServer((req, res) => {
+		// Each answer closes its connection: the browser keeps none open, and the command can end.
+		res.setHeader("Connection", "close");
 		const url = new URL(req.url ?? "/", "http://127.0.0.1");
 		const code = url.searchParams.get("code");
 		// Only this address: a web page that renamed its domain to 127.0.0.1 never reads the state.
@@ -249,8 +251,6 @@ export async function connectGithub(
 	} finally {
 		clearTimeout(timer);
 		server.close();
-		// The browser keeps its connection open: without this, the command would wait for it.
-		server.closeAllConnections();
 	}
 }
 

@@ -1,6 +1,8 @@
 import { lookup as dnsLookup } from "node:dns/promises";
+import { readFileSync } from "node:fs";
 import { setTimeout as wait } from "node:timers/promises";
 import { errorText, readSecrets, type Secrets } from "@openfabriq/runner";
+import { PACKAGE_JSON } from "../../paths.js";
 import type { CommandResult } from "../../result.js";
 import { type ConnectDeps, isSafeUrl } from "../connect/shared.js";
 
@@ -16,6 +18,8 @@ export interface DeployDeps extends ConnectDeps {
 	sleep?: (ms: number) => Promise<void>;
 	/** The IPv4 address of a host name, to check that the studio's domain points at the server. */
 	lookup?: (host: string) => Promise<string>;
+	/** This CLI's version: the server runs the engine of the same release. */
+	version?: string;
 }
 
 /** The engine's sources: Coolify builds its docker-compose.yml from them. */
@@ -57,6 +61,19 @@ export const serverHost = (server: Server, coolifyUrl: string) =>
 	["host.docker.internal", "localhost", "127.0.0.1"].includes(server.ip)
 		? new URL(coolifyUrl).hostname
 		: server.ip;
+
+/** An address the studio accepts as OPENFABRIQ_STUDIO_URL: https and a host, nothing after. */
+export function studioOrigin(given: string): string | undefined {
+	const url = URL.canParse(given) ? new URL(given) : undefined;
+	return url?.protocol === "https:" &&
+		url.pathname === "/" &&
+		!url.search &&
+		!url.hash &&
+		!url.username &&
+		!url.password
+		? url.origin
+		: undefined;
+}
 
 /** owner/name in a GitHub remote, https or ssh. */
 export function githubRepository(remote: string): string | undefined {
@@ -306,7 +323,12 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 			output: "The engine needs a Claude credential. Nothing was created.",
 		};
 	const claude = claudeCredential(credential);
-	const secrets = [token, claude.value, github.private_key];
+	const secrets = [
+		token,
+		claude.value,
+		github.private_key,
+		Buffer.from(github.private_key).toString("base64"),
+	];
 	const shown = (text: string) => scrub(text, secrets);
 
 	const here = await deps.repository().catch(() => undefined);
@@ -334,6 +356,8 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 		.map((r) => r.trim())
 		.filter(Boolean);
 
+	const tag = `v${deps.version ?? (JSON.parse(readFileSync(PACKAGE_JSON, "utf8")) as { version: string }).version}`;
+	let created: { name: string; uuid: string } | undefined;
 	try {
 		const server = await pick(
 			"Servers",
@@ -391,8 +415,22 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 			}
 		}
 
+		const running = (
+			await api<{ name: string; git_repository?: string }[]>(
+				"GET",
+				"/applications",
+			)
+		).filter((app) => app.git_repository?.includes("openfabriq/openfabriq"));
+		if (running.length) {
+			deps.print(
+				`✗ Coolify runs the engine already: ${running.map((app) => app.name).join(", ")}. Two engines on the same repositories would run every automation twice. Change or delete it in Coolify instead.`,
+			);
+			if (!(await deps.confirm("Create another engine anyway?")))
+				return { code: 1, output: "Nothing was created." };
+		}
+
 		deps.print(
-			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (main), on ${server.name}, in ${project.name} › ${environment.name}${studio ? `, its studio at ${studio.url}` : ""}.`,
+			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (${tag}), on ${server.name}, in ${project.name} › ${environment.name}${studio ? `, its studio at ${studio.url}` : ""}.`,
 		);
 		if (!(await deps.confirm("Create it and deploy?")))
 			return { code: 1, output: "Nothing was created." };
@@ -405,7 +443,8 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 				server_uuid: server.uuid,
 				environment_uuid: environment.uuid,
 				git_repository: ENGINE,
-				git_branch: "main",
+				// A tag: the release this CLI is, so the server accepts what it validated.
+				git_branch: tag,
 				build_pack: "dockercompose",
 				docker_compose_location: "/docker-compose.yml",
 				base_directory: "/",
@@ -421,6 +460,7 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 					: {}),
 			},
 		);
+		created = { name, uuid };
 		await api("PATCH", `/applications/${uuid}/envs/bulk`, {
 			data: engineVariables({
 				repositories,
@@ -492,7 +532,9 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 	} catch (error) {
 		return {
 			code: 1,
-			output: shown(`Coolify refused a step (${errorText(error)}).`),
+			output: shown(
+				`Coolify refused a step (${errorText(error)}).${created ? ` The application ${created.name} (${created.uuid}) was created: fix it in Coolify, or delete it there before running this command again.` : " Nothing was created."}`,
+			),
 		};
 	}
 }
@@ -502,11 +544,13 @@ const signIn = (studio: Studio) =>
 	[
 		studio.github &&
 			"Whoever can write to the repositories signs in with their GitHub account.",
-		studio.password && "The password you typed opens it too.",
+		studio.password &&
+			(studio.github
+				? "The password you typed opens it too."
+				: "The password you typed opens it."),
 	]
 		.filter(Boolean)
-		.join(" ")
-		.replace("opens it too", studio.github ? "opens it too" : "opens it");
+		.join(" ");
 
 /** The studio's password, typed twice; undefined after three tries. */
 async function askPassword(deps: DeployDeps): Promise<string | undefined> {
@@ -574,14 +618,14 @@ async function askStudio(
 		"The studio's address, on a domain that points at the server (https://…, Enter for none): ",
 		{},
 		(a) =>
-			!a || (URL.canParse(a) && new URL(a).protocol === "https:")
+			!a || studioOrigin(a)
 				? undefined
-				: "The studio's address is https://, such as https://factory.example.com, or Enter for none.",
+				: "The studio's address is https:// and a domain, with no path, such as https://factory.example.com, or Enter for none.",
 	);
 	if (given === undefined)
 		return "No valid address for the studio. Nothing was created.";
 	if (!given) return undefined;
-	const url = given.replace(/\/+$/, "");
+	const url = studioOrigin(given) ?? given;
 	const mode = await pick(
 		"Sign-in modes",
 		[
