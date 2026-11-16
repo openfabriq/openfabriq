@@ -15,7 +15,7 @@ export async function Hero() {
 	return (
 		<section
 			aria-labelledby="hero"
-			className="mx-auto w-full max-w-7xl px-4 pt-12 pb-20 sm:px-6 sm:pt-14 sm:pb-28"
+			className="mx-auto w-full max-w-7xl px-4 pt-14 pb-20 sm:px-6 sm:pt-20 sm:pb-28"
 		>
 			<h1
 				id="hero"
@@ -23,7 +23,7 @@ export async function Hero() {
 			>
 				Your software factory, as code.
 			</h1>
-			<p className="mt-6 max-w-[42rem] text-lg leading-relaxed text-pretty text-fd-muted-foreground sm:text-xl">
+			<p className="mt-5 max-w-[42rem] text-lg leading-relaxed text-pretty text-fd-muted-foreground sm:text-xl">
 				Describe your AI agents, and what triggers them, in a folder of your
 				repository.{" "}
 				<span className="font-semibold text-fd-foreground">openfabriq</span>{" "}
@@ -32,7 +32,7 @@ export async function Hero() {
 				allowed.
 			</p>
 			{/* The way in: one action, its command beside it, the prompt as the alternative right under. */}
-			<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+			<div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
 				<Link
 					href="/getting-started/quickstart/"
 					className="group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-fd-foreground px-5 text-[15px] font-medium whitespace-nowrap text-fd-background shadow-of-2 transition-[opacity,box-shadow] hover:opacity-90"
@@ -56,7 +56,7 @@ export async function Hero() {
 					</code>
 				</p>
 			</div>
-			<div className="mt-10 sm:mt-12">
+			<div className="mt-8">
 				<FactoryTabs
 					files={files}
 					example={EXAMPLE}
