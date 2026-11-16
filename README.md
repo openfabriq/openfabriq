@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg" alt="macOS and Linux">
 </p>
 
-https://github.com/user-attachments/assets/fdcf155e-c12c-477c-b8cc-7241f437d87c
+https://github.com/user-attachments/assets/495cb83b-c666-4ce6-a7ce-a97feb6db24c
 
 <p align="center">
   <sub>openfabriq in 85 seconds. Voice by elevenlabs.io · Music: The Warm Minimal by Pumpupthemind (Pixabay)</sub>
