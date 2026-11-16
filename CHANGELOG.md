@@ -4,6 +4,8 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-17
+
 ### Changed
 
 - The studio opens in the light theme by default, even when the system is in dark mode. The theme button goes light, dark, then system, and "system" is now remembered by name: if you had picked it, pick it again once.
