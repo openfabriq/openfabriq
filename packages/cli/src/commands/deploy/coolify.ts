@@ -137,6 +137,25 @@ function coolify(url: string, token: string, deps: DeployDeps) {
 	};
 }
 
+/**
+ * Asks until `check` accepts the answer (it returns why not, which is shown), three times at
+ * most: a typo costs one question again, not the whole command.
+ */
+async function askValid(
+	deps: DeployDeps,
+	question: string,
+	options: { secret?: boolean; initial?: string },
+	check: (answer: string) => string | undefined | Promise<string | undefined>,
+): Promise<string | undefined> {
+	for (let tries = 0; tries < 3; tries++) {
+		const answer = (await deps.ask(question, options)).trim();
+		const why = await check(answer);
+		if (why === undefined) return answer;
+		deps.print(`✗ ${why}`);
+	}
+	return undefined;
+}
+
 /** One of `items`: the only one, or the one the person picks by number. */
 async function pick<T extends Named>(
 	what: string,
@@ -147,15 +166,24 @@ async function pick<T extends Named>(
 	deps.print(
 		`${what}:\n${items.map((item, i) => `  ${i + 1}. ${item.name}`).join("\n")}`,
 	);
-	const answer = Number(
-		(
-			await deps.ask(
-				`Which ${what.toLowerCase().replace(/s$/, "")} (1-${items.length}): `,
-			)
-		).trim(),
+	const answer = await askValid(
+		deps,
+		`Which ${what.toLowerCase().replace(/s$/, "")} (1-${items.length}): `,
+		{},
+		(a) =>
+			items[Number(a) - 1]
+				? undefined
+				: `Answer a number from 1 to ${items.length}.`,
 	);
-	return items[answer - 1];
+	return answer === undefined ? undefined : items[Number(answer) - 1];
 }
+
+/** Coolify's address as given, without a trailing slash or the API's path. */
+const coolifyAddress = (given: string) =>
+	given
+		.trim()
+		.replace(/\/+$/, "")
+		.replace(/\/api\/v1$/, "");
 
 export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 	const env = deps.env ?? process.env;
@@ -172,40 +200,55 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 		deps.print(
 			"Coolify: the address and token of $COOLIFY_URL and $COOLIFY_TOKEN, where set.",
 		);
-	const url = (
-		env.COOLIFY_URL ?? (await deps.ask("Coolify's address (https://…): "))
-	)
-		.trim()
-		.replace(/\/+$/, "")
-		.replace(/\/api\/v1$/, "");
-	// Asked, never a flag: a flag stays in the shell history and shows in ps.
-	const token = (
-		env.COOLIFY_TOKEN ??
-		(await deps.ask(
-			"Coolify API token (abilities read, write, deploy, read:sensitive): ",
-			{ secret: true },
-		))
-	).trim();
-	if (!isSafeUrl(url) || !token)
+	const addressWhy = (a: string) =>
+		isSafeUrl(coolifyAddress(a))
+			? undefined
+			: "Coolify's address is https://, such as https://coolify.example.com.";
+	const given = env.COOLIFY_URL
+		? env.COOLIFY_URL
+		: await askValid(deps, "Coolify's address (https://…): ", {}, addressWhy);
+	if (given === undefined || addressWhy(given))
 		return {
 			code: 1,
-			output:
-				"Coolify's https address and an API token are needed. Nothing was created.",
+			output: `${addressWhy(given ?? "") ?? ""} Nothing was created.`.trim(),
 		};
-	const api = coolify(url, token, deps);
-	try {
-		await api("GET", "/version");
-	} catch (error) {
-		const status = error instanceof CoolifyError ? error.status : undefined;
-		const source = env.COOLIFY_TOKEN ? " (the token of $COOLIFY_TOKEN)" : "";
-		const why =
-			status === 401
+	const url = coolifyAddress(given);
+
+	// Asked, never a flag: a flag stays in the shell history and shows in ps.
+	const tokenWhy = async (token: string) => {
+		if (!token)
+			return "Paste the API token made in Coolify, under Keys & Tokens.";
+		try {
+			await coolify(url, token, deps)("GET", "/version");
+			return undefined;
+		} catch (error) {
+			const status = error instanceof CoolifyError ? error.status : undefined;
+			const source = env.COOLIFY_TOKEN ? " (the token of $COOLIFY_TOKEN)" : "";
+			return status === 401
 				? `Coolify at ${url} does not know the token${source}: check it was copied whole, or make a new one in Keys & Tokens.`
 				: status === 403
 					? `Coolify at ${url} refused the token${source}: turn on Settings › Advanced › API Access, and give the token the abilities read, write, deploy and read:sensitive.`
 					: `Coolify did not answer at ${url} (${errorText(error)}).`;
-		return { code: 1, output: `${why} Nothing was created.` };
-	}
+		}
+	};
+	let token: string | undefined;
+	if (env.COOLIFY_TOKEN) {
+		const why = await tokenWhy(env.COOLIFY_TOKEN.trim());
+		if (why) return { code: 1, output: `${why} Nothing was created.` };
+		token = env.COOLIFY_TOKEN.trim();
+	} else
+		token = await askValid(
+			deps,
+			"Coolify API token (abilities read, write, deploy, read:sensitive): ",
+			{ secret: true },
+			tokenWhy,
+		);
+	if (!token)
+		return {
+			code: 1,
+			output: "Coolify did not accept a token. Nothing was created.",
+		};
+	const api = coolify(url, token, deps);
 
 	const fromEnv = env.CLAUDE_CODE_OAUTH_TOKEN
 		? "CLAUDE_CODE_OAUTH_TOKEN"
@@ -213,42 +256,50 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 			? "ANTHROPIC_API_KEY"
 			: undefined;
 	if (fromEnv) deps.print(`Claude: the credential in $${fromEnv}.`);
-	const given = (
-		env.CLAUDE_CODE_OAUTH_TOKEN ??
-		env.ANTHROPIC_API_KEY ??
-		(await deps.ask(
+	const credential =
+		(env.CLAUDE_CODE_OAUTH_TOKEN ?? env.ANTHROPIC_API_KEY)?.trim() ||
+		(await askValid(
+			deps,
 			'Claude for the engine: a token from "claude setup-token" (your subscription) or an Anthropic API key: ',
 			{ secret: true },
-		))
-	).trim();
-	if (!given)
+			(a) =>
+				a
+					? undefined
+					: 'Paste a token from "claude setup-token" (sk-ant-oat…) or an Anthropic API key (sk-ant-api…).',
+		));
+	if (!credential)
 		return {
 			code: 1,
 			output: "The engine needs a Claude credential. Nothing was created.",
 		};
-	const claude = claudeCredential(given);
+	const claude = claudeCredential(credential);
 	const secrets = [token, claude.value, github.private_key];
 	const shown = (text: string) => scrub(text, secrets);
 
 	const here = await deps.repository().catch(() => undefined);
-	const repositories = (
-		await deps.ask(
-			"GitHub repositories the engine runs (owner/name, comma-separated): ",
-			here ? { initial: here } : {},
-		)
-	)
+	const listed = await askValid(
+		deps,
+		"GitHub repositories the engine runs (owner/name, comma-separated): ",
+		here ? { initial: here } : {},
+		(a) => {
+			const names = a
+				.split(",")
+				.map((r) => r.trim())
+				.filter(Boolean);
+			return names.length && names.every((r) => /^[\w.-]+\/[\w.-]+$/.test(r))
+				? undefined
+				: "The repositories are owner/name, comma-separated, such as acme/web-app.";
+		},
+	);
+	if (listed === undefined)
+		return {
+			code: 1,
+			output: "No repository for the engine. Nothing was created.",
+		};
+	const repositories = listed
 		.split(",")
 		.map((r) => r.trim())
 		.filter(Boolean);
-	if (
-		!repositories.length ||
-		repositories.some((r) => !/^[\w.-]+\/[\w.-]+$/.test(r))
-	)
-		return {
-			code: 1,
-			output:
-				"The repositories are owner/name, comma-separated. Nothing was created.",
-		};
 
 	try {
 		const server = await pick(
@@ -397,25 +448,37 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 async function askStudio(
 	deps: DeployDeps,
 ): Promise<{ url: string; password: string } | undefined | string> {
-	const url = (
-		await deps.ask(
-			"The studio's address, on a domain that points at the server (https://…, Enter for none): ",
-		)
-	)
-		.trim()
-		.replace(/\/+$/, "");
-	if (!url) return undefined;
-	if (!URL.canParse(url) || new URL(url).protocol !== "https:")
-		return `The studio's address is https://, such as https://factory.example.com. Nothing was created.`;
-	const password = (
-		await deps.ask(
+	const given = await askValid(
+		deps,
+		"The studio's address, on a domain that points at the server (https://…, Enter for none): ",
+		{},
+		(a) =>
+			!a || (URL.canParse(a) && new URL(a).protocol === "https:")
+				? undefined
+				: "The studio's address is https://, such as https://factory.example.com, or Enter for none.",
+	);
+	if (given === undefined)
+		return "No valid address for the studio. Nothing was created.";
+	if (!given) return undefined;
+	const url = given.replace(/\/+$/, "");
+	for (let tries = 0; tries < 3; tries++) {
+		const password = await askValid(
+			deps,
 			`The studio's password (${MIN_PASSWORD} characters or more, kept only in Coolify): `,
 			{ secret: true },
-		)
-	).trim();
-	if (password.length < MIN_PASSWORD)
-		return `The studio's password needs ${MIN_PASSWORD} characters or more, for example from openssl rand -base64 24. Nothing was created.`;
-	return { url, password };
+			(a) =>
+				a.length >= MIN_PASSWORD
+					? undefined
+					: `The password needs ${MIN_PASSWORD} characters or more, for example from openssl rand -base64 24.`,
+		);
+		if (password === undefined) break;
+		const again = (
+			await deps.ask("The same password again: ", { secret: true })
+		).trim();
+		if (again === password) return { url, password };
+		deps.print("✗ The two passwords differ: type it again.");
+	}
+	return "No password for the studio. Nothing was created.";
 }
 
 export async function deployCommand(

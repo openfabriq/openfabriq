@@ -152,17 +152,23 @@ it("needs the GitHub App of connect github, and calls Coolify only after that", 
 
 it("says how to fix an unknown or a refused token, and creates nothing", async () => {
 	withApp();
+	// Asked three times, then the command stops.
 	const unknown = coolifyDeps({
-		answers: [COOLIFY, "ctok"],
+		answers: [COOLIFY, "ctok", "ctok2", "ctok3"],
 		versionStatus: 401,
 	});
-	expect(await deployCommand("coolify", unknown.deps)).toMatchObject({
+	expect(await deployCommand("coolify", unknown.deps)).toEqual({
 		code: 1,
-		output: expect.stringContaining(
-			"does not know the token: check it was copied whole",
-		),
+		output: "Coolify did not accept a token. Nothing was created.",
 	});
-	expect(unknown.calls.map((c) => c.path)).toEqual(["/version"]);
+	expect(printed).toContain(
+		"✗ Coolify at https://coolify.acme.dev does not know the token: check it was copied whole, or make a new one in Keys & Tokens.",
+	);
+	expect(unknown.calls.map((c) => c.path)).toEqual([
+		"/version",
+		"/version",
+		"/version",
+	]);
 	const refused = coolifyDeps({ answers: [], versionStatus: 403 });
 	refused.deps.env = { COOLIFY_URL: COOLIFY, COOLIFY_TOKEN: "ctok" };
 	expect(await deployCommand("coolify", refused.deps)).toMatchObject({
@@ -176,15 +182,23 @@ it("says how to fix an unknown or a refused token, and creates nothing", async (
 it("creates the application, sets its variables, deploys, and reports the engine's checks", async () => {
 	withApp();
 	const { deps, calls } = coolifyDeps({
-		// address, token, Claude, repositories (Enter keeps the current one), project 2, name, studio
+		// Each wrong answer is asked again: the address, the project's number, the studio's
+		// address, a short password, and a confirmation that differs.
 		answers: [
+			"coolify.acme.dev",
 			`${COOLIFY}/`,
 			"ctok",
 			"sk-ant-oat01-secret",
 			"acme/web-app",
+			"9",
 			"2",
 			"factory",
+			"http://factory.acme.dev",
 			"https://factory.acme.dev/",
+			"short",
+			"a-studio-password-long-enough",
+			"another-password-long-enough",
+			"a-studio-password-long-enough",
 			"a-studio-password-long-enough",
 		],
 		logs: "✓ GitHub: the engine works as the app acme-factory[bot], installed on acme/web-app\n✓ acme/web-app: factory applied",
@@ -195,6 +209,13 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"The engine is deployed on main: application factory in apps › production.",
 	);
 	expect(result.output).toContain("✓ acme/web-app: factory applied");
+	expect(printed.filter((line) => line.startsWith("✗"))).toEqual([
+		"✗ Coolify's address is https://, such as https://coolify.example.com.",
+		"✗ Answer a number from 1 to 2.",
+		"✗ The studio's address is https://, such as https://factory.example.com, or Enter for none.",
+		"✗ The password needs 16 characters or more, for example from openssl rand -base64 24.",
+		"✗ The two passwords differ: type it again.",
+	]);
 	expect(result.output).toContain(
 		"Studio: https://factory.acme.dev, with the password you typed. Claude Desktop, claude.ai and Claude Code read the engine at https://factory.acme.dev/mcp.",
 	);
@@ -271,24 +292,26 @@ it("creates nothing when the person says no", async () => {
 	expect(calls.some((c) => c.method !== "GET")).toBe(false);
 });
 
-it("refuses a studio address without https, or a short password, before creating anything", async () => {
+it("stops before creating anything when the studio's password is never confirmed", async () => {
 	withApp();
-	const answers = [COOLIFY, "ctok", "sk-ant-api03-k", "acme/web-app", "1", ""];
-	const http = coolifyDeps({
-		answers: [...answers, "http://factory.acme.dev"],
+	const { deps, calls } = coolifyDeps({
+		answers: [
+			COOLIFY,
+			"ctok",
+			"sk-ant-api03-k",
+			"acme/web-app",
+			"1",
+			"",
+			"https://factory.acme.dev",
+			...Array.from({ length: 3 }, (_, i) => [
+				"a-studio-password-long-enough",
+				`not-the-same-password-${i}`,
+			]).flat(),
+		],
 	});
-	expect(await deployCommand("coolify", http.deps)).toMatchObject({
+	expect(await deployCommand("coolify", deps)).toEqual({
 		code: 1,
-		output: expect.stringContaining("The studio's address is https://"),
+		output: "No password for the studio. Nothing was created.",
 	});
-	const short = coolifyDeps({
-		answers: [...answers, "https://factory.acme.dev", "short"],
-	});
-	expect(await deployCommand("coolify", short.deps)).toMatchObject({
-		code: 1,
-		output: expect.stringContaining("16 characters or more"),
-	});
-	expect([...http.calls, ...short.calls].some((c) => c.method !== "GET")).toBe(
-		false,
-	);
+	expect(calls.some((c) => c.method !== "GET")).toBe(false);
 });
