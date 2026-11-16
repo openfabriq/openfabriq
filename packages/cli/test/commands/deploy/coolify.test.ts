@@ -15,11 +15,16 @@ import { home, printed } from "../connect/helpers.js";
 const COOLIFY = "https://coolify.acme.dev";
 const PEM =
 	"-----BEGIN RSA PRIVATE KEY-----\nMIIEsecretkeybody\n-----END RSA PRIVATE KEY-----\n";
-const withApp = () =>
+const withApp = (client: Record<string, string> = {}) =>
 	writeFileSync(
 		join(home, "secrets.json"),
 		JSON.stringify({
-			github: { app_id: "42", slug: "acme-factory", private_key: PEM },
+			github: {
+				app_id: "42",
+				slug: "acme-factory",
+				private_key: PEM,
+				...client,
+			},
 		}),
 	);
 
@@ -195,6 +200,7 @@ it("creates the application, sets its variables, deploys, and reports the engine
 			"factory",
 			"http://factory.acme.dev",
 			"https://factory.acme.dev/",
+			"2",
 			"short",
 			"a-studio-password-long-enough",
 			"another-password-long-enough",
@@ -217,7 +223,7 @@ it("creates the application, sets its variables, deploys, and reports the engine
 		"✗ The two passwords differ: type it again.",
 	]);
 	expect(result.output).toContain(
-		"Studio: https://factory.acme.dev, with the password you typed. Claude Desktop, claude.ai and Claude Code read the engine at https://factory.acme.dev/mcp.",
+		"Studio: https://factory.acme.dev. The password you typed opens it. Claude Desktop, claude.ai and Claude Code read the engine at https://factory.acme.dev/mcp.",
 	);
 	expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
 		"GET /version",
@@ -303,6 +309,7 @@ it("stops before creating anything when the studio's password is never confirmed
 			"1",
 			"",
 			"https://factory.acme.dev",
+			"2",
 			...Array.from({ length: 3 }, (_, i) => [
 				"a-studio-password-long-enough",
 				`not-the-same-password-${i}`,
@@ -314,4 +321,94 @@ it("stops before creating anything when the studio's password is never confirmed
 		output: "No password for the studio. Nothing was created.",
 	});
 	expect(calls.some((c) => c.method !== "GET")).toBe(false);
+});
+
+/** The variables a run gave Coolify, by name. */
+const variables = (calls: { path: string; body?: unknown }[]) => {
+	const bulk = calls.find((c) => c.path.endsWith("/envs/bulk"))?.body as
+		| { data: { key: string; value: string }[] }
+		| undefined;
+	return Object.fromEntries((bulk?.data ?? []).map((v) => [v.key, v.value]));
+};
+const BEFORE_STUDIO = [
+	COOLIFY,
+	"ctok",
+	"sk-ant-api03-k",
+	"acme/web-app",
+	"1",
+	"",
+];
+
+it("gives the studio sign-in with GitHub from the client connect github saved, without a password", async () => {
+	withApp({
+		client_id: "Iv1.client",
+		client_secret: "client-secret-value",
+		studio_url: "https://factory.acme.dev",
+	});
+	const { deps, calls } = coolifyDeps({
+		answers: [...BEFORE_STUDIO, "https://factory.acme.dev", "1"],
+	});
+	const result = await deployCommand("coolify", deps);
+	expect(result.code).toBe(0);
+	expect(result.output).toContain(
+		"Studio: https://factory.acme.dev. Whoever can write to the repositories signs in with their GitHub account. Claude Desktop",
+	);
+	expect(variables(calls)).toMatchObject({
+		OPENFABRIQ_STUDIO_URL: "https://factory.acme.dev",
+		GITHUB_APP_CLIENT_ID: "Iv1.client",
+		GITHUB_APP_CLIENT_SECRET: "client-secret-value",
+	});
+	expect(variables(calls)).not.toHaveProperty("OPENFABRIQ_STUDIO_PASSWORD");
+	expect([...printed, result.output].join("\n")).not.toContain(
+		"client-secret-value",
+	);
+});
+
+it("says where to set the callback when the saved client comes back to another address", async () => {
+	withApp({
+		client_id: "Iv1.client",
+		client_secret: "client-secret-value",
+		studio_url: "https://old.acme.dev",
+	});
+	const { deps } = coolifyDeps({
+		answers: [...BEFORE_STUDIO, "https://factory.acme.dev", "1"],
+	});
+	await deployCommand("coolify", deps);
+	expect(printed.join("\n")).toContain(
+		"The app comes back to https://old.acme.dev: in its settings, https://github.com/settings/apps/acme-factory",
+	);
+	expect(printed.join("\n")).toContain(
+		"add https://factory.acme.dev/auth/github/callback to its Callback URLs.",
+	);
+});
+
+it("asks for the app's client, then the password, for both ways of signing in", async () => {
+	withApp();
+	const { deps, calls } = coolifyDeps({
+		answers: [
+			...BEFORE_STUDIO,
+			"https://factory.acme.dev",
+			"3",
+			"Iv1.typed",
+			"typed-client-secret",
+			"a-studio-password-long-enough",
+			"a-studio-password-long-enough",
+		],
+	});
+	const result = await deployCommand("coolify", deps);
+	expect(result.code).toBe(0);
+	expect(printed.join("\n")).toContain(
+		"add https://factory.acme.dev/auth/github/callback to its Callback URLs, then generate a client secret.",
+	);
+	expect(variables(calls)).toMatchObject({
+		GITHUB_APP_CLIENT_ID: "Iv1.typed",
+		GITHUB_APP_CLIENT_SECRET: "typed-client-secret",
+		OPENFABRIQ_STUDIO_PASSWORD: "a-studio-password-long-enough",
+	});
+	expect(result.output).toContain(
+		"Whoever can write to the repositories signs in with their GitHub account. The password you typed opens it too.",
+	);
+	const screen = [...printed, result.output].join("\n");
+	for (const secret of ["typed-client-secret", "a-studio-password-long-enough"])
+		expect(screen).not.toContain(secret);
 });

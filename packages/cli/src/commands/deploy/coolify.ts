@@ -1,5 +1,5 @@
 import { setTimeout as wait } from "node:timers/promises";
-import { errorText, readSecrets } from "@openfabriq/runner";
+import { errorText, readSecrets, type Secrets } from "@openfabriq/runner";
 import type { CommandResult } from "../../result.js";
 import { type ConnectDeps, isSafeUrl } from "../connect/shared.js";
 
@@ -25,6 +25,13 @@ const LOG_TRIES = 12;
 const MIN_PASSWORD = 16;
 /** The engine's service in docker-compose.yml, and the port its studio serves. */
 const STUDIO_PORT = 4311;
+
+/** The studio on a domain: people sign in with a password, with GitHub, or both. */
+export interface Studio {
+	url: string;
+	password?: string;
+	github?: { client_id: string; client_secret: string };
+}
 
 type Claude = {
 	name: "ANTHROPIC_API_KEY" | "CLAUDE_CODE_OAUTH_TOKEN";
@@ -55,7 +62,7 @@ export function engineVariables(input: {
 	repositories: string[];
 	github: { app_id: string; private_key: string };
 	claude: Claude;
-	studio?: { url: string; password: string } | undefined;
+	studio?: Studio | undefined;
 }) {
 	const variable = (key: string, value: string, secret = false) => ({
 		key,
@@ -75,9 +82,19 @@ export function engineVariables(input: {
 		),
 		variable(input.claude.name, input.claude.value, true),
 		...(input.studio
+			? [variable("OPENFABRIQ_STUDIO_URL", input.studio.url)]
+			: []),
+		...(input.studio?.password
+			? [variable("OPENFABRIQ_STUDIO_PASSWORD", input.studio.password, true)]
+			: []),
+		...(input.studio?.github
 			? [
-					variable("OPENFABRIQ_STUDIO_URL", input.studio.url),
-					variable("OPENFABRIQ_STUDIO_PASSWORD", input.studio.password, true),
+					variable("GITHUB_APP_CLIENT_ID", input.studio.github.client_id),
+					variable(
+						"GITHUB_APP_CLIENT_SECRET",
+						input.studio.github.client_secret,
+						true,
+					),
 				]
 			: []),
 	];
@@ -334,9 +351,10 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 					initial: "openfabriq",
 				})
 			).trim() || "openfabriq";
-		const studio = await askStudio(deps);
+		const studio = await askStudio(deps, github);
 		if (typeof studio === "string") return { code: 1, output: studio };
-		if (studio) secrets.push(studio.password);
+		for (const secret of [studio?.password, studio?.github?.client_secret])
+			if (secret) secrets.push(secret);
 
 		deps.print(
 			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (main), on ${server.name}, in ${project.name} › ${environment.name}${studio ? `, its studio at ${studio.url}` : ""}.`,
@@ -426,7 +444,7 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 					"",
 					...(studio
 						? [
-								`Studio: ${studio.url}, with the password you typed. Claude Desktop, claude.ai and Claude Code read the engine at ${studio.url}/mcp.`,
+								`Studio: ${studio.url}. ${signIn(studio)} Claude Desktop, claude.ai and Claude Code read the engine at ${studio.url}/mcp.`,
 							]
 						: [
 								"The studio has no address: run this command again with one, or see the documentation's Docker page.",
@@ -444,10 +462,78 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 	}
 }
 
-/** The studio's https address and password, or none, or why they are refused. */
+/** How people sign in to the studio, said once it is deployed. */
+const signIn = (studio: Studio) =>
+	[
+		studio.github &&
+			"Whoever can write to the repositories signs in with their GitHub account.",
+		studio.password && "The password you typed opens it too.",
+	]
+		.filter(Boolean)
+		.join(" ")
+		.replace("opens it too", studio.github ? "opens it too" : "opens it");
+
+/** The studio's password, typed twice; undefined after three tries. */
+async function askPassword(deps: DeployDeps): Promise<string | undefined> {
+	for (let tries = 0; tries < 3; tries++) {
+		const password = await askValid(
+			deps,
+			`The studio's password (${MIN_PASSWORD} characters or more, kept only in Coolify): `,
+			{ secret: true },
+			(a) =>
+				a.length >= MIN_PASSWORD
+					? undefined
+					: `The password needs ${MIN_PASSWORD} characters or more, for example from openssl rand -base64 24.`,
+		);
+		if (password === undefined) return undefined;
+		const again = (
+			await deps.ask("The same password again: ", { secret: true })
+		).trim();
+		if (again === password) return password;
+		deps.print("✗ The two passwords differ: type it again.");
+	}
+	return undefined;
+}
+
+/**
+ * The GitHub App's client, for sign-in with GitHub: the one "connect github --url" saved, or the
+ * one the person copies from the app's settings, once its callback URL is set.
+ */
+async function askClient(
+	deps: DeployDeps,
+	github: Secrets["github"],
+	url: string,
+): Promise<{ client_id: string; client_secret: string } | undefined> {
+	const callback = `${url}/auth/github/callback`;
+	const settings = `https://github.com/settings/apps/${github?.slug ?? "<the app>"} (for an organization's app: its Settings › Developer settings › GitHub Apps)`;
+	if (github?.client_id && github.client_secret) {
+		if (github.studio_url !== url)
+			deps.print(
+				`The app comes back to ${github.studio_url ?? "another address"}: in its settings, ${settings}, add ${callback} to its Callback URLs.`,
+			);
+		return { client_id: github.client_id, client_secret: github.client_secret };
+	}
+	deps.print(
+		`Sign-in with GitHub goes through the app ${github?.slug ?? ""}. In its settings, ${settings}: add ${callback} to its Callback URLs, then generate a client secret.`,
+	);
+	const client_id = await askValid(deps, "The app's Client ID: ", {}, (a) =>
+		a ? undefined : "Copy the Client ID shown in the app's settings.",
+	);
+	if (!client_id) return undefined;
+	const client_secret = await askValid(
+		deps,
+		"Its client secret: ",
+		{ secret: true },
+		(a) => (a ? undefined : "Paste the client secret you generated."),
+	);
+	return client_secret ? { client_id, client_secret } : undefined;
+}
+
+/** The studio's https address and how people sign in, or none, or why they are refused. */
 async function askStudio(
 	deps: DeployDeps,
-): Promise<{ url: string; password: string } | undefined | string> {
+	github: Secrets["github"],
+): Promise<Studio | undefined | string> {
 	const given = await askValid(
 		deps,
 		"The studio's address, on a domain that points at the server (https://…, Enter for none): ",
@@ -461,24 +547,32 @@ async function askStudio(
 		return "No valid address for the studio. Nothing was created.";
 	if (!given) return undefined;
 	const url = given.replace(/\/+$/, "");
-	for (let tries = 0; tries < 3; tries++) {
-		const password = await askValid(
-			deps,
-			`The studio's password (${MIN_PASSWORD} characters or more, kept only in Coolify): `,
-			{ secret: true },
-			(a) =>
-				a.length >= MIN_PASSWORD
-					? undefined
-					: `The password needs ${MIN_PASSWORD} characters or more, for example from openssl rand -base64 24.`,
-		);
-		if (password === undefined) break;
-		const again = (
-			await deps.ask("The same password again: ", { secret: true })
-		).trim();
-		if (again === password) return { url, password };
-		deps.print("✗ The two passwords differ: type it again.");
+	const mode = await pick(
+		"Sign-in modes",
+		[
+			{
+				uuid: "github",
+				name: "With GitHub: whoever can write to the repositories",
+			},
+			{ uuid: "password", name: "With a password" },
+			{ uuid: "both", name: "Both" },
+		],
+		deps,
+	);
+	if (!mode) return "No way to sign in to the studio. Nothing was created.";
+	const studio: Studio = { url };
+	if (mode.uuid !== "password") {
+		const client = await askClient(deps, github, url);
+		if (!client)
+			return "No client for sign-in with GitHub. Nothing was created.";
+		studio.github = client;
 	}
-	return "No password for the studio. Nothing was created.";
+	if (mode.uuid !== "github") {
+		const password = await askPassword(deps);
+		if (!password) return "No password for the studio. Nothing was created.";
+		studio.password = password;
+	}
+	return studio;
 }
 
 export async function deployCommand(

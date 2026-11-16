@@ -128,6 +128,9 @@ describe("connectGithub", () => {
 			app_id: "42",
 			slug: "openfabriq-acme",
 			private_key: "PEM",
+			client_id: "Iv1.client",
+			client_secret: "client-secret",
+			studio_url: "https://factory.example.com",
 		});
 		expect(statSync(join(home, "secrets.json")).mode & 0o777).toBe(0o600);
 		expect(result.output).toContain("GITHUB_APP_ID=42");

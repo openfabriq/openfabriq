@@ -16,7 +16,15 @@ export interface Secrets {
 	/** url: the Sentry the token was tested against, for information. */
 	sentry?: { token?: string; url?: string };
 	/** The GitHub App "openfabriq connect github" created; GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY win. */
-	github?: { app_id?: string; slug?: string; private_key?: string };
+	github?: {
+		app_id?: string;
+		slug?: string;
+		private_key?: string;
+		/** With `connect github --url`: the app's client for sign-in with GitHub, and the studio it comes back to. */
+		client_id?: string;
+		client_secret?: string;
+		studio_url?: string;
+	};
 }
 
 const ENV: [keyof Secrets, string, string][] = [

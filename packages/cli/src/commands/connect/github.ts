@@ -203,6 +203,14 @@ export async function connectGithub(
 				app_id: String(app.id),
 				slug: app.slug,
 				private_key: app.pem,
+				// Kept for "deploy coolify", which gives the studio sign-in with GitHub.
+				...(studioUrl && app.client_id && app.client_secret
+					? {
+							client_id: app.client_id,
+							client_secret: app.client_secret,
+							studio_url: studioUrl.origin,
+						}
+					: {}),
 			});
 		} catch (error) {
 			notSaved = errorText(error);
