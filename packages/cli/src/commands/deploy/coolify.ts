@@ -509,12 +509,12 @@ async function askClient(
 	if (github?.client_id && github.client_secret) {
 		if (github.studio_url !== url)
 			deps.print(
-				`The app comes back to ${github.studio_url ?? "another address"}: in its settings, ${settings}, add ${callback} to its Callback URLs.`,
+				`The app comes back to ${github.studio_url ?? "another address"}: in its settings, ${settings}, under Identifying and authorizing users, add the Redirect URI ${callback}, then Save changes.`,
 			);
 		return { client_id: github.client_id, client_secret: github.client_secret };
 	}
 	deps.print(
-		`Sign-in with GitHub goes through the app ${github?.slug ?? ""}. In its settings, ${settings}: add ${callback} to its Callback URLs, then generate a client secret.`,
+		`Sign-in with GitHub goes through the app ${github?.slug ?? ""}. In its settings, ${settings}, under Identifying and authorizing users: add the Redirect URI ${callback}, Save changes, then Generate a new client secret.`,
 	);
 	const client_id = await askValid(deps, "The app's Client ID: ", {}, (a) =>
 		a ? undefined : "Copy the Client ID shown in the app's settings.",

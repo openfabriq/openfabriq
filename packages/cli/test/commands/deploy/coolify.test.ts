@@ -378,7 +378,7 @@ it("says where to set the callback when the saved client comes back to another a
 		"The app comes back to https://old.acme.dev: in its settings, https://github.com/settings/apps/acme-factory",
 	);
 	expect(printed.join("\n")).toContain(
-		"add https://factory.acme.dev/auth/github/callback to its Callback URLs.",
+		"add the Redirect URI https://factory.acme.dev/auth/github/callback, then Save changes.",
 	);
 });
 
@@ -398,7 +398,7 @@ it("asks for the app's client, then the password, for both ways of signing in", 
 	const result = await deployCommand("coolify", deps);
 	expect(result.code).toBe(0);
 	expect(printed.join("\n")).toContain(
-		"add https://factory.acme.dev/auth/github/callback to its Callback URLs, then generate a client secret.",
+		"add the Redirect URI https://factory.acme.dev/auth/github/callback, Save changes, then Generate a new client secret.",
 	);
 	expect(variables(calls)).toMatchObject({
 		GITHUB_APP_CLIENT_ID: "Iv1.typed",

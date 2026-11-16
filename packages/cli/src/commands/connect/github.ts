@@ -5,6 +5,7 @@ import {
 	errorText,
 	exec,
 	githubApp,
+	readSecrets,
 	secretsPath,
 	writeSecrets,
 } from "@openfabriq/runner";
@@ -94,12 +95,13 @@ export async function connectGithub(
 		workflows?: boolean;
 		/** The studio's https address, for sign-in with GitHub. */
 		url?: string;
-		/** "token owner/repo": prints an installation token, for a script such as Docker's entrypoint. */
+		/** "token owner/repo": prints an installation token, for a script such as Docker's entrypoint; "env": the server's variables. */
 		action?: string;
 		repository?: string;
 	} = {},
 ): Promise<CommandResult> {
 	if (options.action === "token") return printToken(options.repository);
+	if (options.action === "env") return printEnv();
 	const studioUrl =
 		options.url && URL.canParse(options.url) ? new URL(options.url) : undefined;
 	if (
@@ -110,7 +112,7 @@ export async function connectGithub(
 		return {
 			code: 1,
 			output:
-				"Usage: openfabriq connect github [--org name] [--workflows] [--url https://studio.example.com] | connect github token owner/repo",
+				"Usage: openfabriq connect github [--org name] [--workflows] [--url https://studio.example.com] | connect github token owner/repo | connect github env",
 		};
 	const state = randomBytes(16).toString("hex");
 	let answer: ((code: string, res: ServerResponse) => void) | undefined;
@@ -227,23 +229,72 @@ export async function connectGithub(
 				`Now, in the page that opened (${install}), install it on the repositories the factory runs on.`,
 				RESTART_START,
 				"",
-				"For a server (Docker, Coolify), set these two variables instead of GH_TOKEN; the key is the app's, keep it as secret as a password:",
-				`GITHUB_APP_ID=${app.id}`,
-				`GITHUB_APP_PRIVATE_KEY=${Buffer.from(app.pem).toString("base64")}`,
-				...(studioUrl && app.client_id && app.client_secret
-					? [
-							"",
-							`For sign-in with GitHub on ${studioUrl.origin}, with OPENFABRIQ_STUDIO_URL set to it:`,
-							`GITHUB_APP_CLIENT_ID=${app.client_id}`,
-							`GITHUB_APP_CLIENT_SECRET=${app.client_secret}`,
-						]
-					: []),
+				...(notSaved
+					? serverVariables({
+							app_id: String(app.id),
+							private_key: app.pem,
+							...(studioUrl && app.client_id && app.client_secret
+								? {
+										client_id: app.client_id,
+										client_secret: app.client_secret,
+										studio_url: studioUrl.origin,
+									}
+								: {}),
+						})
+					: [
+							`For a server: "openfabriq deploy coolify" takes the app from this machine. For Docker, "openfabriq connect github env >> .env" writes its variables (GITHUB_APP_ID=${app.id}, its key${studioUrl && app.client_id ? " and its client for sign-in with GitHub" : ""}) without showing them.`,
+						]),
 			].join("\n"),
 		};
 	} finally {
 		clearTimeout(timer);
 		server.close();
+		// The browser keeps its connection open: without this, the command would wait for it.
+		server.closeAllConnections();
 	}
+}
+
+/** The variables of a server's .env for the app: its id and key, and its client when there is one. */
+function serverVariables(app: {
+	app_id: string;
+	private_key: string;
+	client_id?: string;
+	client_secret?: string;
+	studio_url?: string;
+}): string[] {
+	return [
+		"# The engine as the GitHub App; the key is the app's, keep it as secret as a password.",
+		`GITHUB_APP_ID=${app.app_id}`,
+		`GITHUB_APP_PRIVATE_KEY=${Buffer.from(app.private_key).toString("base64")}`,
+		...(app.client_id && app.client_secret
+			? [
+					`# Sign-in with GitHub on ${app.studio_url ?? "the studio"}, with OPENFABRIQ_STUDIO_URL set to it.`,
+					`GITHUB_APP_CLIENT_ID=${app.client_id}`,
+					`GITHUB_APP_CLIENT_SECRET=${app.client_secret}`,
+				]
+			: []),
+	];
+}
+
+/** The saved app's variables for a server's .env, alone: `openfabriq connect github env >> .env`. */
+function printEnv(): CommandResult {
+	const app = readSecrets().github;
+	if (!app?.app_id || !app.private_key)
+		return {
+			code: 1,
+			output:
+				'No GitHub App on this machine: run "openfabriq connect github" first.',
+		};
+	return {
+		code: 0,
+		output: serverVariables({
+			app_id: app.app_id,
+			private_key: app.private_key,
+			...(app.client_id ? { client_id: app.client_id } : {}),
+			...(app.client_secret ? { client_secret: app.client_secret } : {}),
+			...(app.studio_url ? { studio_url: app.studio_url } : {}),
+		}).join("\n"),
+	};
 }
 
 /** An installation token for one repository, printed alone: `GH_TOKEN=$(openfabriq connect github token owner/repo)`. */

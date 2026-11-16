@@ -98,7 +98,7 @@ On the install page that follows, choose *Only select repositories*, the ones of
 
 #### Copy its two variables
 
-The command saves the app on your computer, so `openfabriq start` there works as the app too, and prints `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` for the server's `.env`. The key is the app's private key in base64 on one line (a PEM with `\n` for its line breaks works too). Keep it as secret as a password: whoever holds it acts as the app on every repository it is installed on.
+The command saves the app on your computer, so `openfabriq start` there works as the app too. For the server's `.env`, `openfabriq connect github env >> .env` writes `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` without showing them on the screen. The key is the app's private key in base64 on one line (a PEM with `\n` for its line breaks works too). Keep it as secret as a password: whoever holds it acts as the app on every repository it is installed on.
 
 </Step>
 </Steps>
@@ -240,7 +240,7 @@ Keep the domain private too. The password locks the studio, but its sign-in page
 
 Beyond two or three people, or when the domain is open to [Claude's connector](/mcp/overview/#connect-claude), let each person sign in with their own GitHub account instead of sharing the password. It goes through the engine's [GitHub App](#the-github-app): whoever can write to one of the factory's repositories gets in, and someone removed from them is out within the hour. No database, nothing more to run.
 
-1. In the app's settings (*Settings › Developer settings › GitHub Apps*, your app; the organization's settings for an app it owns), under *Identifying and authorizing users*, add the **Redirect URI** (formerly *Callback URL*) `https://factory.example.com/auth/github/callback`, with its path and without wildcard matching, then **Save changes** at the bottom. Without it, GitHub answers "This GitHub App must be configured with a callback URL". Then **Generate a new client secret**, and copy the *Client ID* and the secret. For a new app, `openfabriq connect github --url https://factory.example.com` does both and prints the two variables.
+1. In the app's settings (*Settings › Developer settings › GitHub Apps*, your app; the organization's settings for an app it owns), under *Identifying and authorizing users*, add the **Redirect URI** (formerly *Callback URL*) `https://factory.example.com/auth/github/callback`, with its path and without wildcard matching, then **Save changes** at the bottom. Without it, GitHub answers "This GitHub App must be configured with a callback URL". Then **Generate a new client secret**, and copy the *Client ID* and the secret. For a new app, `openfabriq connect github --url https://factory.example.com` does both, and `openfabriq connect github env >> .env` then writes the two variables too.
 2. Add them to `.env`, beside `OPENFABRIQ_STUDIO_URL`:
 
    ```bash title=".env"
