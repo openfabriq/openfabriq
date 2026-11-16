@@ -4,6 +4,8 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-16
+
 ### Added
 
 - `openfabriq deploy coolify` runs the engine on your Coolify through its API, with no variables to export: it asks for Coolify's address and token and a Claude credential, masked, uses the GitHub App of `connect github`, gives the studio a domain if you want, with sign-in with GitHub, a password, or both, deploys, and reports the engine's checks. `openfabriq connect github --url` now also saves the app's client for sign-in with GitHub.
@@ -11,6 +13,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 ### Changed
 
 - `openfabriq connect github` no longer shows the app's key and client secret once it has saved them, and gives the terminal back as soon as it is done. `openfabriq connect github env >> .env` writes a server's variables.
+- The documentation's Coolify page sets the engine up with `openfabriq deploy coolify`; the Claude Code prompt for Coolify is gone.
 
 ## [0.1.2] - 2026-11-16
 
