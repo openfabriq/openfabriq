@@ -40,12 +40,8 @@ export const metadata: Metadata = {
 	},
 };
 
-export const viewport: Viewport = {
-	themeColor: [
-		{ media: "(prefers-color-scheme: light)", color: "#ffffff" },
-		{ media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-	],
-};
+// The site opens light whatever the system's theme, so the browser's bar matches it.
+export const viewport: Viewport = { themeColor: "#ffffff" };
 
 // Audience statistics with Plausible and Cloudflare Web Analytics, without cookies, only when the build that publishes the site sets them.
 const PLAUSIBLE_SCRIPT = process.env.PLAUSIBLE_SCRIPT;
@@ -79,7 +75,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				</head>
 			)}
 			<body className="flex min-h-screen flex-col">
-				<RootProvider search={{ options: { type: "static" } }}>
+				<RootProvider
+					search={{ options: { type: "static" } }}
+					theme={{ defaultTheme: "light" }}
+				>
 					{children}
 				</RootProvider>
 			</body>
