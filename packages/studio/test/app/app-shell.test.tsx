@@ -136,24 +136,60 @@ it("goes to the same page of another project, keeping the overview's period", as
 	expect(window.location.hash).toBe("#/overview?project=acme%2Fb&period=30d");
 });
 
-it("turns the theme from the system's to light, dark, and back, and keeps the choice", async () => {
+/** The sidebar's theme button, by what it says now. */
+const themeButton = (theme: string) => {
+	const [button] = screen.getAllByRole("button", { name: `Theme: ${theme}` });
+	if (!button) throw new Error(`no button for the ${theme} theme`);
+	return button;
+};
+
+/** A system set to dark mode. */
+const systemDark = () =>
+	vi.stubGlobal(
+		"matchMedia",
+		vi.fn(() => ({
+			matches: true,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		})),
+	);
+
+it("opens light with nothing saved, even when the system is dark", async () => {
+	systemDark();
 	await show("#/runs?project=acme%2Fa");
-	/** The sidebar's theme button, by what it says now. */
-	const themeButton = (theme: string) => {
-		const [button] = screen.getAllByRole("button", { name: `Theme: ${theme}` });
-		if (!button) throw new Error(`no button for the ${theme} theme`);
-		return button;
-	};
+	expect(themeButton("light")).toBeTruthy();
+	expect(document.documentElement.dataset.theme).toBe("light");
+	for (const meta of document.querySelectorAll('meta[name="theme-color"]'))
+		expect(meta.getAttribute("content")).toBe("#f9fafb");
+});
+
+it("turns the theme from light to dark, the system's, and back, and keeps the choice across a reload", async () => {
+	systemDark();
+	await show("#/runs?project=acme%2Fa");
+	fireEvent.click(themeButton("light"));
+	await wait(0);
+	expect(document.documentElement.dataset.theme).toBe("dark");
+	expect(localStorage.getItem("openfabriq-theme")).toBe("dark");
+	fireEvent.click(themeButton("dark"));
+	await wait(0);
+	// The system's theme is saved by name: an empty key now means light.
+	expect(localStorage.getItem("openfabriq-theme")).toBe("system");
+	expect(document.documentElement.dataset.theme).toBe("dark");
+	cleanup();
+	await show("#/runs?project=acme%2Fa");
+	expect(themeButton("system")).toBeTruthy();
+	expect(document.documentElement.dataset.theme).toBe("dark");
 	fireEvent.click(themeButton("system"));
 	await wait(0);
 	expect(document.documentElement.dataset.theme).toBe("light");
 	expect(localStorage.getItem("openfabriq-theme")).toBe("light");
-	fireEvent.click(themeButton("light"));
-	await wait(0);
+});
+
+it("keeps a dark theme saved before", async () => {
+	localStorage.setItem("openfabriq-theme", "dark");
+	await show("#/runs?project=acme%2Fa");
+	expect(themeButton("dark")).toBeTruthy();
 	expect(document.documentElement.dataset.theme).toBe("dark");
-	fireEvent.click(themeButton("dark"));
-	await wait(0);
-	expect(localStorage.getItem("openfabriq-theme")).toBeNull();
 });
 
 it("reads the projects and the boards at their own pace", async () => {
