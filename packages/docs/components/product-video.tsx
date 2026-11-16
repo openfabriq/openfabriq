@@ -1,9 +1,15 @@
+"use client";
+
 // The presentation film, made in packages/video. It loads only when someone presses play.
 // ElevenLabs' free plan, which voiced it, asks for "elevenlabs.io" wherever it is published.
 export function ProductVideo({ className = "" }: { className?: string }) {
 	return (
 		<figure className={`not-prose mx-auto w-full max-w-5xl ${className}`}>
 			<video
+				// Full volume is loud for a film that starts on a click.
+				ref={(video) => {
+					if (video) video.volume = 0.3;
+				}}
 				controls
 				playsInline
 				preload="none"

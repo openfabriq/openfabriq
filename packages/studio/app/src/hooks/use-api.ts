@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { OFFLINE } from "../lib/api.js";
+import { DEMO } from "../lib/demo.js";
 
 /** The server's answer: its data, or the error it gave. */
 type Answer<T> = { data: T } | { error: string };
@@ -36,10 +37,13 @@ export function useApi<T>(
 		queryKey: [path],
 		queryFn: () => read<T>(path ?? ""),
 		enabled: path !== undefined,
+		// The demo's answers are recorded files: reading them again changes nothing.
 		refetchInterval: (q) =>
-			(typeof refreshMs === "function"
-				? refreshMs(dataOf(q.state.data))
-				: refreshMs) || false,
+			(!DEMO &&
+				(typeof refreshMs === "function"
+					? refreshMs(dataOf(q.state.data))
+					: refreshMs)) ||
+			false,
 	});
 	const answer = query.data;
 	const data = dataOf(answer);
