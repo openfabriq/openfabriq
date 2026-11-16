@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { errorText, gh, localGit } from "@openfabriq/runner";
+import { errorText, exec, gh, localGit } from "@openfabriq/runner";
 import { type CommandLine, readCommandLine, reportsHowItWent } from "./args.js";
 import {
 	type ApplyDeps,
@@ -8,6 +8,7 @@ import {
 	planCommand,
 } from "./commands/apply/index.js";
 import { connectCommand } from "./commands/connect/index.js";
+import { deployCommand, githubRepository } from "./commands/deploy/coolify.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { mcpCommand } from "./commands/mcp.js";
@@ -56,6 +57,9 @@ Commands:
   connect slack|linear|sentry  connect a service through the relay: everything it sends waits
                            there, even while this machine sleeps
   connect webhook <name>   let the relay receive a webhook of factory.yaml; --remove to stop
+  deploy coolify           run the engine on your Coolify, through its API: asks for Coolify's
+                           address and token and a Claude credential; uses the GitHub App
+                           of "connect github"
   secret set <NAME> [--project owner/repo]
                            keep the value of a secret the factory declares, on this machine only
   update                   install the latest openfabriq, or say how when it came another way
@@ -71,7 +75,10 @@ async function main(line: CommandLine): Promise<CommandResult> {
 			output: `openfabriq ${(JSON.parse(readFileSync(PACKAGE_JSON, "utf8")) as { version: string }).version}`,
 		};
 	// The mark and the name, where a command starts a conversation or a long run, and over the usage.
-	if (styled && ["init", "start", "connect", undefined].includes(command))
+	if (
+		styled &&
+		["init", "start", "connect", "deploy", undefined].includes(command)
+	)
 		console.log(header(command && [command, positionals[1]].join(" ").trim()));
 	// validate, doctor, status, connect and init --example work without Claude Code or GitHub.
 	if (
@@ -129,6 +136,16 @@ async function main(line: CommandLine): Promise<CommandResult> {
 					workflows: values.workflows,
 				},
 			);
+		case "deploy":
+			return deployCommand(positionals[1], {
+				ask: terminalAsk,
+				print,
+				confirm: terminalConfirm,
+				repository: async () =>
+					githubRepository(
+						await exec("git", ["remote", "get-url", "origin"], { cwd: dir }),
+					),
+			});
 		case "secret":
 			return secretCommand(
 				{

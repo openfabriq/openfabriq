@@ -24,7 +24,7 @@ Before any task, read `CONTRIBUTING.md` and the documentation site's pages about
 packages/core/      openfabriq/ format: factory/ (loading, validation), plan/, cron, graph
 packages/runner/    local engine: engine/, github/, sources/ (relay.ts, then slack/, linear/, sentry/, webhook/), run/, agent/, workspace/, state/, chat/
 packages/studio/    local app: JSON server (src/, read-only except the protected chat routes and the sign-in, by feature) and Vite React app (app/src: shell/, lib/, components/, features/<page>/ with pure logic beside the components)
-packages/cli/       openfabriq init | validate | doctor | plan | apply | start | status | run | connect | secret (src/commands/, connect/<service>.ts); scripts/package.ts builds the npm package
+packages/cli/       openfabriq init | validate | doctor | plan | apply | start | status | run | connect | deploy | secret (src/commands/, connect/<service>.ts, deploy/<target>.ts); scripts/package.ts builds the npm package
 packages/relay/     Cloudflare Worker + Durable Object the user deploys: webhooks and OAuth for the engine; src/integrations/<name>/; self-hosted with workerd, Docker and Caddy
 packages/docs/      the documentation site, Fumadocs exported as static files, in English
 packages/video/     the product video, HTML scenes rendered with HyperFrames; not a pnpm package

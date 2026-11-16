@@ -1,13 +1,58 @@
 ---
 title: Coolify
-description: Run the engine on your own Coolify. One prompt sets it up through Coolify's API, or follow the steps by hand.
+description: Run the engine on your own Coolify. One command sets it up through Coolify's API, or a prompt in Claude Code, or the steps by hand.
 ---
 
 [Coolify](https://coolify.io) deploys the engine's `docker-compose.yml` straight from the repository: nothing to install on the server. It is the [Docker](/deployment/docker/) setup, with Coolify running `docker compose up`.
 
 ## Deploy
 
-<Tabs items={["With Claude Code", "By hand"]}>
+<Tabs items={["With the CLI", "With Claude Code", "By hand"]}>
+<Tab value="With the CLI" id="with-the-cli">
+
+On your computer, with openfabriq [installed](/getting-started/install/), in the repository the engine will run.
+
+<Steps>
+<Step>
+
+### Turn the API on and make a token
+
+In Coolify:
+
+1. Open *Settings › Advanced* and switch on *API Access*.
+2. Go back to the main menu: *Settings* hides it. Under *Manage*, open *Keys & Tokens*.
+3. In *API tokens*, create a token with the abilities `read`, `write`, `deploy` and `read:sensitive` (the last one is for the logs), and not `root`.
+
+</Step>
+<Step>
+
+### Create the GitHub App
+
+The engine works on GitHub as your team's app ([The GitHub App](/deployment/docker/#the-github-app)). Once, if you have not yet:
+
+```bash
+openfabriq connect github --org acme
+```
+
+Without `--org`, the app is yours, for repositories of your own account. Install it on the repositories the engine runs.
+
+</Step>
+<Step>
+
+### Deploy
+
+```bash
+openfabriq deploy coolify
+```
+
+It asks for Coolify's address and the token, then for Claude: a token from `claude setup-token`, to use your subscription, or an Anthropic API key. Both are typed masked, and never printed. It takes the GitHub App from `connect github`, asks which repositories the engine runs (the current one by default), which server, project and environment to use, and the application's name. Once you say yes, it creates the application from %GITHUB_URL%, sets its variables (the secrets locked, hidden in Coolify), deploys, and reports what [`openfabriq doctor`](/reference/troubleshooting/) says in the engine's logs.
+
+Delete the Coolify token once the deployment works, if you made it only for this.
+
+</Step>
+</Steps>
+
+</Tab>
 <Tab value="With Claude Code" id="with-claude-code">
 
 Paste a prompt in Claude Code, on your computer: it sets the engine up through Coolify's API. Two steps come first.

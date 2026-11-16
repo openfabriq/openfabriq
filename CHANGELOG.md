@@ -4,6 +4,10 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- `openfabriq deploy coolify` runs the engine on your Coolify through its API, with no variables to export: it asks for Coolify's address and token and a Claude credential, masked, uses the GitHub App of `connect github`, deploys, and reports the engine's checks.
+
 ## [0.1.2] - 2026-11-16
 
 ### Added

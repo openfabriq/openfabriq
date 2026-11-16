@@ -30,7 +30,7 @@ export function readCommandLine(args: string[]) {
 export type CommandLine = ReturnType<typeof readCommandLine>;
 
 /** Commands whose output says how they went: in a terminal, it is led by ✓ (or ✗ on failure). */
-const REPORTS = ["init", "apply", "connect", "secret", "update"];
+const REPORTS = ["init", "apply", "connect", "deploy", "secret", "update"];
 
 export const reportsHowItWent = (command: string | undefined) =>
 	REPORTS.includes(command ?? "");

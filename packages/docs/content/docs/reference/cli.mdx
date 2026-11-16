@@ -39,6 +39,7 @@ description: Every openfabriq command.
 | `openfabriq connect linear` | Installs openfabriq as an app in Linear, through the relay: labels and delegation |
 | `openfabriq connect sentry` | Tests a Sentry auth token and gives it to the relay, which looks for new issues |
 | `openfabriq connect webhook <name> [--remove]` | Lets the relay receive a webhook of `factory.yaml`, or stops it |
+| `openfabriq deploy coolify` | Runs the engine on your [Coolify](/deployment/coolify/), through its API: asks for Coolify's address and API token and a Claude credential, masked, uses the GitHub App of `connect github`, creates the application, sets its variables, deploys, and reports what the engine's checks say. Never prints a secret |
 | `openfabriq secret set <NAME> [--project owner/repo]` | Asks for the value of a secret the factory declares, and stores it on this machine only |
 
 ## Environment
