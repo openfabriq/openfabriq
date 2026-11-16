@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <strong>The Terraform of software factories.</strong><br>
+  <strong>Your AI software factory, as code.</strong><br>
   AI agents that triage, implement, review and fix your GitHub repository,<br>
   described in readable files and run on your machine or your team's server.
 </p>
