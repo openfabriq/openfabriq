@@ -64,6 +64,18 @@ export function sectionOf(url: string) {
 	}
 }
 
+/**
+ * A documentation page's title for the browser tab and search results: with its section when
+ * another page has the same title ("Agents · Studio", "Agents · Factory"), so each is told apart.
+ */
+export function docsTitle(title: string, url: string) {
+	const shared = source
+		.getPages()
+		.some((p) => p.url !== url && p.data.title === title);
+	const section = shared && sectionOf(url)?.name;
+	return section ? `${title} · ${section}` : title;
+}
+
 export interface SitePage {
 	path: string;
 	title: string;
