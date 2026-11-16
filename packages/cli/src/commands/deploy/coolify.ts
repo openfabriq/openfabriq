@@ -1,3 +1,4 @@
+import { lookup as dnsLookup } from "node:dns/promises";
 import { setTimeout as wait } from "node:timers/promises";
 import { errorText, readSecrets, type Secrets } from "@openfabriq/runner";
 import type { CommandResult } from "../../result.js";
@@ -13,6 +14,8 @@ export interface DeployDeps extends ConnectDeps {
 	repository(): Promise<string | undefined>;
 	env?: NodeJS.ProcessEnv;
 	sleep?: (ms: number) => Promise<void>;
+	/** The IPv4 address of a host name, to check that the studio's domain points at the server. */
+	lookup?: (host: string) => Promise<string>;
 }
 
 /** The engine's sources: Coolify builds its docker-compose.yml from them. */
@@ -40,7 +43,20 @@ type Claude = {
 interface Named {
 	uuid: string;
 	name: string;
+	description?: string | null;
 }
+
+/** A Coolify server: its address, or a name for the machine Coolify itself runs on. */
+interface Server extends Named {
+	ip?: string;
+}
+
+/** Where a server answers on the Internet: Coolify's own host is named host.docker.internal or localhost. */
+export const serverHost = (server: Server, coolifyUrl: string) =>
+	!server.ip ||
+	["host.docker.internal", "localhost", "127.0.0.1"].includes(server.ip)
+		? new URL(coolifyUrl).hostname
+		: server.ip;
 
 /** owner/name in a GitHub remote, https or ssh. */
 export function githubRepository(remote: string): string | undefined {
@@ -181,7 +197,7 @@ async function pick<T extends Named>(
 ): Promise<T | undefined> {
 	if (items.length <= 1) return items[0];
 	deps.print(
-		`${what}:\n${items.map((item, i) => `  ${i + 1}. ${item.name}`).join("\n")}`,
+		`${what}:\n${items.map((item, i) => `  ${i + 1}. ${item.name}${item.description ? `: ${item.description}` : ""}`).join("\n")}`,
 	);
 	const answer = await askValid(
 		deps,
@@ -321,7 +337,7 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 	try {
 		const server = await pick(
 			"Servers",
-			await api<Named[]>("GET", "/servers"),
+			await api<Server[]>("GET", "/servers"),
 			deps,
 		);
 		const project = await pick(
@@ -355,6 +371,25 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 		if (typeof studio === "string") return { code: 1, output: studio };
 		for (const secret of [studio?.password, studio?.github?.client_secret])
 			if (secret) secrets.push(secret);
+		// The studio's domain must reach this server's proxy, or the studio answers nothing.
+		if (studio) {
+			const lookup =
+				deps.lookup ??
+				(async (host: string) =>
+					(await dnsLookup(host, { family: 4 })).address);
+			const host = new URL(studio.url).hostname;
+			const [domainAt, serverAt] = await Promise.all([
+				lookup(host).catch(() => undefined),
+				lookup(serverHost(server, url)).catch(() => undefined),
+			]);
+			if (domainAt && serverAt && domainAt !== serverAt) {
+				deps.print(
+					`✗ ${host} points at ${domainAt}, but ${server.name} is at ${serverAt}: the studio would answer nothing there. Pick the server ${host} points at, or point the domain at ${serverAt}.`,
+				);
+				if (!(await deps.confirm(`Deploy on ${server.name} anyway?`)))
+					return { code: 1, output: "Nothing was created." };
+			}
+		}
 
 		deps.print(
 			`The engine will run ${repositories.join(", ")} as the GitHub App ${github.slug ?? github.app_id}, with ${claude.name === "CLAUDE_CODE_OAUTH_TOKEN" ? "your Claude subscription" : "an Anthropic API key"}: the application ${name}, built from ${ENGINE} (main), on ${server.name}, in ${project.name} › ${environment.name}${studio ? `, its studio at ${studio.url}` : ""}.`,

@@ -34,6 +34,8 @@ function coolifyDeps(options: {
 	versionStatus?: number;
 	deployment?: string[];
 	logs?: string;
+	servers?: { uuid: string; name: string; ip?: string; description?: string }[];
+	addresses?: Record<string, string>;
 }) {
 	const calls: {
 		method: string;
@@ -59,6 +61,8 @@ function coolifyDeps(options: {
 		confirm: async () => true,
 		repository: async () => "acme/web-app",
 		sleep: async () => {},
+		// Every host at the same address, unless the test says otherwise.
+		lookup: async (host) => options.addresses?.[host] ?? "203.0.113.10",
 		fetch: (async (url: string, init: RequestInit) => {
 			const path = url.replace(`${COOLIFY}/api/v1`, "");
 			const method = init.method ?? "GET";
@@ -71,7 +75,7 @@ function coolifyDeps(options: {
 			if (path === "/version")
 				return answer(options.versionStatus ?? 200, "4.7.5");
 			if (path === "/servers")
-				return answer(200, [{ uuid: "s1", name: "main" }]);
+				return answer(200, options.servers ?? [{ uuid: "s1", name: "main" }]);
 			if (path === "/projects")
 				return answer(200, [
 					{ uuid: "p1", name: "infra" },
@@ -411,4 +415,53 @@ it("asks for the app's client, then the password, for both ways of signing in", 
 	const screen = [...printed, result.output].join("\n");
 	for (const secret of ["typed-client-secret", "a-studio-password-long-enough"])
 		expect(screen).not.toContain(secret);
+});
+
+it("warns when the studio's domain points at another server than the one picked", async () => {
+	withApp();
+	const answers = [
+		...BEFORE_STUDIO.slice(0, 4),
+		"2", // the server: edge
+		"1", // the project
+		"", // the name
+		"https://factory.acme.dev",
+		"2",
+		"a-studio-password-long-enough",
+		"a-studio-password-long-enough",
+	];
+	const setup = {
+		servers: [
+			{
+				uuid: "s1",
+				name: "main",
+				ip: "host.docker.internal",
+				description: "where Coolify runs",
+			},
+			{ uuid: "s2", name: "edge", ip: "100.78.30.108" },
+		],
+		addresses: {
+			"factory.acme.dev": "149.202.58.224",
+			"coolify.acme.dev": "149.202.58.224",
+			"100.78.30.108": "100.78.30.108",
+		},
+	};
+	const refused = coolifyDeps({ answers: [...answers], ...setup });
+	refused.deps.confirm = async (question) => !question.includes("anyway");
+	expect(await deployCommand("coolify", refused.deps)).toEqual({
+		code: 1,
+		output: "Nothing was created.",
+	});
+	expect(printed.join("\n")).toContain("  1. main: where Coolify runs");
+	expect(printed).toContain(
+		"✗ factory.acme.dev points at 149.202.58.224, but edge is at 100.78.30.108: the studio would answer nothing there. Pick the server factory.acme.dev points at, or point the domain at 100.78.30.108.",
+	);
+	expect(refused.calls.some((c) => c.method !== "GET")).toBe(false);
+	// Coolify's own host is where Coolify answers: no warning there.
+	printed.length = 0;
+	const main = coolifyDeps({
+		answers: answers.map((a, i) => (i === 4 ? "1" : a)),
+		...setup,
+	});
+	expect((await deployCommand("coolify", main.deps)).code).toBe(0);
+	expect(printed.join("\n")).not.toContain("points at");
 });
