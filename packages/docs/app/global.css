@@ -274,25 +274,27 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	animation: of-pulse 1.6s var(--of-ease) infinite;
 }
 
-/* The film's play disc calls, slowly: a ring leaves it and fades. */
+/* The film's play disc calls: rings leave it in a steady wave, one starting as the last one fades. */
 @keyframes of-beckon {
-	0% {
+	from {
 		box-shadow: 0 0 0 0
-			color-mix(in oklch, var(--color-fd-foreground) 45%, transparent);
+			color-mix(in oklch, var(--color-fd-foreground) 40%, transparent);
 	}
-	/* Still clear halfway out, so the eye catches it before it fades. */
-	25% {
-		box-shadow: 0 0 0 7px
-			color-mix(in oklch, var(--color-fd-foreground) 22%, transparent);
-	}
-	/* Gone after about 1.3s; the rest of the beat is a pause. */
-	55%,
-	100% {
+	to {
 		box-shadow: 0 0 0 12px transparent;
 	}
 }
-.of-beckon {
-	animation: of-beckon 2.4s var(--of-ease) infinite;
+.of-beckon::before,
+.of-beckon::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	/* A gentle ease-out, not the site's sharp one: a wave has no dead time between its rings. */
+	animation: of-beckon 2.2s cubic-bezier(0.33, 0.6, 0.5, 1) infinite;
+}
+.of-beckon::after {
+	animation-delay: -1.1s;
 }
 
 /* A command or a key inside a sentence: mono on a light tint of the text colour, so it reads as something to type, on any surface. */
@@ -375,7 +377,8 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	.of-digit,
 	.of-enter,
 	.of-pulse,
-	.of-beckon,
+	.of-beckon::before,
+	.of-beckon::after,
 	.of-signal {
 		animation: none;
 	}
