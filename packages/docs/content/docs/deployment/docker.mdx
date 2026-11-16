@@ -222,7 +222,7 @@ OPENFABRIQ_STUDIO_PASSWORD=…   # 16 characters or more: openssl rand -base64 2
 OPENFABRIQ_STUDIO_URL=https://factory.example.com
 ```
 
-Then send that domain to the `engine` service, port `4311`, with an https proxy. On **Coolify**: in the resource's settings, give the `engine` service the domain with the port, `https://factory.example.com:4311`, put the two variables in *Environment Variables*, and deploy; Coolify's proxy gets the certificate.
+Then send that domain to the `engine` service, port `4311`, with an https proxy. On **Coolify**, `openfabriq deploy coolify` does it when it asks for the studio's address; by hand, in the resource's settings, give the `engine` service the domain with the port, `https://factory.example.com:4311`, put the two variables in *Environment Variables*, and deploy; Coolify's proxy gets the certificate.
 
 Open `https://factory.example.com`: the studio asks for the password, then stays open in that browser until the engine restarts. `openfabriq start` prints where to sign in, never the password:
 

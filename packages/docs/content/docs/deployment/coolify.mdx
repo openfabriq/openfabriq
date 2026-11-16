@@ -77,13 +77,15 @@ In the terminal window where you will start Claude Code:
 
 ```bash
 export COOLIFY_URL=https://coolify.example.com   # your Coolify's address
-export COOLIFY_TOKEN=…   # the API token created at step 1
-export GITHUB_APP_ID=…  GITHUB_APP_PRIVATE_KEY=…   # your team's GitHub App, from `openfabriq connect github`
+export COOLIFY_TOKEN='…'   # the API token created at step 1, between single quotes: it holds a |
+set -a; . <(openfabriq connect github env); set +a   # your team's GitHub App, saved by `openfabriq connect github`
 # or, instead of the app, a classic token of the factory's GitHub account:
 # export GH_TOKEN=ghp_…
-export ANTHROPIC_API_KEY=…  # or CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`
+export ANTHROPIC_API_KEY='…'  # or CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`
 claude
 ```
+
+`set -a` exports the app's variables that `openfabriq connect github env` gives, without showing them.
 
 To create the app, see [The GitHub App](/deployment/docker/#the-github-app), and a token instead, [A token instead of the app](/deployment/docker/#a-token-instead-of-the-app). The variables are described under [Configuration](#configuration).
 
@@ -145,9 +147,9 @@ Select *Deploy* and read the deployment logs. The engine prints what `openfabriq
 
 ## Configuration
 
-The variables are Docker's, listed in [Docker's configuration](/deployment/docker/#configuration). In Coolify you set them under *Environment Variables*; the prompt sets them through the API.
+The variables are Docker's, listed in [Docker's configuration](/deployment/docker/#configuration). In Coolify you set them under *Environment Variables*; `openfabriq deploy coolify` and the prompt set them through the API.
 
-To open the studio on a domain, see [Open the studio](/deployment/docker/#open-the-studio): on Coolify, give the `engine` service the domain with the port, `https://factory.example.com:4311`. With that domain, Claude Desktop, claude.ai and Claude Code read the engine at `https://factory.example.com/mcp`: see [Connect Claude](/mcp/overview/#connect-claude).
+To open the studio on a domain, `openfabriq deploy coolify` asks for it, and how people sign in. By hand, see [Open the studio](/deployment/docker/#open-the-studio): on Coolify, give the `engine` service the domain with the port, `https://factory.example.com:4311`. With that domain, Claude Desktop, claude.ai and Claude Code read the engine at `https://factory.example.com/mcp`: see [Connect Claude](/mcp/overview/#connect-claude).
 
 ## What the compose file does not pass on
 
