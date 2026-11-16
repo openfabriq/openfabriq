@@ -37,13 +37,16 @@ function coolifyDeps(options: {
 		auth: string;
 	}[] = [];
 	const statuses = [...(options.deployment ?? ["in_progress", "finished"])];
-	const answer = (status: number, body: unknown) =>
-		({
+	// As Coolify answers: JSON, except a string, sent as plain text (GET /version answers 4.7.5).
+	const answer = (status: number, body: unknown) => {
+		const text = typeof body === "string" ? body : JSON.stringify(body);
+		return {
 			ok: status < 300,
 			status,
-			json: async () => body,
-			text: async () => JSON.stringify(body),
-		}) as Response;
+			json: async () => JSON.parse(text),
+			text: async () => text,
+		} as Response;
+	};
 	const deps: DeployDeps = {
 		env: {},
 		ask: async () => options.answers.shift() ?? "",

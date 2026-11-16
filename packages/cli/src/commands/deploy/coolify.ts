@@ -116,7 +116,13 @@ function coolify(url: string, token: string, deps: DeployDeps) {
 				`${method} ${path} answered ${res.status}${text ? `: ${text}` : ""}`,
 			);
 		}
-		return (await res.json()) as T;
+		// Most routes answer JSON; /version answers its number as plain text.
+		const text = await res.text();
+		try {
+			return JSON.parse(text) as T;
+		} catch {
+			return text as T;
+		}
 	};
 }
 
