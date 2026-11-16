@@ -179,14 +179,15 @@ export async function deployCoolify(deps: DeployDeps): Promise<CommandResult> {
 	try {
 		await api("GET", "/version");
 	} catch (error) {
-		const refused =
-			error instanceof CoolifyError && [401, 403].includes(error.status);
-		return {
-			code: 1,
-			output: refused
-				? "Coolify refused the token. In Coolify, turn on Settings › Advanced › API Access, and give the token the abilities read, write, deploy and read:sensitive. Nothing was created."
-				: `Coolify did not answer at ${url} (${errorText(error)}). Nothing was created.`,
-		};
+		const status = error instanceof CoolifyError ? error.status : undefined;
+		const source = env.COOLIFY_TOKEN ? " (the token of $COOLIFY_TOKEN)" : "";
+		const why =
+			status === 401
+				? `Coolify at ${url} does not know the token${source}: check it was copied whole, or make a new one in Keys & Tokens.`
+				: status === 403
+					? `Coolify at ${url} refused the token${source}: turn on Settings › Advanced › API Access, and give the token the abilities read, write, deploy and read:sensitive.`
+					: `Coolify did not answer at ${url} (${errorText(error)}).`;
+		return { code: 1, output: `${why} Nothing was created.` };
 	}
 
 	const fromEnv = env.CLAUDE_CODE_OAUTH_TOKEN

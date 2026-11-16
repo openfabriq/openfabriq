@@ -147,17 +147,27 @@ it("needs the GitHub App of connect github, and calls Coolify only after that", 
 	expect(calls).toEqual([]);
 });
 
-it("says how to fix a refused token, and creates nothing", async () => {
+it("says how to fix an unknown or a refused token, and creates nothing", async () => {
 	withApp();
-	const { deps, calls } = coolifyDeps({
+	const unknown = coolifyDeps({
 		answers: [COOLIFY, "ctok"],
 		versionStatus: 401,
 	});
-	expect(await deployCommand("coolify", deps)).toMatchObject({
+	expect(await deployCommand("coolify", unknown.deps)).toMatchObject({
 		code: 1,
-		output: expect.stringContaining("API Access"),
+		output: expect.stringContaining(
+			"does not know the token: check it was copied whole",
+		),
 	});
-	expect(calls.map((c) => c.path)).toEqual(["/version"]);
+	expect(unknown.calls.map((c) => c.path)).toEqual(["/version"]);
+	const refused = coolifyDeps({ answers: [], versionStatus: 403 });
+	refused.deps.env = { COOLIFY_URL: COOLIFY, COOLIFY_TOKEN: "ctok" };
+	expect(await deployCommand("coolify", refused.deps)).toMatchObject({
+		code: 1,
+		output: expect.stringContaining(
+			"refused the token (the token of $COOLIFY_TOKEN): turn on Settings › Advanced › API Access",
+		),
+	});
 });
 
 it("creates the application, sets its variables, deploys, and reports the engine's checks", async () => {
