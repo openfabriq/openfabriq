@@ -5,7 +5,7 @@ description: The local app that shows what your factory does, what it costs, and
 
 The studio is openfabriq's local app: follow the work of your factories, review a run, and see where people had to step in.
 
-![The overview: pull requests merged as written, issue to merge against the team, hands-off runs and human interventions, for one project.](/screenshots/studio/overview.png)
+![The overview: autonomy, merge rate, resolved issues and human interventions, for one project.](/screenshots/studio/overview.png)
 
 *The overview of a project over 7 days.*
 
@@ -46,22 +46,26 @@ The studio shows one project at a time: the selector at the top of the sidebar s
 
 The overview covers the last 7 days, the last 30 days, or all time. It has two views.
 
-**Productivity** has four figures, then the runs per day by agent (a menu keeps one agent), the applied outputs by kind and the latest runs:
+**Productivity** has four figures, then the charts and the latest runs:
 
-- **Merged as written**: the factory's pull requests merged with no commit of a person on them. The engine notes the commits it pushes, so any other commit, an *Update branch* on GitHub included, counts as a person's. Pull requests it cannot check are counted apart: those opened before the engine noted its commits, and those older than the repository's 100 latest merged pull requests.
-- **Issue to merge**: the median time from the opening of the issue a pull request closes (its `Closes #12`) to its merge, for the factory's pull requests, next to the same median for your team's pull requests merged in the last 90 days. Only the repository's 100 latest merged pull requests are read; pull requests that close no issue are left out.
-- **Hands-off runs**: the share of finished runs that succeeded with no hand-off and no refused output, and the time the agents spent working.
-- **Human interventions**: hand-offs to `needs-human`, failed runs, refused outputs, and a link to what is waiting for you.
+- **Autonomy**: the share of finished runs that needed nobody: they succeeded, were not handed to a person, and the factory's rules blocked nothing they proposed.
+- **Merge rate**: of the factory's pull requests a person decided on, the share merged rather than closed without merge. Those still open are not counted yet.
+- **Issues resolved**: of the issues an agent opened a pull request for, those where one of these pull requests was merged. Issues only triaged or commented on are left out.
+- **Human interventions**: runs handed to a person (`needs-human`), failed runs, outputs the factory's rules blocked, and a link to what is waiting for you.
 
-**Cost and return** has four figures too, then the cost per day and per agent, chat included:
+The charts: runs per day by agent (a menu keeps one agent), autonomy and success as a 7-day average, the pull requests opened and merged since the start of the period, and the actions the engine took for the agents, by kind.
 
-- **Spent**: agents and chat, with the cost per run.
-- **Cost per PR merged as written**: what was spent over the period, divided by the pull requests merged as written, next to the cost per merged pull request.
-- **Time gained per issue**: how much shorter the factory's median time from issue to merge is than your team's over 90 days; "lost" when it is longer.
-- **Lost to failed runs**: what the failed runs cost.
+**Cost and return** has four figures too, then the cost per day, the cost per agent, chat included, and where the money went:
+
+- **Spent**: agents and chat.
+- **Cost per run**: the agents' cost, without the chat, with the average length of a run.
+- **Cost per merged PR**: everything spent over the period, chat and triage included, divided by the pull requests merged.
+- **Cost per agent hour**: the agents' cost per hour they spent working.
+
+**Where the money went** splits the runs' cost by what came of their work: pull requests merged, still open or closed without merge, failed runs, and other work (triage, comments, reviews of other pull requests). A run counts for the pull request it opened, pushed to or reviewed.
 
 Every figure is counted from the runs and GitHub; none is estimated.
 
-![Cost and return: cost per agent and per day.](/screenshots/studio/overview-cost.png)
+![Cost and return: what was spent, per unit of work, per day, per agent, and where the money went.](/screenshots/studio/overview-cost.png)
 
 On a subscription, nothing is billed per token. The studio reports what the same tokens would cost on the API, which measures how much of your quota the factory uses.

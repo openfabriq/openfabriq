@@ -1,8 +1,8 @@
 import type { Action } from "@openfabriq/core";
 import type { RunRecord } from "@openfabriq/runner";
+import { subjectUrl } from "../board/board.js";
 import { byEngineHandoff, handedOver, isLinkNotice } from "../runs/story.js";
 import type { SubjectState, SubjectStates } from "../subjects/subject-state.js";
-import type { MergedPull } from "./merged-pulls.js";
 
 export const PERIODS = ["7d", "30d", "all"] as const;
 export type Period = (typeof PERIODS)[number];
@@ -23,26 +23,42 @@ export interface Metrics {
 		failed: number;
 		skipped: number;
 		active: number;
-		/** Succeeded with no handoff and no refused output: nobody had to step in. */
-		unaided: number;
 	};
 	averageDurationMs?: number;
 	/** Time the agents spent working, all finished runs together. */
 	agentTimeMs: number;
+	/** The finished runs (succeeded or failed), and those nobody had to step in: no failure, handoff or refused output. */
+	autonomy: { finished: number; autonomous: number };
 	cost: {
 		totalUsd: number;
 		chatUsd: number;
-		/** What the failed runs cost. */
-		failedUsd: number;
 		byAgent: { agent: string; usd: number; runs: number }[];
-		/** `agents`: the runs of each agent that day, an agent without one left out. */
-		byDay: {
-			day: string;
-			usd: number;
-			runs: number;
-			agents: Record<string, number>;
-		}[];
+		/**
+		 * What came of the money the runs spent, the chat apart: the work on a pull request the factory opened,
+		 * by what became of it; the failed runs; and the rest (triage, comments, reviews of other pull requests).
+		 */
+		byOutcome: {
+			merged: number;
+			open: number;
+			closed: number;
+			failed: number;
+			other: number;
+		};
 	};
+	/** Each day of the period. `agents`: the runs of each agent that day, an agent without one left out. */
+	byDay: {
+		day: string;
+		usd: number;
+		runs: number;
+		agents: Record<string, number>;
+		/** Of the day's runs, those finished, those that succeeded and those nobody had to step in. */
+		finished: number;
+		succeeded: number;
+		autonomous: number;
+		/** The factory's pull requests opened that day, and those of them merged that day. */
+		opened: number;
+		merged: number;
+	}[];
 	pullRequests: {
 		opened: number;
 		merged: number;
@@ -50,31 +66,20 @@ export interface Metrics {
 		closed: number;
 		unknown: number;
 	};
+	/**
+	 * The issues (GitHub, Linear, Sentry) an agent opened a pull request for, and those resolved: one
+	 * of those pull requests was merged.
+	 */
+	issues: { attempted: number; resolved: number };
 	interventions: {
 		total: number;
 		handoffs: number;
 		failedRuns: number;
 		refusedOutputs: number;
 	};
-	/** The outputs the engine applied for the agents, by kind, most first. */
+	/** The outputs the engine applied for the agents, by action, most first. */
 	outputs: { action: Action; count: number }[];
-	/** What the factory saved, as GitHub tells: nothing estimated. */
-	gains: {
-		/** The factory's merged pull requests: with no commit but the engine's, with one of a person, or not checked (opened before the engine noted its commits, or merged before the repository's 100 latest). */
-		merged: { asWritten: number; changed: number; unknown: number };
-		/** Median time from the opening of the issue a merged pull request closes to its merge. */
-		issueToMerge: {
-			factoryMs?: number;
-			factoryPulls: number;
-			/** The team's pull requests merged in the last TEAM_DAYS days. */
-			teamMs?: number;
-			teamPulls: number;
-		};
-	};
 }
-
-/** How far back the team's pull requests are compared. */
-const TEAM_DAYS = 90;
 
 /** YYYY-MM-DD of a date in the machine's time zone, like `costToday` in the runner. */
 const localDay = (date: Date) => date.toLocaleDateString("sv-SE");
@@ -114,11 +119,27 @@ const when = (r: RunRecord) => r.endedAt ?? r.queuedAt;
 const closedUnmerged = (state: SubjectState | undefined) =>
 	state !== undefined && !state.merged && !state.open;
 
-/** The applied outputs of the agent's work: not the engine's own handoff or link notes. */
-const agentOutputs = (r: RunRecord) =>
+/** The outputs applied for the agent: not the engine's own handoff or link notes. */
+const applied = (r: RunRecord) =>
 	r.outputs.filter(
 		(o) => o.status === "applied" && !byEngineHandoff(r, o) && !isLinkNotice(o),
 	);
+
+/** A finished run nobody had to step in: it succeeded, was not handed over, and had no output refused. */
+const autonomous = (r: RunRecord) =>
+	r.status === "succeeded" &&
+	!handedOver(r) &&
+	!r.outputs.some((o) => o.status === "refused");
+
+/** The pull request a run worked on: the one it opened or pushed to, or its subject. */
+const pullRequestOf = (r: RunRecord) =>
+	r.outputs.find(
+		(o) =>
+			(o.action === "create_pull_request" ||
+				o.action === "push_to_pull_request") &&
+			o.status === "applied" &&
+			o.url,
+	)?.url ?? (r.isPullRequest ? r.url : undefined);
 
 /** The first day counted: "all" starts at midnight of the first run or chat message, so none of them is left out. */
 function periodStart(
@@ -150,37 +171,58 @@ export function runsInPeriod(
 	return start ? runs.filter((r) => new Date(when(r)) >= start) : runs;
 }
 
-interface Day {
-	usd: number;
-	runs: number;
-	agents: Record<string, number>;
-}
+type Day = Omit<Metrics["byDay"][number], "day">;
 
-/** Each day of the period, with what its runs and chat messages cost, and its runs by agent. */
+/** Each day of the period: what its runs and chat messages cost, its runs by agent and how they ended, the pull requests opened and merged. */
 function dayBuckets(
 	start: Date | undefined,
 	now: Date,
 	runs: RunRecord[],
 	chats: ChatCost[],
-): Map<string, Day> {
+	states: SubjectStates,
+): Metrics["byDay"] {
 	const byDay = new Map<string, Day>(
 		(start ? days(start, now) : []).map((d) => [
 			d,
-			{ usd: 0, runs: 0, agents: {} },
+			{
+				usd: 0,
+				runs: 0,
+				agents: {},
+				finished: 0,
+				succeeded: 0,
+				autonomous: 0,
+				opened: 0,
+				merged: 0,
+			},
 		]),
 	);
+	const dayOf = (iso: string) => byDay.get(localDay(new Date(iso)));
+	const opened = new Set<string>();
 	for (const r of runs) {
-		const day = byDay.get(localDay(new Date(when(r))));
+		const day = dayOf(when(r));
 		if (!day) continue;
 		day.usd += r.costUsd ?? 0;
 		day.runs += 1;
 		day.agents[r.agent] = (day.agents[r.agent] ?? 0) + 1;
+		if (r.status === "succeeded" || r.status === "failed") day.finished += 1;
+		if (r.status === "succeeded") day.succeeded += 1;
+		if (autonomous(r)) day.autonomous += 1;
+		for (const url of pullRequestUrls([r]))
+			if (!opened.has(url)) {
+				opened.add(url);
+				day.opened += 1;
+			}
 	}
 	for (const c of chats) {
-		const day = byDay.get(localDay(new Date(c.at)));
+		const day = dayOf(c.at);
 		if (day) day.usd += c.costUsd;
 	}
-	return byDay;
+	for (const url of opened) {
+		const mergedAt = states[url]?.mergedAt;
+		const mergedOn = mergedAt && dayOf(mergedAt);
+		if (mergedOn) mergedOn.merged += 1;
+	}
+	return [...byDay].map(([day, d]) => ({ day, ...d }));
 }
 
 function runCounts(runs: RunRecord[]): Metrics["runs"] {
@@ -192,12 +234,6 @@ function runCounts(runs: RunRecord[]): Metrics["runs"] {
 		failed: count("failed"),
 		skipped: count("skipped"),
 		active: count("queued") + count("running"),
-		unaided: runs.filter(
-			(r) =>
-				r.status === "succeeded" &&
-				!handedOver(r) &&
-				!r.outputs.some((o) => o.status === "refused"),
-		).length,
 	};
 }
 
@@ -213,6 +249,29 @@ function costByAgent(runs: RunRecord[]): Metrics["cost"]["byAgent"] {
 	return [...byAgent]
 		.map(([agent, v]) => ({ agent, ...v }))
 		.sort((a, b) => b.usd - a.usd || b.runs - a.runs);
+}
+
+function costByOutcome(
+	runs: RunRecord[],
+	states: SubjectStates,
+): Metrics["cost"]["byOutcome"] {
+	const out = { merged: 0, open: 0, closed: 0, failed: 0, other: 0 };
+	for (const r of runs) {
+		const url = pullRequestOf(r);
+		const state = url ? states[url] : undefined;
+		const outcome =
+			r.status === "failed"
+				? "failed"
+				: !state
+					? "other"
+					: state.merged
+						? "merged"
+						: state.open
+							? "open"
+							: "closed";
+		out[outcome] += r.costUsd ?? 0;
+	}
+	return out;
 }
 
 function pullRequestsOf(
@@ -245,96 +304,33 @@ function interventionsOf(runs: RunRecord[]): Metrics["interventions"] {
 	};
 }
 
-/** The kinds of output applied, most first. */
+/** Each issue (GitHub, Linear, Sentry) a run opened pull requests for, and whether one of them was merged. */
+function issuesOf(runs: RunRecord[], states: SubjectStates): Metrics["issues"] {
+	const merged = new Map<string, boolean>();
+	for (const r of runs) {
+		const issue = r.isPullRequest ? undefined : subjectUrl(r);
+		const opened = applied(r).flatMap((o) =>
+			o.action === "create_pull_request" && o.url ? [o.url] : [],
+		);
+		if (!issue || opened.length === 0) continue;
+		merged.set(
+			issue,
+			(merged.get(issue) ?? false) || opened.some((u) => states[u]?.merged),
+		);
+	}
+	return {
+		attempted: merged.size,
+		resolved: [...merged.values()].filter(Boolean).length,
+	};
+}
+
 function outputsOf(runs: RunRecord[]): Metrics["outputs"] {
 	const counts = new Map<Action, number>();
-	for (const o of runs.flatMap(agentOutputs))
+	for (const o of runs.flatMap(applied))
 		counts.set(o.action, (counts.get(o.action) ?? 0) + 1);
 	return [...counts]
 		.map(([action, count]) => ({ action, count }))
 		.sort((a, b) => b.count - a.count);
-}
-
-const median = (values: number[]) => {
-	if (values.length === 0) return undefined;
-	const sorted = [...values].sort((a, b) => a - b);
-	const mid = Math.floor(sorted.length / 2);
-	return sorted.length % 2
-		? sorted[mid]
-		: ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-};
-
-const pushesCode = (o: RunRecord["outputs"][number]) =>
-	o.status === "applied" &&
-	(o.action === "create_pull_request" || o.action === "push_to_pull_request");
-
-/**
- * The factory's merged pull requests, against the repository's merged ones: those it wrote alone,
- * and how long an issue waits for its merge, the factory's against the team's.
- */
-function gainsOf(
-	all: RunRecord[],
-	shown: RunRecord[],
-	merged: MergedPull[],
-	states: SubjectStates,
-	now: Date,
-): Metrics["gains"] {
-	// A pull request's commits the engine pushed: an opening, then pushes, from any run.
-	const engineCommits = new Map<
-		string,
-		{ opened: boolean; oids: Set<string> }
-	>();
-	for (const r of all)
-		for (const o of r.outputs.filter(pushesCode)) {
-			const url = o.url ?? r.url;
-			if (!url) continue;
-			const pull = engineCommits.get(url) ?? { opened: false, oids: new Set() };
-			for (const oid of o.commits ?? []) pull.oids.add(oid);
-			if (o.action === "create_pull_request" && o.commits?.length)
-				pull.opened = true;
-			engineCommits.set(url, pull);
-		}
-	const byUrl = new Map(merged.map((p) => [p.url, p]));
-	const counts = { asWritten: 0, changed: 0, unknown: 0 };
-	const factory: MergedPull[] = [];
-	for (const u of pullRequestUrls(shown)) {
-		const pull = byUrl.get(u);
-		if (pull) factory.push(pull);
-		// Merged before the repository's 100 latest: it counts, its commits unread.
-		else if (states[u]?.merged) counts.unknown++;
-	}
-	for (const pull of factory) {
-		const engine = engineCommits.get(pull.url);
-		if (!engine?.opened) counts.unknown++;
-		else if (pull.commits.every((oid) => engine.oids.has(oid)))
-			counts.asWritten++;
-		else counts.changed++;
-	}
-	const waits = (pulls: MergedPull[]) =>
-		pulls.flatMap((p) =>
-			p.issueOpenedAt
-				? [new Date(p.mergedAt).getTime() - new Date(p.issueOpenedAt).getTime()]
-				: [],
-		);
-	const factoryUrls = new Set(pullRequestUrls(all));
-	const since = now.getTime() - TEAM_DAYS * 86_400_000;
-	const factoryWaits = waits(factory);
-	const teamWaits = waits(
-		merged.filter(
-			(p) => !factoryUrls.has(p.url) && new Date(p.mergedAt).getTime() >= since,
-		),
-	);
-	const factoryMs = median(factoryWaits);
-	const teamMs = median(teamWaits);
-	return {
-		merged: counts,
-		issueToMerge: {
-			...(factoryMs !== undefined ? { factoryMs } : {}),
-			factoryPulls: factoryWaits.length,
-			...(teamMs !== undefined ? { teamMs } : {}),
-			teamPulls: teamWaits.length,
-		},
-	};
 }
 
 /** Runs (latest first or not) → the numbers of one project, or of all, over a period. */
@@ -342,9 +338,9 @@ export function computeMetrics(
 	runs: RunRecord[],
 	period: Period,
 	now: Date,
-	pullRequests: SubjectStates = {},
+	/** The states of the factory's pull requests. */
+	states: SubjectStates = {},
 	chats: ChatCost[] = [],
-	merged: MergedPull[] = [],
 ): Metrics {
 	const start = periodStart(runs, chats, period, now);
 	const inPeriod = (iso: string) => !start || new Date(iso) >= start;
@@ -354,7 +350,9 @@ export function computeMetrics(
 	const durations = shown.flatMap((r) =>
 		r.durationMs !== undefined && r.status !== "skipped" ? [r.durationMs] : [],
 	);
-	const byDay = dayBuckets(start, now, shown, shownChats);
+	const finished = shown.filter(
+		(r) => r.status === "succeeded" || r.status === "failed",
+	);
 
 	return {
 		period,
@@ -368,23 +366,20 @@ export function computeMetrics(
 				}
 			: {}),
 		agentTimeMs: durations.reduce((a, b) => a + b, 0),
+		autonomy: {
+			finished: finished.length,
+			autonomous: finished.filter(autonomous).length,
+		},
 		cost: {
 			totalUsd: shown.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) + chatUsd,
 			chatUsd,
-			failedUsd: shown
-				.filter((r) => r.status === "failed")
-				.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
 			byAgent: costByAgent(shown),
-			byDay: [...byDay].map(([day, { usd, runs, agents }]) => ({
-				day,
-				usd,
-				runs,
-				agents,
-			})),
+			byOutcome: costByOutcome(shown, states),
 		},
-		pullRequests: pullRequestsOf(shown, pullRequests),
+		byDay: dayBuckets(start, now, shown, shownChats, states),
+		pullRequests: pullRequestsOf(shown, states),
+		issues: issuesOf(shown, states),
 		interventions: interventionsOf(shown),
 		outputs: outputsOf(shown),
-		gains: gainsOf(runs, shown, merged, pullRequests, now),
 	};
 }

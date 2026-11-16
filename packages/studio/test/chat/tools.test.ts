@@ -56,10 +56,7 @@ it("gives the chat the numbers of the Overview page", async () => {
 		closed: 0,
 		unknown: 0,
 	});
-	expect(metrics.outputs).toContainEqual({
-		action: "create_pull_request",
-		count: 1,
-	});
+	expect(metrics.cost.byOutcome.merged).toBe(1.5);
 });
 
 it("gives the chat the board, each card in a few fields", async () => {

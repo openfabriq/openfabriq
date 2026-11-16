@@ -8,6 +8,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 - `openfabriq init` now asks whether an agent should review each change before the pull request opens, whichever example the factory starts from, and adds or removes the reviewer accordingly.
 - The studio's **Generate the wiki** starts the run at once, instead of at the engine's next reading of GitHub, up to a minute later.
+- The studio's overview shows four figures per tab. **Productivity**: autonomy, merge rate, issues resolved by a merged pull request, and human interventions, with the runs per day, autonomy and success as a 7-day average, and the pull requests opened and merged since the start of the period. **Cost and return**: spent, cost per run, per merged pull request and per agent hour, the cost per day and per agent, and where the money went. A note explains each figure that needs it. "Merged as written" and "Issue to merge" are gone, and the studio no longer reads the repository's merged pull requests with GraphQL.
 
 ## [0.1.3] - 2026-11-16
 
