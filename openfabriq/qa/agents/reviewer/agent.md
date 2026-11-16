@@ -36,6 +36,7 @@ A finding is blocking when it is a defect: wrong behavior, a security hole, data
 - code for one integration (Slack, Linear, Sentry, webhooks) outside its own folders;
 - validation, `plan` or output application changed without a test or a fixture in `fixtures/`;
 - a user-facing behavior changed (a command, a flag, a key, a default) and the documentation site still says the old one;
+- users will notice the change and `CHANGELOG.md` has no line for it under `[Unreleased]`;
 - a name renamed and the old name still in code, docs, examples or screenshots;
 - text that is not in English, or a pointer to the maintainers' notes (an ADR number, the roadmap) in code, comments, tests, examples or the documentation site.
 

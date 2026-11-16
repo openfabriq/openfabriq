@@ -15,22 +15,24 @@
 		<meta name="robots" content="noindex, nofollow" />
 		<meta name="application-name" content="openfabriq" />
 		<meta name="apple-mobile-web-app-title" content="openfabriq" />
-		<!-- The --bg tokens of styles.css; use-theme.ts follows a theme picked in the app. -->
-		<meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#0c0d0f" media="(prefers-color-scheme: dark)" />
+		<!-- The light --bg token of styles.css, the default; the script below and use-theme.ts follow the theme picked. -->
+		<meta name="theme-color" content="#f9fafb" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<script>
-			// Before paint, so a dark screen never flashes white.
+			// Before paint, so a dark screen never flashes white. Light unless dark, or the system's dark, was picked.
 			try {
 				const pick = localStorage.getItem("openfabriq-theme");
 				const dark =
 					pick === "dark" ||
-					(pick !== "light" &&
+					(pick === "system" &&
 						matchMedia("(prefers-color-scheme: dark)").matches);
 				document.documentElement.dataset.theme = dark ? "dark" : "light";
+				if (dark)
+					for (const meta of document.querySelectorAll('meta[name="theme-color"]'))
+						meta.setAttribute("content", "#0c0d0f");
 			} catch {
 				document.documentElement.dataset.theme = "light";
 			}
