@@ -10,8 +10,8 @@ export interface TemplateSummary {
 	does: string;
 	startsOn: string[];
 	hasWorkflow: boolean;
-	/** How the card frames the graph: whole, its top (a tall one), or its top-left corner (a wide one). */
-	workflowFrame?: "whole" | "top" | "corner";
+	/** How the card frames the graph: whole, its top (a tall one), its top-left corner (a wide one), or its left middle. */
+	workflowFrame?: "whole" | "top" | "corner" | "left";
 	agents: number;
 	automations: number;
 }
@@ -21,6 +21,7 @@ const FRAME = {
 	top: "h-full w-full object-cover object-top",
 	corner:
 		"absolute top-10 left-4 h-[180%] w-[180%] max-w-none object-cover object-left-top",
+	left: "absolute top-1/2 left-4 h-[180%] w-[180%] max-w-none -translate-y-1/2 object-cover object-left",
 } as const;
 
 /** A template in a grid: its workflow, what it does, when it starts, and the command that copies it. */

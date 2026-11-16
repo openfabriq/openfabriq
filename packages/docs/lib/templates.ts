@@ -37,7 +37,14 @@ export type CategoryId = (typeof CATEGORIES)[number]["id"];
 /** What a person reads before opening a template: where it fits, what it does, when it starts, what it writes. */
 const CATALOG: Record<
 	string,
-	{ category: CategoryId; does: string; startsOn: string[]; writes: string }
+	{
+		category: CategoryId;
+		does: string;
+		startsOn: string[];
+		writes: string;
+		/** For a wide graph whose work starts at its left middle, not its top-left corner: the card shows there. */
+		startsMidLeft?: true;
+	}
 > = {
 	"00-at-a-glance": {
 		category: "start",
@@ -209,6 +216,7 @@ const CATALOG: Record<
 			"schedule",
 		],
 		writes: "The plan's PR, ticket issues, reviewed PRs, sync PRs",
+		startsMidLeft: true,
 	},
 	"27-framer-to-astro": {
 		category: "projects",
@@ -219,6 +227,7 @@ const CATALOG: Record<
 			"pull requests",
 		],
 		writes: "The plan's PR, ticket issues, reviewed PRs, sync PRs",
+		startsMidLeft: true,
 	},
 };
 
@@ -233,6 +242,8 @@ export interface Template {
 	does: string;
 	startsOn: string[];
 	writes: string;
+	/** The card shows a wide graph's left middle, where its work starts. */
+	startsMidLeft?: true;
 	/** The README without its title. */
 	readme: string;
 	/** The workflow image's width as the README shows it, or null when the template has none. */
@@ -296,7 +307,12 @@ function pixelsOf(name: string) {
  * What a card shows: no README, and how to frame the workflow image. A large graph is cut to
  * where the work starts: its top when it is tall, its top-left corner, enlarged, when it is wide.
  */
-export function cardOf({ readme, workflowWidth, ...t }: Template) {
+export function cardOf({
+	readme,
+	workflowWidth,
+	startsMidLeft,
+	...t
+}: Template) {
 	const pixels = workflowWidth === null ? null : pixelsOf(t.name);
 	const large = (workflowWidth ?? 0) >= 900;
 	return {
@@ -307,6 +323,8 @@ export function cardOf({ readme, workflowWidth, ...t }: Template) {
 				? ("whole" as const)
 				: pixels.height > pixels.width
 					? ("top" as const)
-					: ("corner" as const),
+					: startsMidLeft
+						? ("left" as const)
+						: ("corner" as const),
 	};
 }
