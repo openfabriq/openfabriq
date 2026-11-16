@@ -416,6 +416,39 @@ it("takes the manual runs, through the queue like any event", async () => {
 	expect(e.status().queued).toHaveLength(1);
 });
 
+it("takes a manual run at once when woken, without reading GitHub again", async () => {
+	writeApplied(REPO, nightly());
+	let calls = 0;
+	const github = new Proxy(fakeGitHub(), {
+		get: (target, key) => {
+			const value = Reflect.get(target, key);
+			return typeof value === "function"
+				? (...args: unknown[]) => {
+						calls++;
+						return value(...args);
+					}
+				: value;
+		},
+	});
+	const e = engine(0, neverEnds, {}, { github });
+	await e.tick();
+	const read = calls;
+	expect(read).toBeGreaterThan(0);
+	requestRun(REPO, {
+		id: "r1",
+		automation: "nightly",
+		isPullRequest: false,
+		by: "studio",
+		at: T0.toISOString(),
+	});
+	e.wake();
+	expect(e.status().queued.map((r) => r.automation)).toEqual(["nightly"]);
+	expect(calls).toBe(read);
+	// Taken once: the next tick finds nothing left to take.
+	await e.tick();
+	expect(e.status().queued).toHaveLength(1);
+});
+
 it("takes a manual run of an automation applied while the engine read GitHub", async () => {
 	writeApplied(REPO, sdlc());
 	let applying = false;

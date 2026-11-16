@@ -179,24 +179,7 @@ export function startEngine(given: EngineDeps) {
 						deps.log(`${repo}: schedules: ${errorText(error)}`);
 					}
 			}
-			for (const [repo, polled] of factories)
-				try {
-					// Read again when a request waits: an apply during the poll comes with its own manual run.
-					let applied: Factory | undefined;
-					const factory = () =>
-						(applied ??= loadApplied(repo)?.factory ?? polled.factory);
-					for (const manual of manualRuns(repo, factory)) {
-						if ("refused" in manual)
-							deps.log(`${repo}: manual run refused: ${manual.refused}`);
-						else scheduled.add(manual.run, factory());
-						manual.taken();
-					}
-					// The run starts with the factory it was checked against, not the one polled before the apply.
-					if (applied) factories.set(repo, { ...polled, factory: applied });
-				} catch (error) {
-					deps.log(`${repo}: manual runs: ${errorText(error)}`);
-				}
-			scheduled.pump();
+			takeManualRuns();
 		} catch (error) {
 			// Offline at start, a corrupt file: said, and tried again at the next tick.
 			deps.log(`tick: ${errorText(error)}`);
@@ -205,8 +188,42 @@ export function startEngine(given: EngineDeps) {
 		}
 	}
 
+	/** Queues the waiting manual runs and starts what fits; synchronous, so a tick and a wake never take one twice. */
+	function takeManualRuns() {
+		for (const [repo, polled] of factories)
+			try {
+				// Read again when a request waits: an apply during the poll comes with its own manual run.
+				let applied: Factory | undefined;
+				const factory = () =>
+					(applied ??= loadApplied(repo)?.factory ?? polled.factory);
+				for (const manual of manualRuns(repo, factory)) {
+					if ("refused" in manual)
+						deps.log(`${repo}: manual run refused: ${manual.refused}`);
+					else scheduled.add(manual.run, factory());
+					manual.taken();
+				}
+				// The run starts with the factory it was checked against, not the one polled before the apply.
+				if (applied) factories.set(repo, { ...polled, factory: applied });
+			} catch (error) {
+				deps.log(`${repo}: manual runs: ${errorText(error)}`);
+			}
+		scheduled.pump();
+	}
+
 	return {
 		tick,
+		/**
+		 * The studio asked for a run: take it now rather than at the next tick, without reading
+		 * GitHub. Before the first tick there is no factory yet, and the tick takes it.
+		 */
+		wake() {
+			if (stopped) return;
+			try {
+				takeManualRuns();
+			} catch (error) {
+				deps.log(`wake: ${errorText(error)}`);
+			}
+		},
 		/** For tests and the relay listener. */
 		relayed: handleRelayBatch,
 		start() {

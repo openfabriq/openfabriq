@@ -81,7 +81,12 @@ async function start(options: {
 			'no project yet. Run "openfabriq apply" in a repository first.',
 		);
 	const identity = await gitIdentity();
-	const studio = startStudio(port, undefined, { access });
+	// The studio starts first; a run asked before the engine exists is taken at its first tick.
+	let engine: ReturnType<typeof startEngine> | undefined;
+	const studio = startStudio(port, undefined, {
+		access,
+		wake: () => engine?.wake(),
+	});
 	const signIn = signInAddress(access, port);
 	await new Promise((resolve) => studio.once("listening", resolve));
 	const facts: StartFacts = {
@@ -95,7 +100,7 @@ async function start(options: {
 	// In a terminal, the studio's address leads, apart from the log; a pipe or Docker keeps the lines.
 	if (styled) announce(facts);
 	const awake = keepAwake();
-	const engine = startEngine({
+	engine = startEngine({
 		github: gh,
 		launch: claudeAgent,
 		workspace,

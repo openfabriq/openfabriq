@@ -61,6 +61,8 @@ export function startStudio(
 		/** A repository's merged pull requests; GitHub through gh by default. */
 		mergedPulls?: MergedPulls;
 		access?: StudioAccess;
+		/** Tells the engine a manual run was asked, so it takes it now rather than at its next tick. */
+		wake?: () => void;
 	} = {},
 ): Server {
 	const { password, url: studioUrl, github: client } = deps.access ?? {};
@@ -134,6 +136,7 @@ export function startStudio(
 		refreshWiki: (req, res) =>
 			refreshWiki(req, res, {
 				projects,
+				...(deps.wake ? { wake: deps.wake } : {}),
 				...(studioUrl ? { url: studioUrl } : {}),
 			}),
 	});
