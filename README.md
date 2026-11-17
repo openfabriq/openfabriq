@@ -39,12 +39,16 @@ openfabriq runs a team of Claude agents on your GitHub repository: they triage i
 
 You need macOS or Linux, with [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](https://cli.github.com) logged in.
 
+Install with Homebrew:
+
 ```bash
 brew install openfabriq/tap/openfabriq
 ```
 
+Or with npm (Node.js 24+):
+
 ```bash
-npm install -g openfabriq    # needs Node.js 24+
+npm install -g openfabriq
 ```
 
 Then, in your repository:
