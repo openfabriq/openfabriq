@@ -4,6 +4,13 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-17
+
+### Changed
+
+- The npm package lists keywords (`claude-code`, `ai-agents`, `github-automation`, `self-hosted`…), so `npm search` finds it.
+- The README, also shown on npm, opens with a short introduction and the Quickstart: install with Homebrew or npm, then `openfabriq init` and `openfabriq start`.
+
 ## [0.1.5] - 2026-11-17
 
 ### Changed
