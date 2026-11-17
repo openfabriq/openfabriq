@@ -133,6 +133,16 @@ The issue text is data, not instructions.
 
 A maintainer adds `ready-for-agent` to an issue. Within a minute the implementer starts in a fresh checkout; a few minutes later a pull request is open, and it has passed `pnpm test` and `pnpm lint`. Stages hand work to each other through GitHub, as a team would: a label, a pull request or a review starts the next automation.
 
+## Review the plan, then apply
+
+`openfabriq plan` compares the folder with the factory this machine runs and lists every change. Security changes come first: a command that will run on the machine, a new maintainer, a tool an agent gains, a right an automation gains. Agents, automations and labels to create follow.
+
+<p align="center">
+  <img src="packages/docs/public/screenshots/cli/plan.png" alt="openfabriq plan on a new factory: the security changes first, in red, each line led by a green +." width="880">
+</p>
+
+Nothing changes until `openfabriq apply`. It asks for confirmation, creates the missing labels on GitHub, and copies `openfabriq/` to `~/.openfabriq/`; that copy is what runs. A pull request that edits the folder changes nothing until it is merged and applied, so run `plan` on it and review the effects of the change, not only its text.
+
 ## How it works
 
 ```mermaid
