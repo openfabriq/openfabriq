@@ -39,14 +39,24 @@ You describe the factory in an `openfabriq/` folder of your repository, in Markd
 
 It is for teams that keep their code on GitHub, already use Claude Code, and want agents on their repository without handing them the keys.
 
+Install it with Homebrew or npm:
+
 ```bash
-brew install openfabriq/tap/openfabriq    # or: npm install -g openfabriq
-cd your-repository
+brew install openfabriq/tap/openfabriq
+```
+
+```bash
+npm install -g openfabriq
+```
+
+Then, in your repository:
+
+```bash
 openfabriq init     # Claude Code reads the repository and writes openfabriq/ with you
 openfabriq start    # shows the plan, applies it once you confirm, and runs the factory
 ```
 
-You need Claude Code and the GitHub CLI logged in: the [Quickstart](#quickstart) has the details.
+You need Claude Code and the GitHub CLI logged in, and Node.js 24+ for npm: the [Quickstart](#quickstart) has the details.
 
 > **This repository runs its own factory.** Its [`openfabriq/`](openfabriq) folder triages new issues, implements the ones a maintainer marks ready, reviews pull requests and keeps the documentation current. See the [pull requests it opened](https://github.com/openfabriq/openfabriq/pulls?q=is%3Apr+author%3Aapp%2Fopenfabriq).
 
