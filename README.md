@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="packages/docs/public/brand/openfabriq-logo-dark.svg">
-    <img src="packages/docs/public/brand/openfabriq-logo-light.svg" alt="openfabriq" width="293" height="52">
+    <source media="(prefers-color-scheme: dark)" srcset="https://openfabriq.dev/brand/openfabriq-logo-dark.svg">
+    <img src="https://openfabriq.dev/brand/openfabriq-logo-light.svg" alt="openfabriq" width="293" height="52">
   </picture>
 </p>
 
