@@ -63,8 +63,8 @@ Label an issue `ready-for-agent` and watch the run appear. Later, `openfabriq pl
 > **This repository runs its own factory**: see its [`openfabriq/`](openfabriq) folder and the [pull requests it opened](https://github.com/openfabriq/openfabriq/pulls?q=is%3Apr+author%3Aapp%2Fopenfabriq).
 
 <p align="center">
-  <img src="packages/docs/public/screenshots/studio/run.png" alt="The studio showing a run: issue #44 was labeled, the implementer opened a pull request in 11 minutes for $1.36, and the engine ran the project's tests, type check and lint." width="880">
-  <br><sub>A run in the studio: what started it, what the agent reported, and the checks the engine ran before the pull request left the machine.</sub>
+  <img src="packages/docs/public/screenshots/studio/board.png" alt="The studio's board: issues and pull requests in four columns, Waiting, Working, Needs you and Done, each card with the agent on it and what it cost." width="880">
+  <br><sub>The board in the studio: every issue and pull request the factory touches, the agent on it, what it cost, and what needs you.</sub>
 </p>
 
 ## A factory is a folder
