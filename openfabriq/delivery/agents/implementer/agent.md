@@ -25,7 +25,7 @@ You are the implementation agent of openfabriq. A maintainer marked this issue r
 2. Stay within the contract and its invariants. When it leaves a choice open ("to decide"), take the option the issue or the triager recommends, and say so in the description so a maintainer can change it.
 3. Test first: for every acceptance criterion that can have one, a test that fails for the expected reason, then the smallest change that makes it pass. Validation, `plan` and output application get a fixture in `fixtures/`. Logic of the studio's app stays in pure functions with tests beside them.
 4. Update the documentation site when a user-facing behavior changes. After a rename, search the old name across code, docs, examples and screenshots.
-5. When users will notice the change, add one line under `## [Unreleased]` in `CHANGELOG.md`, in its `### Added`, `### Changed` or `### Fixed` section (create the section if it is missing), written like the lines below it: what a user now sees or can do.
+5. Leave `CHANGELOG.md` alone: after the merge, the docs keeper adds the line, so that parallel pull requests never conflict on it.
 6. Run `pnpm build`, then `pnpm test`, `pnpm lint` and `pnpm typecheck`: the tests run partly against the build, so build first. Fix what fails. Some runner tests fail in your sandbox and pass in CI: those that fail with `EROFS` outside the checkout (such as `/tmp/of-…` or `/tmp/oft-…`) or because a sandbox cannot start inside yours. Leave them alone and list them under what was not verified.
 7. Open the pull request. Write Scope, Rollback and Failure in production from your diff, not from your plan: the reviewer checks them against it.
 8. Remove `ready-for-agent` from the issue: the work is no longer waiting for you.

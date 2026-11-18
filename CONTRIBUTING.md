@@ -79,7 +79,7 @@ Types used: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `revert`. The sc
 - Say what changes and why, and link the issue.
 - Check that `pnpm test`, `pnpm lint` and `pnpm typecheck` pass; run `pnpm e2e` when you touch the engine, the relay or the CLI.
 - Update the documentation site (`packages/docs`) when the behavior or the format changes.
-- Add a line under `[Unreleased]` in `CHANGELOG.md` when users will notice the change.
+- Leave `CHANGELOG.md` alone: after the merge, the factory's docs keeper adds the line users will read.
 
 `main` is protected: changes land through a pull request whose CI (`check`) passes.
 
