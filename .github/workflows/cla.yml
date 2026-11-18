@@ -24,5 +24,5 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           if printf '%s' "$BODY" | grep -qiE '^[[:space:]]*- \[x\] I agree to the \[Contributor License Agreement\]'; then exit 0; fi
-          echo "::error::Tick \"I agree to the Contributor License Agreement\" in the pull request's description (CLA.md)."
+          echo "::error::The pull request's description has no ticked Contributor License Agreement box. Tick it, or add this line to the description: - [x] I agree to the [Contributor License Agreement](https://github.com/openfabriq/openfabriq/blob/main/CLA.md)"
           exit 1
