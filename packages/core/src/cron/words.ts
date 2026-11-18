@@ -25,7 +25,9 @@ export function cronWords(expression: string): string {
 		60 % Number(minute.slice(2)) === 0 &&
 		[hour, day, month, weekday].every((p) => p === "*")
 	)
-		return `every ${minute.slice(2)} minutes`;
+		return minute === "*/1"
+			? "every minute"
+			: `every ${minute.slice(2)} minutes`;
 	if (
 		number(minute) &&
 		hour === "*" &&
