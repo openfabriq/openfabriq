@@ -10,7 +10,7 @@ commands: # the project's commands, by name
   build: pnpm build
   test: pnpm build && pnpm test # some tests run against the built CLI
   lint: pnpm lint
-  typecheck: pnpm typecheck
+  typecheck: pnpm build && pnpm typecheck # the packages' types come from their dist, which a run's checkout lacks
 checks: [lint, typecheck] # run by the engine before any pull request leaves the machine; not test: some runner tests write to /tmp, outside the engine's sandbox on Linux
 
 limits:
