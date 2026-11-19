@@ -351,6 +351,7 @@ describe("schedules in a time zone", () => {
 		);
 		expect(cronWords("0 0 1 * *")).toBe("on day 1 of every month at 00:00");
 		expect(cronWords("15 * * * *")).toBe("every hour at :15");
+		expect(cronWords("*/1 * * * *")).toBe("every minute");
 		expect(cronWords("*/15 * * * *")).toBe("every 15 minutes");
 		// */45 runs at :00 and :45, not every 45 minutes: only a step that divides the hour is said in words.
 		expect(cronWords("*/45 * * * *")).toBe("*/45 * * * *");
