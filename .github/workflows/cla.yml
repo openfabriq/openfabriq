@@ -2,8 +2,10 @@ name: CLA
 
 # A contributor agrees to CLA.md by ticking its box in the pull request's description; the pull request keeps the record.
 # The description is only matched, never run, and no code of the pull request is checked out.
+# pull_request_target runs this file from main, without waiting for a maintainer to approve a first-time contributor's
+# workflows, so they see the missing box at once. Safe only while the job checks out nothing and has no permissions.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, reopened, synchronize]
 
 permissions: {}
@@ -22,5 +24,5 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           if printf '%s' "$BODY" | grep -qiE '^[[:space:]]*- \[x\] I agree to the \[Contributor License Agreement\]'; then exit 0; fi
-          echo "::error::Tick \"I agree to the Contributor License Agreement\" in the pull request's description (CLA.md)."
+          echo "::error::The pull request's description has no ticked Contributor License Agreement box. Tick it, or add this line to the description: - [x] I agree to the [Contributor License Agreement](https://github.com/openfabriq/openfabriq/blob/main/CLA.md)"
           exit 1

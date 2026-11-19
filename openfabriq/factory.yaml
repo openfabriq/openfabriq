@@ -1,5 +1,5 @@
 name: openfabriq
-description: The factory openfabriq runs on its own repository. Issues get a first answer, a maintainer's ready issue gets a reviewed pull request, a pull request gets a review when a maintainer asks for one, and the documentation site follows the code. Ordered by area; people merge.
+description: The factory openfabriq runs on its own repository. Issues get a first answer, a maintainer's ready issue gets a reviewed pull request, a pull request gets a review when a maintainer asks for one, and the documentation site and the changelog follow the code. Ordered by area; people merge.
 repository: openfabriq/openfabriq
 maintainers: [eixoweb] # only their actions start the factory, except where an automation says from: anyone
 model: sonnet # the default model of the agents
