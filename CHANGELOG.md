@@ -7,6 +7,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 ### Fixed
 
 - A schedule of `*/1 * * * *` now reads "every minute" in `plan` and the studio, instead of "every 1 minutes".
+- The studio chat's message box now has a stable name, "Message", so a screen reader no longer reads its changing placeholder instead.
 
 ## [0.1.6] - 2026-11-17
 
