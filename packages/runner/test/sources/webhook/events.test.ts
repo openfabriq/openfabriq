@@ -70,6 +70,7 @@ const workspace: Workspace = {
 	run: async () => ({ ok: true, output: "" }),
 	changed: async () => ({ uncommitted: false, ahead: 0 }),
 	touched: async () => [],
+	versions: async () => ({}),
 	commitsSince: async () => [],
 	fetch: async () => {},
 	contains: async () => true,

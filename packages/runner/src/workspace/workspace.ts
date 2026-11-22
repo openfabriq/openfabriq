@@ -162,6 +162,13 @@ export interface Workspace {
 	): Promise<string>;
 	/** The files the agent's commits touched since origin/base: both sides of a rename. */
 	touched(clone: string, dir: string, base: string): Promise<string[]>;
+	/** A file where origin/base was at the start, and at HEAD; undefined where it does not exist. */
+	versions(
+		clone: string,
+		dir: string,
+		base: string,
+		path: string,
+	): Promise<{ start?: string; head?: string }>;
 	/**
 	 * Whether HEAD contains where origin/branch was when the run started: a conflict merged in.
 	 * With `at`, whether origin/at contained it at the start: the base was already in the pull request.
@@ -447,6 +454,21 @@ export function createWorkspace(): Workspace {
 						.filter(Boolean),
 				),
 			];
+		},
+		async versions(clone, dir, base, path) {
+			const show = (commit: string) =>
+				worktreeGit(clone, dir, ["show", `${commit}:${path}`]).then(
+					(text): string | undefined => text,
+					() => undefined,
+				);
+			const [start, head] = await Promise.all([
+				show(baseOf(dir, base)),
+				show("HEAD"),
+			]);
+			return {
+				...(start !== undefined ? { start } : {}),
+				...(head !== undefined ? { head } : {}),
+			};
 		},
 		async contains(clone, dir, branch, at) {
 			return worktreeGit(clone, dir, [

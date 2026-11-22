@@ -39,6 +39,7 @@ let setupFails: string | undefined;
 let commandFails: string[];
 let uncommitted: boolean;
 let touched: string[];
+const versions: { start?: string; head?: string } = {};
 let pushedCommits: string[];
 let subjectState: string | undefined;
 
@@ -160,6 +161,7 @@ const workspace: Workspace = {
 	},
 	changed: async () => ({ uncommitted, ahead: 1 }),
 	touched: async () => touched,
+	versions: async () => versions,
 	commitsSince: async () => pushedCommits,
 	fetch: async () => {},
 	contains: async () => true,

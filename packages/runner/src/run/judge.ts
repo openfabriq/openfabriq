@@ -1,5 +1,6 @@
-import type { Agent, Factory } from "@openfabriq/core";
+import { type Agent, type Factory, LEARNING, WIKI } from "@openfabriq/core";
 import type { QueuedRun } from "../engine/queue.js";
+import { outsideLearning } from "../learning/guard.js";
 import type { Workspace } from "../workspace/workspace.js";
 import type { RunPaths } from "./execute.js";
 import type { harness } from "./harness.js";
@@ -23,7 +24,8 @@ export interface CodeToJudge {
 
 /**
  * Why the agent's code cannot be published, if it cannot: a CI workflow changed, the wiki's agent
- * wrote outside the wiki, a conflict left unresolved, or a check of the factory that failed.
+ * wrote outside the wiki, learning's beyond the text of skills and agent.md files, a conflict left
+ * unresolved, or a check of the factory that failed.
  */
 export async function judgeCode(
 	step: CodeToJudge,
@@ -53,8 +55,13 @@ export async function judgeCode(
 	);
 	return (
 		workflowChange(touchedFiles) ??
-		(agent.builtIn && factory.wiki
+		(agent.builtIn && agent.name === WIKI && factory.wiki
 			? outsideWiki(touchedFiles, factory.wiki.folder)
+			: undefined) ??
+		(agent.builtIn && agent.name === LEARNING
+			? await outsideLearning(touchedFiles, (path) =>
+					workspace.versions(clone, worktree, ref, path),
+				)
 			: undefined) ??
 		// An agent that pushes nothing (two changes contradict) has nothing to lock: its comment says why.
 		(conflictBase &&
