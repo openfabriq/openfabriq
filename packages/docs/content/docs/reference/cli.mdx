@@ -26,7 +26,7 @@ description: "Every openfabriq command: write, check and apply a factory, run it
 | `openfabriq status` | Lists the runs in progress, waiting and recent |
 | `openfabriq mcp` | Serves the factories, their runs, numbers and board, read only, to an MCP client such as Claude Code or Claude Desktop, over stdio. See [MCP server](/mcp/overview/) |
 | `openfabriq update` | Installs the latest openfabriq with npm, or `brew upgrade` when Homebrew installed it. From the sources or in Docker, says how to update instead. `start` prints a line when a new version is out |
-| `openfabriq run <automation> [--issue n \| --pr n] [--project owner/repo]` | Asks `start` to run an automation now. Only one with a GitHub event or a `schedule` in `when`, not one that starts only from Slack, Linear, Sentry or a webhook. `--issue` or `--pr` when it starts on one, neither when it runs on the whole repository. `openfabriq run wiki` generates or updates the [wiki](/factory/wiki/) |
+| `openfabriq run <automation> [--issue n \| --pr n] [--project owner/repo]` | Asks `start` to run an automation now. Only one with a GitHub event or a `schedule` in `when`, not one that starts only from Slack, Linear, Sentry or a webhook. `--issue` or `--pr` when it starts on one, neither when it runs on the whole repository. `openfabriq run wiki` generates or updates the [wiki](/factory/wiki/); `openfabriq run learning` runs a batch of [learning](/factory/learning/) now |
 
 ## Connect services and secrets
 
