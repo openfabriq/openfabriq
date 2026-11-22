@@ -4,7 +4,7 @@ import {
 	machineNeeds,
 	readImportedSkills,
 	sentenceList,
-	skillHash,
+	skillPlace,
 	unlistedSites,
 } from "@openfabriq/core";
 import {
@@ -13,11 +13,12 @@ import {
 	type GitHubApp,
 	githubApp,
 	recentRefusals,
+	skillFiles,
+	skillHash,
 } from "@openfabriq/runner";
 import type { CommandResult } from "../result.js";
 import { secretWarnings } from "../secret-warnings.js";
 import { missingPrerequisites } from "./prerequisites.js";
-import { skillFiles } from "./skill.js";
 import { checkFactoryFolder } from "./validate.js";
 
 // What this machine lacks for the factory: read only, it installs and runs nothing of the factory.
@@ -149,7 +150,7 @@ function networkLines(
 }
 
 /**
- * Each imported skill: changed by hand since it was imported, or with a newer version upstream.
+ * Each imported skill: changed by hand since it was imported, and with a newer version upstream.
  * Said, not a failure: GitHub may be out of reach, and an update is a pull request of its own.
  */
 async function importedSkillLines(
@@ -164,17 +165,17 @@ async function importedSkillLines(
 	const lines: string[] = [];
 	for (const [key, entry] of Object.entries(read.skills).sort()) {
 		const { source, ref, commit, skillPath } = entry;
-		if (skillHash(skillFiles(join(folder, key))) !== entry.computedHash) {
+		const edited =
+			skillHash(skillFiles(join(folder, key))) !== entry.computedHash;
+		if (edited)
 			lines.push(
 				`! ${key}: changed since it was imported from ${source}: put it back as it was, and adapt it in the agent's own body instead; "openfabriq skill add" will not update it until then`,
 			);
-			continue;
-		}
-		// The last commit that touched the skill's folder, on its branch and at the pinned commit.
+		// The skill's folder in its repository; a skill at the root is the whole repository.
 		const path = skillPath.includes("/")
 			? skillPath.slice(0, skillPath.lastIndexOf("/"))
 			: "";
-		const last = (at: string) =>
+		const lastCommitOnSkill = (at: string) =>
 			run("gh", [
 				"api",
 				`repos/${source}/commits?sha=${encodeURIComponent(at)}&per_page=1${path ? `&path=${encodeURIComponent(path)}` : ""}`,
@@ -182,14 +183,16 @@ async function importedSkillLines(
 				'.[0].sha // ""',
 			]).then((out) => out.trim());
 		try {
-			const [latest, pinned] = [await last(ref), await last(commit)];
-			lines.push(
-				!latest
-					? `! ${key}: ${source} no longer has ${skillPath} on ${ref}`
-					: latest !== pinned
-						? `! ${key}: ${source} has a newer version on ${ref}: run "${updateCommand(key, source)}" for a pull request that updates it`
-						: `✓ ${key}: as imported from ${source}, and up to date`,
-			);
+			const latest = await lastCommitOnSkill(ref);
+			const pinned = await lastCommitOnSkill(commit);
+			if (!latest)
+				lines.push(`! ${key}: ${source} no longer has ${skillPath} on ${ref}`);
+			else if (latest !== pinned)
+				lines.push(
+					`! ${key}: ${source} has a newer version on ${ref}: run "${updateCommand(key, source)}" for a pull request that updates it`,
+				);
+			else if (!edited)
+				lines.push(`✓ ${key}: as imported from ${source}, and up to date`);
 		} catch (error) {
 			lines.push(
 				`! ${key}: could not ask ${source} for a newer version (${errorText(error).split("\n")[0]})`,
@@ -199,15 +202,15 @@ async function importedSkillLines(
 	return lines;
 }
 
-/** The skill add that updates an imported skill, from its folder: --agent or --area as it was added. */
+/** The skill add that updates an imported skill, with --agent or --area as its folder says. */
 function updateCommand(key: string, source: string): string {
-	const parts = key.split("/");
-	const name = parts.at(-1) ?? "";
-	const agent = /(?:^|\/)agents\/([^/]+)\/skills\//.exec(key)?.[1];
-	const where = agent
-		? ` --agent ${agent}`
-		: parts.length === 3
-			? ` --area ${parts[0]}`
-			: "";
-	return `openfabriq skill add ${source} ${name}${where}`;
+	const read = skillPlace(key);
+	const place = read?.place ?? {};
+	const where =
+		"agent" in place
+			? ` --agent ${place.agent}`
+			: "area" in place
+				? ` --area ${place.area}`
+				: "";
+	return `openfabriq skill add ${source} ${read?.name ?? key}${where}`;
 }

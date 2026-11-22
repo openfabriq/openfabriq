@@ -2,61 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
 	IMPORTED_SKILLS,
 	type ImportedSkills,
-	isHashed,
 	readImportedSkills,
-	skillHash,
+	skillFolder,
+	skillPlace,
 } from "../../src/factory/imported.js";
 import { loadFactory } from "../../src/factory/load.js";
 import type { FactoryFiles } from "../../src/factory/types.js";
 
-const bytes = (text: string) => new TextEncoder().encode(text);
-
-describe("the hash of a skill, the same as the skills CLI's", () => {
-	// The test vectors of the skills CLI's README, "Lock File Content Hash".
-	it("matches the skills CLI's test vectors", () => {
-		expect(skillHash([])).toBe(
-			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		);
-		expect(skillHash([{ path: "SKILL.md", content: bytes("# hi\n") }])).toBe(
-			"93c36952d8843b33e68ae970ebabcc03e1687c9bb0dd1ecaf357060318952f55",
-		);
-		expect(
-			skillHash([
-				{ path: "docs/b.md", content: bytes("b\n") },
-				{ path: "SKILL.md", content: bytes("a\n") },
-			]),
-		).toBe("b22c4d22aa319d2924312fa18fcbfedc88fa89c74dbd8f298c683e1caf7b7f24");
-	});
-
-	it("reads CRLF as LF in a text file, never in a binary one", () => {
-		const lf = skillHash([{ path: "SKILL.md", content: bytes("a\nb\n") }]);
-		expect(
-			skillHash([{ path: "SKILL.md", content: bytes("a\r\nb\r\n") }]),
-		).toBe(lf);
-		const binary = (text: string) => new Uint8Array([0, ...bytes(text)]);
-		expect(skillHash([{ path: "x.bin", content: binary("a\r\n") }])).not.toBe(
-			skillHash([{ path: "x.bin", content: binary("a\n") }]),
-		);
-	});
-
-	it("sorts paths by their bytes, not by locale", () => {
-		const a = { path: "B.md", content: bytes("1") };
-		const b = { path: "a.md", content: bytes("2") };
-		expect(skillHash([a, b])).toBe(skillHash([b, a]));
-	});
-
-	it("leaves out what the skills CLI does not install", () => {
-		expect(
-			[
-				"SKILL.md",
-				"metadata.json",
-				"docs/metadata.json",
-				".git/config",
-				"scripts/__pycache__/x.pyc",
-				"__pypackages__/a/b.py",
-				"scripts/run.sh",
-			].filter(isHashed),
-		).toEqual(["SKILL.md", "scripts/run.sh"]);
+describe("an imported skill's folder", () => {
+	it("is built from its name and place, and read back", () => {
+		const cases = [
+			[{}, "skills/tdd"],
+			[{ area: "qa" }, "qa/skills/tdd"],
+			[{ agent: "reviewer" }, "agents/reviewer/skills/tdd"],
+			[{ agent: "tester", area: "qa" }, "qa/agents/tester/skills/tdd"],
+		] as const;
+		for (const [place, folder] of cases) {
+			expect(skillFolder("tdd", place)).toBe(folder);
+			expect(skillPlace(folder)).toEqual({ name: "tdd", place });
+		}
+		expect(skillPlace("agents/reviewer/agent.md")).toBeUndefined();
 	});
 });
 

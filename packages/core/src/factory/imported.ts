@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Layout } from "./files.js";
 import type { FactoryFiles, Problem } from "./types.js";
@@ -81,51 +80,32 @@ export function importedSkillsProblems(
 	return messages.map((message) => ({ file: IMPORTED_SKILLS, message }));
 }
 
-// What the skills CLI leaves out of a skill, so of its hash.
-const LEFT_OUT_FILES = new Set(["metadata.json"]);
-const LEFT_OUT_FOLDERS = new Set([".git", "__pycache__", "__pypackages__"]);
+/** Where an imported skill goes: an agent's own skills, an area's, or the shared ones. */
+export type SkillPlace =
+	| { agent: string; area?: string }
+	| { area: string }
+	| Record<string, never>;
 
-/** Whether a file of a skill, by its path in the skill's folder, is copied and hashed. */
-export function isHashed(path: string): boolean {
-	const parts = path.split("/").filter(Boolean);
-	return !parts.some((part, i) =>
-		i < parts.length - 1
-			? LEFT_OUT_FOLDERS.has(part)
-			: LEFT_OUT_FILES.has(part),
-	);
+/** The skill's folder in openfabriq/, its key in imported-skills.json: `qa/agents/tester/skills/tdd`. */
+export function skillFolder(name: string, place: SkillPlace): string {
+	const area = "area" in place && place.area ? `${place.area}/` : "";
+	const agent = "agent" in place ? `agents/${place.agent}/` : "";
+	return `${area}${agent}skills/${name}`;
 }
 
-/**
- * The skills CLI's content hash of a skill folder: its files sorted by the bytes of their path,
- * each fed as `path \0 length \0 content` into one SHA-256, CRLF read as LF in a file without a
- * NUL byte. Lowercase hex.
- */
-export function skillHash(
-	files: { path: string; content: Uint8Array }[],
-): string {
-	const encoder = new TextEncoder();
-	const entries = files
-		.filter((file) => isHashed(file.path))
-		.map((file) => ({
-			path: Buffer.from(encoder.encode(file.path)),
-			content: lf(Buffer.from(file.content)),
-		}))
-		.sort((a, b) => Buffer.compare(a.path, b.path));
-	const hash = createHash("sha256");
-	for (const { path, content } of entries)
-		hash
-			.update(path)
-			.update("\0")
-			.update(String(content.length))
-			.update("\0")
-			.update(content);
-	return hash.digest("hex");
-}
-
-function lf(content: Buffer): Buffer {
-	if (content.includes(0) || !content.includes("\r\n")) return content;
-	return Buffer.from(
-		content.toString("latin1").replaceAll("\r\n", "\n"),
-		"latin1",
+/** A skill's folder read back: its name and its place, or undefined for no skill folder. */
+export function skillPlace(
+	folder: string,
+): { name: string; place: SkillPlace } | undefined {
+	const match = /^(?:([^/]+)\/)?(?:agents\/([^/]+)\/)?skills\/([^/]+)$/.exec(
+		folder,
 	);
+	if (!match) return undefined;
+	const [, area, agent, name = ""] = match;
+	const place: SkillPlace = agent
+		? { agent, ...(area ? { area } : {}) }
+		: area
+			? { area }
+			: {};
+	return { name, place };
 }

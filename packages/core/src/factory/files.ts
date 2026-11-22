@@ -252,26 +252,36 @@ export function missingFiles({
 	return missing;
 }
 
+/** A field of a file's front matter, or undefined when the file has no such field or no header. */
+export function frontMatterField(text: string, key: string): unknown {
+	const split = splitFrontMatter(text);
+	const header = typeof split === "string" ? undefined : split.header;
+	return header && typeof header === "object" && key in header
+		? (header as Record<string, unknown>)[key]
+		: undefined;
+}
+
 /**
- * The skills whose SKILL.md grants tools with allowed-tools: Claude Code would let the agent use
- * them without asking, and the factory alone says which tools an agent may use.
+ * Whether a SKILL.md grants tools with allowed-tools: Claude Code would let the agent use them
+ * without asking, and the factory alone says which tools an agent may use.
  */
+export function grantsTools(skillMd: string): boolean {
+	// An empty allowed-tools: still grants: YAML reads it as null, not as absent.
+	return frontMatterField(skillMd, "allowed-tools") !== undefined;
+}
+
+/** The skills of the factory whose SKILL.md grants tools. */
 export function grantingSkills(
 	files: FactoryFiles,
 	{ skillFolders }: Layout,
 ): Omit<Problem, "level">[] {
-	return [...skillFolders.keys()].sort().flatMap((folder) => {
-		const file = `${folder}/SKILL.md`;
-		const split = splitFrontMatter(files[file] ?? "");
-		const header = typeof split === "string" ? undefined : split.header;
-		return header && typeof header === "object" && "allowed-tools" in header
-			? [
-					{
-						file,
-						message:
-							"allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
-					},
-				]
-			: [];
-	});
+	return [...skillFolders.keys()]
+		.sort()
+		.map((folder) => `${folder}/SKILL.md`)
+		.filter((file) => grantsTools(files[file] ?? ""))
+		.map((file) => ({
+			file,
+			message:
+				"allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
+		}));
 }

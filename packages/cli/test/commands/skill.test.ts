@@ -1,18 +1,21 @@
 import {
 	chmodSync,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	rmSync,
 	statSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { loadFactory, skillHash } from "@openfabriq/core";
-import { readFactoryFolder } from "@openfabriq/runner";
+import { loadFactory } from "@openfabriq/core";
+import { readFactoryFolder, skillFiles, skillHash } from "@openfabriq/runner";
 import { describe, expect, it } from "vitest";
-import { skillCommand, skillFiles } from "../../src/commands/skill.js";
+import { chooseSkill, skillCommand } from "../../src/commands/skill.js";
 
 const COMMIT = "c".repeat(40);
 const REVIEW =
@@ -233,6 +236,52 @@ describe("openfabriq skill add", () => {
 		).toBe("mine\n");
 	});
 
+	it("imports again a skill whose folder was deleted", async () => {
+		const repo = factory();
+		const add = () =>
+			skillCommand(
+				{ action: "add", target: "mattpocock/skills", name: "code-review" },
+				repo,
+				github(PUBLIC),
+			);
+		await add();
+		writeFileSync(
+			join(repo, "openfabriq/skills/code-review/SKILL.md"),
+			"mine\n",
+		);
+		rmSync(join(repo, "openfabriq/skills/code-review"), { recursive: true });
+		const again = await add();
+		expect(again.code).toBe(0);
+		expect(
+			readFileSync(
+				join(repo, "openfabriq/skills/code-review/SKILL.md"),
+				"utf8",
+			),
+		).toBe(REVIEW);
+	});
+
+	it("copies a link inside the skill as its file", async () => {
+		const repo = factory();
+		const calls: string[][] = [];
+		const linked = async (command: string, args: string[]) => {
+			const out = await github(PUBLIC, calls)(command, args);
+			if (command === "gh")
+				symlinkSync(
+					"SKILL.md",
+					join(args[3] ?? "", "skills/code-review/README.md"),
+				);
+			return out;
+		};
+		await skillCommand(
+			{ action: "add", target: "mattpocock/skills", name: "code-review" },
+			repo,
+			linked,
+		);
+		const copy = join(repo, "openfabriq/skills/code-review/README.md");
+		expect(lstatSync(copy).isSymbolicLink()).toBe(false);
+		expect(readFileSync(copy, "utf8")).toBe(REVIEW);
+	});
+
 	it("never overwrites a skill of the factory's own", async () => {
 		const repo = factory({ "skills/code-review/SKILL.md": REVIEW });
 		const result = await skillCommand(
@@ -278,5 +327,39 @@ describe("openfabriq skill remove", () => {
 		);
 		expect(result.code).toBe(1);
 		expect(existsSync(join(repo, "openfabriq/skills/mine"))).toBe(true);
+	});
+});
+
+describe("the skill to import from a repository", () => {
+	const skill = (folder: string, name = folder.split("/").at(-1) ?? "") => ({
+		folder,
+		name,
+	});
+
+	it("looks first where the skills CLI does: the root, skills/, then the agents' folders", () => {
+		const found = (folders: string[]) =>
+			chooseSkill(
+				folders.map((f) => skill(f, "x")),
+				"x",
+			);
+		expect(found(["other/x", "skills/deep/x"])).toEqual(
+			skill("skills/deep/x", "x"),
+		);
+		expect(found(["a/x", ".claude/skills/x"])).toEqual(
+			skill(".claude/skills/x", "x"),
+		);
+		expect(found(["skills/x", ""])).toEqual(skill("", "x"));
+	});
+
+	it("finds a skill by its folder's name too, and refuses a name no folder can take", () => {
+		expect(chooseSkill([skill("skills/cr", "code-review")], "cr")).toEqual(
+			skill("skills/cr", "code-review"),
+		);
+		expect(chooseSkill([skill("skills/x", "Code Review")], undefined)).toMatch(
+			/cannot be a folder of the factory/,
+		);
+		expect(chooseSkill([], undefined)).toBe(
+			"This repository has no skill: no SKILL.md in it",
+		);
 	});
 });

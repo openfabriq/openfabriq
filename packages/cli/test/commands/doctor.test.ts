@@ -1,8 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { skillHash } from "@openfabriq/core";
-import { projectDir, recordRefusals } from "@openfabriq/runner";
+import { projectDir, recordRefusals, skillHash } from "@openfabriq/runner";
 import { expect, it } from "vitest";
 import { doctorCommand } from "../../src/commands/doctor.js";
 

@@ -11,17 +11,25 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import {
+	frontMatterField,
+	grantsTools,
 	IMPORTED_SKILLS,
 	type ImportedSkills,
 	importedSkillsText,
-	isHashed,
 	readImportedSkills,
+	type SkillPlace,
 	scanLayout,
 	sentenceList,
-	skillHash,
-	splitFrontMatter,
+	skillFolder,
+	splitArea,
 } from "@openfabriq/core";
-import { exec, factoryFolder, readFactoryFolder } from "@openfabriq/runner";
+import {
+	exec,
+	factoryFolder,
+	readFactoryFolder,
+	skillFiles,
+	skillHash,
+} from "@openfabriq/runner";
 import type { CommandResult } from "../result.js";
 
 // Public skills brought into the factory as plain files, pinned to a commit, with the skills CLI's hash.
@@ -70,29 +78,10 @@ async function addSkill(
 		return fail(
 			"Name a GitHub repository and its skill: openfabriq skill add mattpocock/skills code-review",
 		);
-	if (args.agent && args.area)
-		return fail(
-			"Pass --agent or --area, not both: an agent's skills are in its own folder",
-		);
-	const files = readFactoryFolder(folder);
-	const layout = scanLayout(files);
-	let parent = "";
-	if (args.agent) {
-		const agentFile = layout.agentFiles.get(args.agent);
-		if (!agentFile)
-			return fail(
-				`The factory has no agent named ${args.agent}: its agents are ${sentenceList([...layout.agentFiles.keys()].sort())}`,
-			);
-		parent = `${dirname(agentFile)}/`;
-	} else if (args.area) {
-		if (!layout.areas.has(args.area))
-			return fail(
-				`The factory has no area named ${args.area}: an area is a folder of openfabriq/ with agents/ or automations/`,
-			);
-		parent = `${args.area}/`;
-	}
-	const lock = readLock(files[IMPORTED_SKILLS]);
-	if (typeof lock === "string") return fail(lock);
+	const place = placeOf(args, folder);
+	if (typeof place === "string") return fail(place);
+	const imported = readImported(folder);
+	if (typeof imported === "string") return fail(imported);
 
 	const temp = mkdtempSync(join(tmpdir(), "openfabriq-skill-"));
 	try {
@@ -113,45 +102,49 @@ async function addSkill(
 		const ref = (
 			await run("git", ["-C", clone, "rev-parse", "--abbrev-ref", "HEAD"])
 		).trim();
-		const found = findSkill(clone, wanted);
+		const found = chooseSkill(skillCandidates(clone), wanted);
 		if (typeof found === "string") return fail(found);
-		const sourceFiles = skillFiles(join(clone, found.folder));
-		const skillMd = sourceFiles.find((f) => f.path === "SKILL.md");
+		const source = join(clone, found.folder);
+		const files = skillFiles(source);
+		const skillMd = files.find((f) => f.path === "SKILL.md");
 		if (skillMd && grantsTools(Buffer.from(skillMd.content).toString("utf8")))
 			return fail(
 				`${repository}'s ${found.name} grants itself tools with allowed-tools, which a factory refuses: the agent's tools say what it may use`,
 			);
-		const key = `${parent}skills/${found.name}`;
+		const key = skillFolder(found.name, place);
 		const target = join(folder, key);
-		const entry = lock.skills[key];
-		if (entry) {
-			if (skillHash(skillFiles(target)) !== entry.computedHash)
-				return fail(
-					`openfabriq/${key} changed since it was imported, and updating it would lose that change: put it back as it was imported, or delete the folder, then run this again. Adapt an imported skill in the agent's own body instead.`,
-				);
-		} else if (existsSync(target))
+		const entry = imported.skills[key];
+		// A folder deleted since its import is imported again; one changed by hand is kept.
+		if (
+			entry &&
+			existsSync(target) &&
+			skillHash(skillFiles(target)) !== entry.computedHash
+		)
+			return fail(
+				`openfabriq/${key} changed since it was imported, and updating it would lose that change: put it back as it was imported, or delete the folder, then run this again. Adapt an imported skill in the agent's own body instead.`,
+			);
+		if (!entry && existsSync(target))
 			return fail(
 				`openfabriq/${key} is already a skill of the factory, not one it imported: give it another name, or delete it first`,
 			);
 		rmSync(target, { recursive: true, force: true });
-		for (const file of sourceFiles) {
+		for (const file of files) {
 			const to = join(target, file.path);
 			mkdirSync(dirname(to), { recursive: true });
-			// Keeps a script's mode, so it still runs.
-			copyFileSync(join(clone, found.folder, file.path), to);
+			// Keeps a script's mode, so it still runs; a link inside the folder becomes its file.
+			copyFileSync(join(source, file.path), to);
 		}
-		const skills = {
-			...lock.skills,
+		writeImported(folder, {
+			...imported.skills,
 			[key]: {
 				source: repository,
-				sourceType: "github" as const,
+				sourceType: "github",
 				ref,
 				commit,
 				skillPath: found.folder ? `${found.folder}/SKILL.md` : "SKILL.md",
-				computedHash: skillHash(sourceFiles),
+				computedHash: skillHash(files),
 			},
-		};
-		writeFileSync(join(folder, IMPORTED_SKILLS), importedSkillsText(skills));
+		});
 		return {
 			code: 0,
 			output: [
@@ -165,102 +158,115 @@ async function addSkill(
 	}
 }
 
+/** Where --agent or --area puts the skill, or why the factory has no such place. */
+function placeOf(args: SkillArgs, folder: string): SkillPlace | string {
+	if (args.agent && args.area)
+		return "Pass --agent or --area, not both: an agent's skills are in its own folder";
+	if (!args.agent && !args.area) return {};
+	const layout = scanLayout(readFactoryFolder(folder));
+	if (args.agent) {
+		const agentFile = layout.agentFiles.get(args.agent);
+		if (!agentFile)
+			return `The factory has no agent named ${args.agent}: its agents are ${sentenceList([...layout.agentFiles.keys()].sort())}`;
+		const { area } = splitArea(agentFile, layout.areas);
+		return { agent: args.agent, ...(area ? { area } : {}) };
+	}
+	const area = args.area ?? "";
+	return layout.areas.has(area)
+		? { area }
+		: `The factory has no area named ${area}: an area is a folder of openfabriq/ with agents/ or automations/`;
+}
+
 function removeSkill(given: string | undefined, folder: string): CommandResult {
 	const key = (given ?? "").replace(/^openfabriq\//, "").replace(/\/+$/, "");
 	if (!key)
 		return fail(
 			"Name the skill's folder: openfabriq skill remove skills/code-review",
 		);
-	const lock = readLock(readIfExists(join(folder, IMPORTED_SKILLS)));
-	if (typeof lock === "string") return fail(lock);
-	if (!lock.skills[key])
+	const imported = readImported(folder);
+	if (typeof imported === "string") return fail(imported);
+	const folders = Object.keys(imported.skills).sort();
+	if (!imported.skills[key])
 		return fail(
-			`openfabriq/${key} is not an imported skill${Object.keys(lock.skills).length ? `; the imported ones are ${sentenceList(Object.keys(lock.skills).sort())}` : ""}. Delete a skill of your own like any other folder.`,
+			`openfabriq/${key} is not an imported skill${folders.length ? `; the imported ones are ${sentenceList(folders)}` : ""}. Delete a skill of your own like any other folder.`,
 		);
 	rmSync(join(folder, key), { recursive: true, force: true });
-	const { [key]: _removed, ...rest } = lock.skills;
-	if (Object.keys(rest).length)
-		writeFileSync(join(folder, IMPORTED_SKILLS), importedSkillsText(rest));
-	else rmSync(join(folder, IMPORTED_SKILLS), { force: true });
+	const { [key]: _removed, ...rest } = imported.skills;
+	writeImported(folder, rest);
 	return {
 		code: 0,
 		output: `✓ Removed openfabriq/${key}. Open a pull request, and run "openfabriq apply" once it is merged.`,
 	};
 }
 
-function readIfExists(path: string): string | undefined {
-	return existsSync(path) ? readFileSync(path, "utf8") : undefined;
-}
-
 /** The factory's imported skills, none without the file, or why it cannot be read. */
-function readLock(text: string | undefined): ImportedSkills | string {
-	if (text === undefined) return { version: 1, skills: {} };
-	const read = readImportedSkills(text);
+function readImported(folder: string): ImportedSkills | string {
+	const path = join(folder, IMPORTED_SKILLS);
+	if (!existsSync(path)) return { version: 1, skills: {} };
+	const read = readImportedSkills(readFileSync(path, "utf8"));
 	return Array.isArray(read)
 		? `openfabriq/${IMPORTED_SKILLS} cannot be read (${read.join("; ")}): fix it, or check it out again from git`
 		: read;
 }
 
-function grantsTools(text: string): boolean {
-	const split = splitFrontMatter(text);
-	const header = typeof split === "string" ? undefined : split.header;
-	return !!header && typeof header === "object" && "allowed-tools" in header;
+/** Writes the imported skills, or removes the file once there are none. */
+function writeImported(folder: string, skills: ImportedSkills["skills"]) {
+	const path = join(folder, IMPORTED_SKILLS);
+	if (Object.keys(skills).length)
+		writeFileSync(path, importedSkillsText(skills));
+	else rmSync(path, { force: true });
 }
 
-/**
- * The files of a skill folder that the skills CLI would copy, with their bytes. Links are left
- * out: a link could point outside the folder.
- */
-export function skillFiles(dir: string): { path: string; content: Buffer }[] {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => join(entry.parentPath, entry.name))
-		.map((path) => ({
-			path: relative(dir, path).split(sep).join("/"),
-			content: readFileSync(path),
-		}))
-		.filter((file) => isHashed(file.path));
+/** A skill of a repository: its folder there ("" at the root) and its name. */
+export interface Candidate {
+	folder: string;
+	name: string;
 }
 
-/**
- * The skill to import from a repository: the one named, or its only skill. A SKILL.md at the root
- * comes first, then the shallowest.
- * shortcut: one search of the whole repository instead of the skills CLI's list of folders and
- * manifests; a repository with two skills of one name gets the shallower, until someone needs more.
- */
-function findSkill(
-	clone: string,
-	wanted: string | undefined,
-): { folder: string; name: string } | string {
-	const skills = readdirSync(clone, { recursive: true, withFileTypes: true })
-		.filter(
-			(entry) =>
-				entry.isFile() &&
-				entry.name === "SKILL.md" &&
-				!/(^|[/\\])(\.git|node_modules)([/\\]|$)/.test(
-					relative(clone, entry.parentPath),
-				),
-		)
-		.map((entry) => {
-			const folder = relative(clone, entry.parentPath).split(sep).join("/");
-			const split = splitFrontMatter(
-				readFileSync(join(entry.parentPath, entry.name), "utf8"),
+/** Every SKILL.md of a cloned repository, outside .git and node_modules. */
+function skillCandidates(clone: string): Candidate[] {
+	return readdirSync(clone, { recursive: true, withFileTypes: true })
+		.filter((entry) => entry.isFile() && entry.name === "SKILL.md")
+		.map((entry) => relative(clone, entry.parentPath).split(sep).join("/"))
+		.filter((folder) => !/(^|\/)(\.git|node_modules)(\/|$)/.test(folder))
+		.map((folder) => {
+			const name = frontMatterField(
+				readFileSync(join(clone, folder, "SKILL.md"), "utf8"),
+				"name",
 			);
-			const header = typeof split === "string" ? undefined : split.header;
-			const named =
-				header && typeof header === "object" && "name" in header
-					? header.name
-					: undefined;
-			const name =
-				typeof named === "string" ? named : folder.split("/").at(-1) || "";
-			return { folder, name };
-		})
-		.sort(
-			(a, b) =>
-				a.folder.split("/").length - b.folder.split("/").length ||
-				(a.folder < b.folder ? -1 : 1),
-		);
+			return {
+				folder,
+				name:
+					typeof name === "string" ? name : (folder.split("/").at(-1) ?? ""),
+			};
+		});
+}
+
+// Where the skills CLI looks first: the root, then skills/, then the agents' own skill folders.
+const FIRST_PLACES = [
+	(folder: string) => folder === "",
+	(folder: string) => folder.startsWith("skills/"),
+	(folder: string) => /^\.(claude|agents)\/skills\//.test(folder),
+];
+const placeRank = (folder: string) => {
+	const at = FIRST_PLACES.findIndex((first) => first(folder));
+	return at === -1 ? FIRST_PLACES.length : at;
+};
+
+/**
+ * The skill to import: the one named, by its name or its folder's, or the repository's only skill.
+ * Two of the same name: the first where the skills CLI looks, then the shallowest.
+ */
+export function chooseSkill(
+	candidates: Candidate[],
+	wanted: string | undefined,
+): Candidate | string {
+	const skills = [...candidates].sort(
+		(a, b) =>
+			placeRank(a.folder) - placeRank(b.folder) ||
+			a.folder.split("/").length - b.folder.split("/").length ||
+			(a.folder < b.folder ? -1 : 1),
+	);
 	if (skills.length === 0)
 		return "This repository has no skill: no SKILL.md in it";
 	const names = sentenceList([...new Set(skills.map((s) => s.name))].sort());

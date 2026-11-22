@@ -1,6 +1,8 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadFactory } from "../../src/factory/load.js";
 import type { FactoryFiles } from "../../src/factory/types.js";
+import { ROOT, readFolder } from "../helpers.js";
 
 const FACTORY = "name: F\nrepository: acme/app\nmaintainers: [alice]\n";
 const AGENT = "---\ndescription: Does things\n---\nDo things.\n";
@@ -52,5 +54,18 @@ describe("the factory's skills", () => {
 				"skills/s/notes.md": "---\nallowed-tools: Bash\n---\n",
 			}),
 		).toEqual([]);
+	});
+});
+
+describe("an invalid factory's skills", () => {
+	it("refuses a skill that grants tools and an imported skill whose folder is gone", () => {
+		const { factory, problems } = loadFactory(
+			readFolder(join(ROOT, "fixtures/invalid/skills/openfabriq")),
+		);
+		expect(factory).toBeUndefined();
+		expect(problems.map((p) => `${p.file}: ${p.message}`)).toEqual([
+			"skills/grants/SKILL.md: allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
+			'imported-skills.json: lists skills/tdd, which is not a skill folder of the factory: run "openfabriq skill remove skills/tdd"',
+		]);
 	});
 });

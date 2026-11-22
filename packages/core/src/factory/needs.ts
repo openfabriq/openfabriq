@@ -1,4 +1,4 @@
-import { splitFrontMatter } from "./files.js";
+import { frontMatterField } from "./files.js";
 import type { Factory, FactoryFiles } from "./types.js";
 
 // What a factory needs on the engine's machine, read from its files, for openfabriq doctor.
@@ -65,12 +65,7 @@ export function machineNeeds(
 	const skills: Record<string, string> = {};
 	for (const [path, text] of Object.entries(files).sort()) {
 		if (!path.endsWith("/SKILL.md")) continue;
-		const split = splitFrontMatter(text);
-		const header = typeof split === "string" ? undefined : split.header;
-		const compatibility =
-			header && typeof header === "object" && "compatibility" in header
-				? header.compatibility
-				: undefined;
+		const compatibility = frontMatterField(text, "compatibility");
 		if (typeof compatibility !== "string" || !compatibility.trim()) continue;
 		const skill = path.slice(0, -"/SKILL.md".length);
 		skills[skill] = compatibility.trim();
