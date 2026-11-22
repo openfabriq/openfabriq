@@ -58,7 +58,7 @@ describe("the factory's skills", () => {
 });
 
 describe("an invalid factory's skills", () => {
-	it("refuses a skill that grants tools and an imported skill whose folder is gone", () => {
+	it("refuses a skill that grants tools, an imported skill whose folder is gone, and a declared one for no agent", () => {
 		const { factory, problems } = loadFactory(
 			readFolder(join(ROOT, "fixtures/invalid/skills/openfabriq")),
 		);
@@ -66,6 +66,7 @@ describe("an invalid factory's skills", () => {
 		expect(problems.map((p) => `${p.file}: ${p.message}`)).toEqual([
 			"skills/grants/SKILL.md: allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
 			'imported-skills.json: lists skills/tdd, which is not a skill folder of the factory: run "openfabriq skill remove skills/tdd"',
+			'factory.yaml: skills.review: agent "reviewer" does not exist. Use one of: worker',
 		]);
 	});
 });

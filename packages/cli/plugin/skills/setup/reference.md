@@ -31,7 +31,7 @@ openfabriq/
 
 A large factory may order its resources by area: a folder of `openfabriq/` holding `agents/` or `automations/` (and optionally `skills/`, read by that area's agents only), such as `qa/agents/tester/agent.md`. Names stay unique in the whole factory and carry no area; an automation may start the agent of another area; `factory.yaml` stays one, at the root. `agents`, `automations`, `skills` and `scripts` cannot be areas, and an area holds no other area. Example: `04-large-factory`.
 
-A skill is a Claude Code skill: a `SKILL.md` with `name` and `description` in its header, then short prescriptive text (stack, commands, conventions). Never `allowed-tools`: the agent's `tools` say what it may use, and `validate` refuses it. To use a public skill, have the person run `openfabriq skill add <owner/repo> <skill>` (`--agent` or `--area` for a narrower folder) instead of copying it; never edit an imported skill or `imported-skills.json`, and adapt it in the agent's body instead.
+A skill is a Claude Code skill: a `SKILL.md` with `name` and `description` in its header, then short prescriptive text (stack, commands, conventions). Never `allowed-tools`: the agent's `tools` say what it may use, and `validate` refuses it. To use a public skill, have the person run `openfabriq skill add <owner/repo> <skill>` (`--agent` or `--area` for a narrower folder) instead of copying it: it declares the skill in `factory.yaml`'s `skills` and pins it. `openfabriq skill update` updates the declared skills. Never edit an imported skill or `imported-skills.json`, and adapt it in the agent's body instead.
 
 ## `factory.yaml`
 

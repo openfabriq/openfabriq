@@ -174,7 +174,8 @@ it("says an imported skill changed by hand, out of date, up to date, or out of r
 	const dir = mkdtempSync(join(tmpdir(), "doctor-skills-"));
 	const skill = "---\nname: s\ndescription: S\n---\nDo.\n";
 	const files: Record<string, string> = {
-		"factory.yaml": "name: F\nrepository: acme/app\nmaintainers: [alice]\n",
+		"factory.yaml":
+			"name: F\nrepository: acme/app\nmaintainers: [alice]\nskills:\n  fresh: acme/fresh\n  stale: acme/stale\n  far: { from: acme/far, agent: a }\n  edited: acme/edited\n",
 		"agents/a/agent.md": "---\ndescription: A\n---\nGo.\n",
 		"automations/x/automation.md":
 			"---\nwhen: [issue.opened]\nagent: a\ncan: [add_comment]\n---\nGo.\n",
@@ -219,7 +220,7 @@ it("says an imported skill changed by hand, out of date, up to date, or out of r
 		"! skills/edited: changed since it was imported from acme/edited",
 	);
 	expect(result.output).toContain(
-		'! skills/stale: acme/stale has a newer version on main: run "openfabriq skill add acme/stale stale" for a pull request that updates it',
+		'! skills/stale: acme/stale has a newer version on main: run "openfabriq skill update stale" for a pull request that updates it',
 	);
 	expect(result.output).toContain(
 		"✓ skills/fresh: as imported from acme/fresh, and up to date",

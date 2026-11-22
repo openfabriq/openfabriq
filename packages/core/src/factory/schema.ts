@@ -1,12 +1,16 @@
 import { z } from "zod";
 import { isTimeZone } from "../cron/schedule.js";
 import { unknownWord } from "../words.js";
+import { REPOSITORY } from "./imported.js";
 import { isSite, type Network, PACKAGES } from "./network.js";
+import type { DeclaredSkill } from "./types.js";
 
 const label = z.string().min(1).max(50);
 const variableName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, {
 	error: "a variable name is letters, digits and _, like DATABASE_URL",
 });
+
+const REPOSITORY_ERROR = "is a GitHub repository, like mattpocock/skills";
 
 const NETWORK_WORDS = ["none", "packages", "any"];
 
@@ -133,6 +137,45 @@ export const FactoryShape = {
 	// Names and signatures are checked in factory-rules.ts, one webhook at a time.
 	webhooks: z
 		.record(z.string(), z.strictObject({ signature: z.string().min(1) }))
+		.optional(),
+	// Public skills the factory imports, by name: the repository, or the repository and the agent
+	// or area whose folder takes the skill. Checked against imported-skills.json in imported.ts.
+	skills: z
+		.record(
+			z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
+				error:
+					"a skill's name is lowercase letters, digits and -, like code-review",
+			}),
+			z
+				.union(
+					[
+						z.string().regex(REPOSITORY, { error: REPOSITORY_ERROR }),
+						z.strictObject({
+							from: z.string().regex(REPOSITORY, { error: REPOSITORY_ERROR }),
+							agent: z.string().min(1).optional(),
+							area: z.string().min(1).optional(),
+						}),
+					],
+					{
+						error:
+							"is a GitHub repository, like mattpocock/skills, or { from: mattpocock/skills, agent: reviewer }",
+					},
+				)
+				.refine((d) => typeof d === "string" || !(d.agent && d.area), {
+					error:
+						"takes agent or area, not both: an agent's skills are in its own folder",
+				})
+				.transform(
+					(d): DeclaredSkill =>
+						typeof d === "string"
+							? { from: d }
+							: {
+									from: d.from,
+									...(d.agent ? { agent: d.agent } : {}),
+									...(d.area ? { area: d.area } : {}),
+								},
+				),
+		)
 		.optional(),
 	// Off by default; true turns it on, on demand, in wiki/; the folder's rules are in wiki.ts.
 	wiki: z

@@ -189,7 +189,7 @@ async function importedSkillLines(
 				lines.push(`! ${key}: ${source} no longer has ${skillPath} on ${ref}`);
 			else if (latest !== pinned)
 				lines.push(
-					`! ${key}: ${source} has a newer version on ${ref}: run "${updateCommand(key, source)}" for a pull request that updates it`,
+					`! ${key}: ${source} has a newer version on ${ref}: run "openfabriq skill update ${skillPlace(key)?.name ?? key}" for a pull request that updates it`,
 				);
 			else if (!edited)
 				lines.push(`✓ ${key}: as imported from ${source}, and up to date`);
@@ -200,17 +200,4 @@ async function importedSkillLines(
 		}
 	}
 	return lines;
-}
-
-/** The skill add that updates an imported skill, with --agent or --area as its folder says. */
-function updateCommand(key: string, source: string): string {
-	const read = skillPlace(key);
-	const place = read?.place ?? {};
-	const where =
-		"agent" in place
-			? ` --agent ${place.agent}`
-			: "area" in place
-				? ` --area ${place.area}`
-				: "";
-	return `openfabriq skill add ${source} ${read?.name ?? key}${where}`;
 }

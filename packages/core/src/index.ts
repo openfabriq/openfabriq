@@ -17,6 +17,7 @@ export {
 	splitArea,
 } from "./factory/files.js";
 export {
+	declaredPlace,
 	IMPORTED_SKILLS,
 	type ImportedSkill,
 	type ImportedSkills,
@@ -24,8 +25,10 @@ export {
 	REPOSITORY,
 	readImportedSkills,
 	type SkillPlace,
+	skillAddCommand,
 	skillFolder,
 	skillPlace,
+	withDeclaredSkill,
 } from "./factory/imported.js";
 export { loadFactory } from "./factory/load.js";
 export { machineNeeds } from "./factory/needs.js";
@@ -43,6 +46,7 @@ export { isScript, scriptOf } from "./factory/scripts.js";
 export type {
 	Agent,
 	Automation,
+	DeclaredSkill,
 	Factory,
 	FactoryFiles,
 	Limits,

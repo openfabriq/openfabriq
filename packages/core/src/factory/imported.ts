@@ -1,6 +1,8 @@
+import { isMap, isScalar, parseDocument } from "yaml";
 import { z } from "zod";
-import type { Layout } from "./files.js";
-import type { FactoryFiles, Problem } from "./types.js";
+import { suggested } from "../words.js";
+import { type Layout, splitArea } from "./files.js";
+import type { DeclaredSkill, FactoryFiles, Problem } from "./types.js";
 
 /**
  * Where a factory records the skills it imported from public repositories, by folder: each entry
@@ -78,24 +80,90 @@ export function importedSkillsText(skills: ImportedSkills["skills"]): string {
 	return `${JSON.stringify({ version: 1, skills: sorted }, null, 2)}\n`;
 }
 
-/** Problems of imported-skills.json: its shape, and entries whose folder is no skill of the factory. */
+/**
+ * Problems of the imported skills: imported-skills.json's shape, entries whose folder is no skill
+ * of the factory, and any gap between it and what factory.yaml's `skills` declares.
+ */
 export function importedSkillsProblems(
 	files: FactoryFiles,
-	{ skillFolders }: Layout,
+	layout: Layout,
+	declared: Record<string, DeclaredSkill> = {},
 ): Omit<Problem, "level">[] {
 	const text = files[IMPORTED_SKILLS];
-	if (text === undefined) return [];
-	const read = readImportedSkills(text);
-	const messages = Array.isArray(read)
-		? read
-		: Object.keys(read.skills)
-				.sort()
-				.filter((folder) => !skillFolders.get(folder))
-				.map(
-					(folder) =>
-						`lists ${folder}, which is not a skill folder of the factory: run "openfabriq skill remove ${folder}"`,
-				);
-	return messages.map((message) => ({ file: IMPORTED_SKILLS, message }));
+	const read =
+		text === undefined
+			? { version: 1 as const, skills: {} }
+			: readImportedSkills(text);
+	if (Array.isArray(read))
+		return read.map((message) => ({ file: IMPORTED_SKILLS, message }));
+	const problems: Omit<Problem, "level">[] = [];
+	const inLock = (message: string) =>
+		problems.push({ file: IMPORTED_SKILLS, message });
+	const inFactory = (message: string) =>
+		problems.push({ file: "factory.yaml", message });
+	for (const folder of Object.keys(read.skills).sort())
+		if (!layout.skillFolders.get(folder))
+			inLock(
+				`lists ${folder}, which is not a skill folder of the factory: run "openfabriq skill remove ${folder}"`,
+			);
+	const declaredFolders = new Set<string>();
+	for (const [name, skill] of Object.entries(declared).sort()) {
+		const place = declaredPlace(skill, layout);
+		if (typeof place === "string") {
+			inFactory(`skills.${name}: ${place}`);
+			continue;
+		}
+		const folder = skillFolder(name, place);
+		declaredFolders.add(folder);
+		const entry = read.skills[folder];
+		if (!entry)
+			inFactory(
+				`skills.${name}: declared, but not imported: run "${skillAddCommand(name, skill)}"`,
+			);
+		else if (entry.source !== skill.from)
+			inFactory(
+				`skills.${name}: declared from ${skill.from}, but imported from ${entry.source}: run "${skillAddCommand(name, skill)}"`,
+			);
+	}
+	for (const folder of Object.keys(read.skills).sort())
+		if (!declaredFolders.has(folder))
+			inLock(
+				`imports ${folder}, which factory.yaml's skills does not declare: declare it, or run "openfabriq skill remove ${folder}"`,
+			);
+	return problems;
+}
+
+/** Where a declared skill goes, or why its agent or area does not exist. */
+export function declaredPlace(
+	skill: DeclaredSkill,
+	{ agentFiles, areas }: Pick<Layout, "agentFiles" | "areas">,
+): SkillPlace | string {
+	if (skill.agent) {
+		const agentFile = agentFiles.get(skill.agent);
+		if (!agentFile)
+			return suggested(`agent "${skill.agent}" does not exist.`, skill.agent, [
+				...agentFiles.keys(),
+			]);
+		const { area } = splitArea(agentFile, areas);
+		return { agent: skill.agent, ...(area ? { area } : {}) };
+	}
+	if (skill.area)
+		return areas.has(skill.area)
+			? { area: skill.area }
+			: suggested(`area "${skill.area}" does not exist.`, skill.area, [
+					...areas,
+				]);
+	return {};
+}
+
+/** The command that imports a declared skill, as the person would type it. */
+export function skillAddCommand(name: string, skill: DeclaredSkill): string {
+	const where = skill.agent
+		? ` --agent ${skill.agent}`
+		: skill.area
+			? ` --area ${skill.area}`
+			: "";
+	return `openfabriq skill add ${skill.from} ${name}${where}`;
 }
 
 /** Where an imported skill goes: an agent's own skills, an area's, or the shared ones. */
@@ -128,4 +196,57 @@ export function skillPlace(
 			? { area }
 			: {};
 	return { name, place };
+}
+
+/**
+ * factory.yaml with a skill declared, or no longer declared without `skill`. Only the `skills`
+ * section is rewritten, in place; the rest of the text and its comments stay as they are. A shared
+ * skill is one line; an agent's or an area's, `{ from, agent }`.
+ */
+export function withDeclaredSkill(
+	factoryYaml: string,
+	name: string,
+	skill: DeclaredSkill | undefined,
+): string {
+	const doc = parseDocument(factoryYaml);
+	const root = doc.contents;
+	const pair = isMap(root)
+		? root.items.find(
+				(item) => isScalar(item.key) && item.key.value === "skills",
+			)
+		: undefined;
+	const read: unknown = pair?.value
+		? (pair.value as { toJSON(): unknown }).toJSON()
+		: {};
+	const skills: Record<string, unknown> =
+		read && typeof read === "object"
+			? { ...(read as Record<string, unknown>) }
+			: {};
+	if (skill) skills[name] = skill;
+	else delete skills[name];
+	const lines = Object.entries(skills).map(
+		([key, value]) => `  ${key}: ${declarationText(value)}`,
+	);
+	const section = lines.length ? `skills:\n${lines.join("\n")}\n` : "";
+	const keyStart = pair && isScalar(pair.key) ? pair.key.range?.[0] : undefined;
+	const valueEnd = (pair?.value as { range?: number[] } | undefined)
+		?.range?.[2];
+	if (keyStart === undefined || valueEnd === undefined) {
+		const text =
+			factoryYaml.endsWith("\n") || !factoryYaml
+				? factoryYaml
+				: `${factoryYaml}\n`;
+		return `${text}${section}`;
+	}
+	const after = factoryYaml.slice(valueEnd).replace(/^\n/, "");
+	return `${factoryYaml.slice(0, keyStart)}${section}${after}`;
+}
+
+/** A declaration as factory.yaml writes it: the repository, or `{ from, agent }` and the like. */
+function declarationText(value: unknown): string {
+	if (typeof value === "string") return value;
+	if (!value || typeof value !== "object") return String(value);
+	const { from, agent, area } = value as DeclaredSkill;
+	if (!agent && !area) return String(from);
+	return `{ from: ${from}, ${agent ? `agent: ${agent}` : `area: ${area}`} }`;
 }

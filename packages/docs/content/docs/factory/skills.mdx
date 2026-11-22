@@ -51,9 +51,29 @@ openfabriq skill add mattpocock/skills code-review --area qa         # → openf
 
 The repository is read with `gh`, so a private one works too; `owner/repo@code-review` is the same as naming the skill after the repository. A repository with a single skill needs no name. With `--agent`, the skill goes into that agent's own folder, in its area if it has one.
 
+The command also declares the skill in `factory.yaml`, so anyone can read what the factory imports, as a `package.json` lists a project's dependencies:
+
+```yaml title="openfabriq/factory.yaml (extract)"
+skills:
+  code-review: mattpocock/skills                              # shared by every agent
+  tdd: { from: mattpocock/skills, agent: implementer }        # that agent only
+  web-design-guidelines: { from: vercel-labs/agent-skills, area: qa }
+```
+
 The skill is never fetched while a run goes on: its folder is reviewed in a pull request, and `plan` shows its changes like any other file. Read it before you merge: a public skill is written for a person at the keyboard ("ask the user", "run `gh pr comment`"), while an agent of the factory has no one to ask and goes through the outputs its automation allows. Keep the imported skill as it is, and say in the agent's body how the factory uses it.
 
-`openfabriq/imported-skills.json` records, for each imported skill's folder, its repository, branch, commit and content hash. The hash is the `computedHash` of the [`skills` CLI](https://github.com/vercel-labs/skills)'s `skills-lock.json`, so both tools agree on a skill's content. The command writes this file; never edit it by hand.
+### Update the imported skills
+
+```bash
+openfabriq skill update          # every skill factory.yaml declares
+openfabriq skill update tdd      # that one only
+```
+
+`skill update` takes each declared skill from the last commit of its repository's default branch. A skill whose content did not change keeps its entry, so the pull request shows only what changed. A skill changed by hand is skipped and said so: the update would lose that change. Put it back as it was imported, or adapt it in the agent's body instead. `openfabriq doctor` says when an imported skill has a newer version, or was changed by hand; neither fails `doctor`, and an unreachable repository is a line of its own. After an update, read the changes and open a pull request.
+
+### What openfabriq keeps
+
+`openfabriq/imported-skills.json` is the lock: for each imported skill's folder, its repository, branch, commit and content hash. The hash is the `computedHash` of the [`skills` CLI](https://github.com/vercel-labs/skills)'s `skills-lock.json`, so both tools agree on a skill's content. The commands write this file; never edit it by hand.
 
 ```json title="openfabriq/imported-skills.json"
 {
@@ -71,9 +91,9 @@ The skill is never fetched while a run goes on: its folder is reviewed in a pull
 }
 ```
 
-- `openfabriq doctor` says when an imported skill was changed since it was imported, and when its repository has a newer version. Neither fails `doctor`: an unreachable repository is a line of its own.
-- To update a skill, run the same `skill add` again, then open a pull request. It refuses a skill changed by hand, which the update would lose: put it back as it was imported, or delete the folder first. It also refuses to overwrite a skill of your own with the same name.
-- `openfabriq skill remove skills/code-review` removes the folder and its entry. `validate` refuses an entry whose folder is gone.
+- `validate` refuses any gap between `factory.yaml`'s `skills`, this file and the folders: a skill declared but not imported, imported but not declared, or whose folder is gone. Its message gives the command that closes the gap.
+- `skill add` refuses to overwrite a skill of your own with the same name.
+- `openfabriq skill remove skills/code-review` removes the folder, its entry and its line in `factory.yaml`.
 - Like any skill of the factory, an imported skill whose header has `allowed-tools` is refused.
 
 ### What a public skill needs from the task

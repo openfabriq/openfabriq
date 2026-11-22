@@ -67,7 +67,7 @@ export function loadFactory(files: FactoryFiles): {
 		...misplacedAreas(files, layout),
 		...duplicateNames(layout),
 		...grantingSkills(files, layout),
-		...importedSkillsProblems(files, layout),
+		...importedSkillsProblems(files, layout, fields.skills),
 	);
 	const { wiki, problems: wikiProblems } = readWiki(
 		fields.wiki,

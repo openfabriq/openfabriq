@@ -11,20 +11,25 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import {
+	type DeclaredSkill,
+	declaredPlace,
 	frontMatterField,
 	grantsTools,
 	IMPORTED_SKILLS,
 	type ImportedSkills,
 	importedSkillsText,
+	loadFactory,
 	REPOSITORY,
 	readImportedSkills,
 	type SkillPlace,
 	scanLayout,
 	sentenceList,
 	skillFolder,
-	splitArea,
+	skillPlace,
+	withDeclaredSkill,
 } from "@openfabriq/core";
 import {
+	errorText,
 	exec,
 	factoryFolder,
 	readFactoryFolder,
@@ -60,20 +65,146 @@ export async function skillCommand(
 		return fail(
 			`No factory here: no factory.yaml, nor an openfabriq/ folder. Run "openfabriq init" first.`,
 		);
-	if (args.action === "add") return addSkill(args, folder, run);
-	if (args.action === "remove") return removeSkill(args.target, folder);
+	const temp = mkdtempSync(join(tmpdir(), "openfabriq-skill-"));
+	try {
+		const clone = cloner(run, temp);
+		if (args.action === "add") return await addSkill(args, folder, clone);
+		if (args.action === "update")
+			return await updateSkills(args.target, folder, clone);
+		if (args.action === "remove") return removeSkill(args.target, folder);
+	} finally {
+		rmSync(temp, { recursive: true, force: true });
+	}
 	return fail(
-		"Usage: openfabriq skill add <owner/repo> [skill] [--agent name | --area name], or openfabriq skill remove <folder>",
+		"Usage: openfabriq skill add <owner/repo> [skill] [--agent name | --area name], openfabriq skill update [skill], or openfabriq skill remove <folder>",
 	);
 }
+
+/** A repository cloned at the last commit of its default branch. */
+interface Clone {
+	dir: string;
+	commit: string;
+	ref: string;
+}
+
+/** Clones each repository once for the command, in its temp folder. */
+function cloner(run: typeof exec, temp: string) {
+	const clones = new Map<string, Promise<Clone>>();
+	return (repository: string): Promise<Clone> => {
+		const known = clones.get(repository);
+		if (known) return known;
+		const dir = join(temp, `${clones.size}`);
+		const cloning = (async () => {
+			await run("gh", [
+				"repo",
+				"clone",
+				repository,
+				dir,
+				"--",
+				"--depth",
+				"1",
+				"--quiet",
+			]);
+			const git = async (...args: string[]) =>
+				(await run("git", ["-C", dir, ...args])).trim();
+			return {
+				dir,
+				commit: await git("rev-parse", "HEAD"),
+				ref: await git("rev-parse", "--abbrev-ref", "HEAD"),
+			};
+		})();
+		clones.set(repository, cloning);
+		return cloning;
+	};
+}
+
+type Cloner = ReturnType<typeof cloner>;
+
+/** What importing a skill did: written, left as it was, or kept because it was changed by hand. */
+interface Imported {
+	status: "imported" | "updated" | "unchanged" | "edited";
+	name: string;
+	key: string;
+	commit: string;
+}
+
+/**
+ * Copies a skill of a repository into its folder of the factory and records it in `imported`, or
+ * says why it cannot. A skill changed by hand is kept; one whose content did not change keeps its
+ * entry, so a pull request shows only what changed.
+ */
+async function importSkill(
+	folder: string,
+	imported: ImportedSkills,
+	request: {
+		repository: string;
+		wanted: string | undefined;
+		place: SkillPlace;
+	},
+	clone: Cloner,
+): Promise<Imported | string> {
+	const { repository, wanted, place } = request;
+	const source = await clone(repository);
+	const found = chooseSkill(skillCandidates(source.dir), wanted);
+	if (typeof found === "string") return found;
+	const from = join(source.dir, found.folder);
+	const files = skillFiles(from);
+	const skillMd = files.find((f) => f.path === "SKILL.md");
+	if (skillMd && grantsTools(Buffer.from(skillMd.content).toString("utf8")))
+		return `${repository}'s ${found.name} grants itself tools with allowed-tools, which a factory refuses: the agent's tools say what it may use`;
+	const key = skillFolder(found.name, place);
+	const target = join(folder, key);
+	const entry = imported.skills[key];
+	const done = (status: Imported["status"]) => ({
+		status,
+		name: found.name,
+		key,
+		commit: status === "unchanged" && entry ? entry.commit : source.commit,
+	});
+	// A folder deleted since its import is imported again; one changed by hand is kept.
+	if (
+		entry &&
+		existsSync(target) &&
+		skillHash(skillFiles(target)) !== entry.computedHash
+	)
+		return done("edited");
+	if (!entry && existsSync(target))
+		return `openfabriq/${key} is already a skill of the factory, not one it imported: give it another name, or delete it first`;
+	const computedHash = skillHash(files);
+	if (
+		entry?.source === repository &&
+		entry.computedHash === computedHash &&
+		existsSync(target)
+	)
+		return done("unchanged");
+	rmSync(target, { recursive: true, force: true });
+	for (const file of files) {
+		const to = join(target, file.path);
+		mkdirSync(dirname(to), { recursive: true });
+		// Keeps a script's mode, so it still runs; a link inside the folder becomes its file.
+		copyFileSync(join(from, file.path), to);
+	}
+	imported.skills[key] = {
+		source: repository,
+		sourceType: "github",
+		ref: source.ref,
+		commit: source.commit,
+		skillPath: found.folder ? `${found.folder}/SKILL.md` : "SKILL.md",
+		computedHash,
+	};
+	return done(entry ? "updated" : "imported");
+}
+
+const NEXT_STEP = `Read its files: it was written for a person at the keyboard, and the agent's own body says how the factory uses it. Then open a pull request, and run "openfabriq apply" once it is merged.`;
+const EDITED = (key: string) =>
+	`openfabriq/${key} changed since it was imported, and updating it would lose that change: put it back as it was imported, or delete the folder, then run this again. Adapt an imported skill in the agent's own body instead.`;
 
 async function addSkill(
 	args: SkillArgs,
 	folder: string,
-	run: typeof exec,
+	clone: Cloner,
 ): Promise<CommandResult> {
 	const [repository = "", afterAt] = (args.target ?? "").split("@");
-	const wanted = args.name ?? afterAt;
 	if (!REPOSITORY.test(repository))
 		return fail(
 			"Name a GitHub repository and its skill: openfabriq skill add mattpocock/skills code-review",
@@ -82,99 +213,101 @@ async function addSkill(
 	if (typeof place === "string") return fail(place);
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
+	const done = await importSkill(
+		folder,
+		imported,
+		{ repository, wanted: args.name ?? afterAt, place },
+		clone,
+	);
+	if (typeof done === "string") return fail(done);
+	if (done.status === "edited") return fail(EDITED(done.key));
+	writeImported(folder, imported.skills);
+	declare(folder, done.name, {
+		from: repository,
+		...(args.agent ? { agent: args.agent } : {}),
+		...(args.area ? { area: args.area } : {}),
+	});
+	const what =
+		done.status === "unchanged"
+			? `${done.name} from ${repository} is already up to date in openfabriq/${done.key}`
+			: `${done.status === "updated" ? "Updated" : "Imported"} ${done.name} from ${repository} at ${done.commit.slice(0, 7)} into openfabriq/${done.key}, declared in factory.yaml`;
+	return { code: 0, output: [`✓ ${what}`, "", NEXT_STEP].join("\n") };
+}
 
-	const temp = mkdtempSync(join(tmpdir(), "openfabriq-skill-"));
-	try {
-		const clone = join(temp, "source");
-		await run("gh", [
-			"repo",
-			"clone",
-			repository,
+/** Updates every skill factory.yaml declares, or the one named, to its source's last commit. */
+async function updateSkills(
+	only: string | undefined,
+	folder: string,
+	clone: Cloner,
+): Promise<CommandResult> {
+	const files = readFactoryFolder(folder);
+	const { factory, problems } = loadFactory(files);
+	if (!factory)
+		return fail(
+			`The factory has ${problems.filter((p) => p.level === "error").length} error(s): run "openfabriq validate", fix them, then update.`,
+		);
+	const declared = factory.importedSkills ?? {};
+	const names = Object.keys(declared).sort();
+	if (only && !declared[only])
+		return fail(
+			`factory.yaml's skills declares no ${only}${names.length ? `: it declares ${sentenceList(names)}` : ""}`,
+		);
+	if (names.length === 0)
+		return fail(
+			`factory.yaml declares no skills: import one with "openfabriq skill add <owner/repo> <skill>"`,
+		);
+	const imported = readImported(folder);
+	if (typeof imported === "string") return fail(imported);
+	const layout = scanLayout(files);
+	const lines: string[] = [];
+	let failed = false;
+	let changed = false;
+	for (const name of only ? [only] : names) {
+		const skill = declared[name];
+		const place = skill && declaredPlace(skill, layout);
+		if (!skill || typeof place === "string" || place === undefined) continue;
+		const done = await importSkill(
+			folder,
+			imported,
+			{ repository: skill.from, wanted: name, place },
 			clone,
-			"--",
-			"--depth",
-			"1",
-			"--quiet",
-		]);
-		const commit = (
-			await run("git", ["-C", clone, "rev-parse", "HEAD"])
-		).trim();
-		const ref = (
-			await run("git", ["-C", clone, "rev-parse", "--abbrev-ref", "HEAD"])
-		).trim();
-		const found = chooseSkill(skillCandidates(clone), wanted);
-		if (typeof found === "string") return fail(found);
-		const source = join(clone, found.folder);
-		const files = skillFiles(source);
-		const skillMd = files.find((f) => f.path === "SKILL.md");
-		if (skillMd && grantsTools(Buffer.from(skillMd.content).toString("utf8")))
-			return fail(
-				`${repository}'s ${found.name} grants itself tools with allowed-tools, which a factory refuses: the agent's tools say what it may use`,
+		).catch((error: unknown) => `${errorText(error).split("\n")[0]}`);
+		if (typeof done === "string") {
+			failed = true;
+			lines.push(`✗ ${name}: ${done}`);
+		} else if (done.status === "edited")
+			lines.push(
+				`! ${name}: changed by hand since it was imported, not updated: put openfabriq/${done.key} back as it was, then run this again`,
 			);
-		const key = skillFolder(found.name, place);
-		const target = join(folder, key);
-		const entry = imported.skills[key];
-		// A folder deleted since its import is imported again; one changed by hand is kept.
-		if (
-			entry &&
-			existsSync(target) &&
-			skillHash(skillFiles(target)) !== entry.computedHash
-		)
-			return fail(
-				`openfabriq/${key} changed since it was imported, and updating it would lose that change: put it back as it was imported, or delete the folder, then run this again. Adapt an imported skill in the agent's own body instead.`,
+		else if (done.status === "unchanged") lines.push(`✓ ${name}: up to date`);
+		else {
+			changed = true;
+			lines.push(
+				`✓ ${name}: updated to ${skill.from} at ${done.commit.slice(0, 7)}`,
 			);
-		if (!entry && existsSync(target))
-			return fail(
-				`openfabriq/${key} is already a skill of the factory, not one it imported: give it another name, or delete it first`,
-			);
-		rmSync(target, { recursive: true, force: true });
-		for (const file of files) {
-			const to = join(target, file.path);
-			mkdirSync(dirname(to), { recursive: true });
-			// Keeps a script's mode, so it still runs; a link inside the folder becomes its file.
-			copyFileSync(join(source, file.path), to);
 		}
-		writeImported(folder, {
-			...imported.skills,
-			[key]: {
-				source: repository,
-				sourceType: "github",
-				ref,
-				commit,
-				skillPath: found.folder ? `${found.folder}/SKILL.md` : "SKILL.md",
-				computedHash: skillHash(files),
-			},
-		});
-		return {
-			code: 0,
-			output: [
-				`✓ ${entry ? "Updated" : "Imported"} ${found.name} from ${repository} at ${commit.slice(0, 7)} into openfabriq/${key}`,
-				"",
-				`Read its files: it was written for a person at the keyboard, and the agent's own body says how the factory uses it. Then open a pull request, and run "openfabriq apply" once it is merged.`,
-			].join("\n"),
-		};
-	} finally {
-		rmSync(temp, { recursive: true, force: true });
 	}
+	writeImported(folder, imported.skills);
+	if (changed)
+		lines.push("", NEXT_STEP.replace("Read its files", "Read the changes"));
+	return { code: failed ? 1 : 0, output: lines.join("\n") };
 }
 
 /** Where --agent or --area puts the skill, or why the factory has no such place. */
 function placeOf(args: SkillArgs, folder: string): SkillPlace | string {
 	if (args.agent && args.area)
 		return "Pass --agent or --area, not both: an agent's skills are in its own folder";
-	if (!args.agent && !args.area) return {};
-	const layout = scanLayout(readFactoryFolder(folder));
-	if (args.agent) {
-		const agentFile = layout.agentFiles.get(args.agent);
-		if (!agentFile)
-			return `The factory has no agent named ${args.agent}: its agents are ${sentenceList([...layout.agentFiles.keys()].sort())}`;
-		const { area } = splitArea(agentFile, layout.areas);
-		return { agent: args.agent, ...(area ? { area } : {}) };
-	}
-	const area = args.area ?? "";
-	return layout.areas.has(area)
-		? { area }
-		: `The factory has no area named ${area}: an area is a folder of openfabriq/ with agents/ or automations/`;
+	const place = declaredPlace(
+		{
+			from: "",
+			...(args.agent ? { agent: args.agent } : {}),
+			...(args.area ? { area: args.area } : {}),
+		},
+		scanLayout(readFactoryFolder(folder)),
+	);
+	return typeof place === "string"
+		? `The factory has no such place: ${place}`
+		: place;
 }
 
 function removeSkill(given: string | undefined, folder: string): CommandResult {
@@ -193,10 +326,25 @@ function removeSkill(given: string | undefined, folder: string): CommandResult {
 	rmSync(join(folder, key), { recursive: true, force: true });
 	const { [key]: _removed, ...rest } = imported.skills;
 	writeImported(folder, rest);
+	const name = skillPlace(key)?.name;
+	if (name) declare(folder, name, undefined);
 	return {
 		code: 0,
-		output: `✓ Removed openfabriq/${key}. Open a pull request, and run "openfabriq apply" once it is merged.`,
+		output: `✓ Removed openfabriq/${key} and its line in factory.yaml's skills. Open a pull request, and run "openfabriq apply" once it is merged.`,
 	};
+}
+
+/** Writes a skill's declaration in factory.yaml, or takes it out. */
+function declare(
+	folder: string,
+	name: string,
+	skill: DeclaredSkill | undefined,
+) {
+	const path = join(folder, "factory.yaml");
+	writeFileSync(
+		path,
+		withDeclaredSkill(readFileSync(path, "utf8"), name, skill),
+	);
 }
 
 /** The factory's imported skills, none without the file, or why it cannot be read. */

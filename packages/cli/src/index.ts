@@ -62,9 +62,10 @@ Commands:
                            address and token and a Claude credential; uses the GitHub App
                            of "connect github"
   skill add <owner/repo> [skill] [--agent name | --area name]
-                           copy a public skill into openfabriq/, pinned to its commit
-                           in imported-skills.json; run again to update it
-  skill remove <folder>    remove an imported skill, like skills/code-review
+                           copy a public skill into openfabriq/, declare it in factory.yaml's
+                           skills and pin its commit in imported-skills.json
+  skill update [skill]     update the skills factory.yaml declares to their source's last commit
+  skill remove <folder>    remove an imported skill and its declaration, like skills/code-review
   secret set <NAME> [--project owner/repo]
                            keep the value of a secret the factory declares, on this machine only
   update                   install the latest openfabriq, or say how when it came another way

@@ -1,3 +1,7 @@
 name: Skills
 repository: acme/app
 maintainers: [alice]
+skills:
+  code-review: mattpocock/skills
+  tdd: mattpocock/skills
+  review: { from: mattpocock/skills, agent: reviewer }

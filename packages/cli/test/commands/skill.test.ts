@@ -77,7 +77,7 @@ describe("openfabriq skill add", () => {
 		);
 		expect(result.code).toBe(0);
 		expect(result.output).toContain(
-			"✓ Imported code-review from mattpocock/skills at ccccccc into openfabriq/skills/code-review",
+			"✓ Imported code-review from mattpocock/skills at ccccccc into openfabriq/skills/code-review, declared in factory.yaml",
 		);
 		expect(calls[0]?.slice(0, 3)).toEqual(["gh", "repo", "clone"]);
 		const folder = join(repo, "openfabriq/skills/code-review");
@@ -117,6 +117,9 @@ describe("openfabriq skill add", () => {
 		expect(Object.keys(lockOf(repo).skills)).toEqual([
 			"qa/agents/tester/skills/tdd",
 		]);
+		expect(
+			readFileSync(join(repo, "openfabriq/factory.yaml"), "utf8"),
+		).toContain("skills:\n  tdd: { from: mattpocock/skills, agent: tester }\n");
 		expect(
 			existsSync(join(repo, "openfabriq/qa/agents/tester/skills/tdd/SKILL.md")),
 		).toBe(true);
@@ -205,7 +208,7 @@ describe("openfabriq skill add", () => {
 				github(PUBLIC),
 			);
 		expect((await add({ agent: "nobody" })).output).toBe(
-			"The factory has no agent named nobody: its agents are reviewer and tester",
+			'The factory has no such place: agent "nobody" does not exist. Use one of: reviewer, tester',
 		);
 		expect((await add({ area: "ops" })).code).toBe(1);
 		expect((await add({ agent: "tester", area: "qa" })).code).toBe(1);
@@ -303,6 +306,66 @@ describe("openfabriq skill add", () => {
 		);
 		expect(result.code).toBe(1);
 		expect(result.output).toContain("not one it imported");
+	});
+});
+
+describe("openfabriq skill update", () => {
+	const add = (repo: string, name: string, repository = PUBLIC) =>
+		skillCommand(
+			{ action: "add", target: "mattpocock/skills", name },
+			repo,
+			github(repository),
+		);
+	const update = (
+		repo: string,
+		repository: Record<string, string>,
+		target?: string,
+	) => skillCommand({ action: "update", target }, repo, github(repository));
+	const NEWER = {
+		...PUBLIC,
+		"skills/tdd/SKILL.md":
+			"---\nname: tdd\ndescription: Tests first\n---\nRed, then green.\n",
+	};
+
+	it("updates each declared skill whose source changed, and leaves the others as they were", async () => {
+		const repo = factory();
+		await add(repo, "code-review");
+		await add(repo, "tdd");
+		const before = lockOf(repo).skills["skills/code-review"];
+		const result = await update(repo, NEWER);
+		expect(result.code).toBe(0);
+		expect(result.output).toContain("✓ code-review: up to date");
+		expect(result.output).toContain(
+			"✓ tdd: updated to mattpocock/skills at ccccccc",
+		);
+		expect(
+			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),
+		).toContain("Red, then green.");
+		expect(lockOf(repo).skills["skills/code-review"]).toEqual(before);
+	});
+
+	it("skips a skill changed by hand, and updates only the one named", async () => {
+		const repo = factory();
+		await add(repo, "code-review");
+		await add(repo, "tdd");
+		writeFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "mine\n");
+		const named = await update(repo, NEWER, "code-review");
+		expect(named.output).toBe("✓ code-review: up to date");
+		const all = await update(repo, NEWER);
+		expect(all.output).toContain(
+			"! tdd: changed by hand since it was imported, not updated",
+		);
+		expect(
+			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),
+		).toBe("mine\n");
+	});
+
+	it("says what factory.yaml declares when the skill named is not there", async () => {
+		const repo = factory();
+		await add(repo, "tdd");
+		expect((await update(repo, PUBLIC, "nope")).output).toBe(
+			"factory.yaml's skills declares no nope: it declares tdd",
+		);
 	});
 });
 

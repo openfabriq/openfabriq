@@ -5,6 +5,7 @@ import {
 	readImportedSkills,
 	skillFolder,
 	skillPlace,
+	withDeclaredSkill,
 } from "../../src/factory/imported.js";
 import { loadFactory } from "../../src/factory/load.js";
 import type { FactoryFiles } from "../../src/factory/types.js";
@@ -59,20 +60,22 @@ describe("imported-skills.json", () => {
 		} satisfies ImportedSkills);
 	});
 
-	it("is valid when each entry has its folder", () => {
+	it("is valid when each entry has its folder and its declaration", () => {
 		expect(
 			errors({
+				"factory.yaml": `${FACTORY}skills:\n  code-review: mattpocock/skills\n`,
 				"skills/code-review/SKILL.md": SKILL,
 				[IMPORTED_SKILLS]: lock({ "skills/code-review": ENTRY }),
 			}),
 		).toEqual([]);
 	});
 
-	it("refuses an entry whose folder is gone", () => {
+	it("refuses an entry whose folder is gone, or that factory.yaml does not declare", () => {
 		expect(
 			errors({ [IMPORTED_SKILLS]: lock({ "skills/code-review": ENTRY }) }),
 		).toEqual([
 			`${IMPORTED_SKILLS}: lists skills/code-review, which is not a skill folder of the factory: run "openfabriq skill remove skills/code-review"`,
+			`${IMPORTED_SKILLS}: imports skills/code-review, which factory.yaml's skills does not declare: declare it, or run "openfabriq skill remove skills/code-review"`,
 		]);
 	});
 
@@ -81,6 +84,7 @@ describe("imported-skills.json", () => {
 			`${IMPORTED_SKILLS}: is not JSON; "openfabriq skill add" writes it, never edit it by hand`,
 		]);
 		const [problem] = errors({
+			"factory.yaml": `${FACTORY}skills:\n  code-review: mattpocock/skills\n`,
 			"skills/code-review/SKILL.md": SKILL,
 			[IMPORTED_SKILLS]: lock({
 				"skills/code-review": { ...ENTRY, commit: "main" },
@@ -123,5 +127,109 @@ describe("what imported-skills.json may hold", () => {
 		).toEqual([
 			"skills.skills/s.skillPath: is the path of a SKILL.md in the repository",
 		]);
+	});
+});
+
+describe("factory.yaml's skills", () => {
+	const AGENT = "---\ndescription: Tests\n---\nTest.\n";
+	const withSkills = (skills: string, more: FactoryFiles = {}) =>
+		errors({
+			"factory.yaml": `${FACTORY}skills:\n${skills}`,
+			"qa/agents/tester/agent.md": AGENT,
+			...more,
+		});
+
+	it("declares a shared skill, an agent's and an area's, each matched to its imported folder", () => {
+		const entry = (folder: string) => ({
+			[`${folder}/SKILL.md`]: SKILL,
+		});
+		expect(
+			withSkills(
+				"  code-review: mattpocock/skills\n  tdd: { from: mattpocock/skills, agent: tester }\n  owasp: { from: acme/sec, area: qa }\n",
+				{
+					...entry("skills/code-review"),
+					...entry("qa/agents/tester/skills/tdd"),
+					...entry("qa/skills/owasp"),
+					[IMPORTED_SKILLS]: lock({
+						"skills/code-review": ENTRY,
+						"qa/agents/tester/skills/tdd": ENTRY,
+						"qa/skills/owasp": { ...ENTRY, source: "acme/sec" },
+					}),
+				},
+			),
+		).toEqual([]);
+	});
+
+	it("says how to import a skill declared but not imported, or imported from elsewhere", () => {
+		expect(
+			withSkills(
+				"  tdd: { from: mattpocock/skills, agent: tester }\n  code-review: acme/fork\n",
+				{
+					"skills/code-review/SKILL.md": SKILL,
+					[IMPORTED_SKILLS]: lock({ "skills/code-review": ENTRY }),
+				},
+			),
+		).toEqual([
+			'factory.yaml: skills.code-review: declared from acme/fork, but imported from mattpocock/skills: run "openfabriq skill add acme/fork code-review"',
+			'factory.yaml: skills.tdd: declared, but not imported: run "openfabriq skill add mattpocock/skills tdd --agent tester"',
+		]);
+	});
+
+	it("refuses an unknown agent or area, both at once, and a name no folder can take", () => {
+		expect(
+			withSkills(
+				"  a: { from: x/y, agent: testr }\n  b: { from: x/y, area: ops }\n",
+			),
+		).toEqual([
+			'factory.yaml: skills.a: agent "testr" does not exist. Did you mean "tester"?',
+			'factory.yaml: skills.b: area "ops" does not exist. Use one of: qa',
+		]);
+		expect(
+			withSkills("  c: { from: x/y, agent: tester, area: qa }\n").join(),
+		).toContain("takes agent or area, not both");
+		expect(withSkills("  Code_Review: x/y\n").join()).toContain(
+			"a skill's name is lowercase letters, digits and -",
+		);
+		expect(withSkills("  c: -x/y\n").join()).toContain(
+			"is a GitHub repository, like mattpocock/skills",
+		);
+	});
+});
+
+describe("declaring a skill in factory.yaml", () => {
+	const YAML =
+		"# The factory\nname: F # its name\nrepository: acme/app\nmaintainers: [alice]\n";
+
+	it("adds a shared skill on one line and an agent's as { from, agent }, keeping the comments", () => {
+		let text = withDeclaredSkill(YAML, "code-review", {
+			from: "mattpocock/skills",
+		});
+		text = withDeclaredSkill(text, "tdd", {
+			from: "mattpocock/skills",
+			agent: "tester",
+		});
+		expect(text).toBe(
+			`${YAML}skills:\n  code-review: mattpocock/skills\n  tdd: { from: mattpocock/skills, agent: tester }\n`,
+		);
+	});
+
+	it("replaces a declaration, then removes it, and the section once empty", () => {
+		const once = withDeclaredSkill(YAML, "tdd", { from: "mattpocock/skills" });
+		const moved = withDeclaredSkill(once, "tdd", {
+			from: "acme/fork",
+			area: "qa",
+		});
+		expect(moved).toContain("tdd: { from: acme/fork, area: qa }");
+		expect(withDeclaredSkill(moved, "tdd", undefined)).toBe(YAML);
+	});
+
+	it("rewrites a skills section in the middle of the file, and leaves what follows", () => {
+		const text = `${YAML}skills:\n  tdd: mattpocock/skills # tests first\nmodel: opus\n`;
+		expect(withDeclaredSkill(text, "tdd", { from: "acme/fork" })).toBe(
+			`${YAML}skills:\n  tdd: acme/fork\nmodel: opus\n`,
+		);
+		expect(withDeclaredSkill(text, "tdd", undefined)).toBe(
+			`${YAML}model: opus\n`,
+		);
 	});
 });
