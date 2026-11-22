@@ -22,13 +22,19 @@ const ImportedSkill = z.strictObject({
 		error: "is a GitHub repository, like mattpocock/skills",
 	}),
 	sourceType: z.literal("github"),
-	/** The branch it was taken from. */
-	ref: z.string().regex(/^(?!-)[\w./-]+$/, { error: "is a branch's name" }),
-	commit: z.string().regex(/^[0-9a-f]{40}$/, { error: "is a commit's SHA" }),
-	/** Its SKILL.md in the source repository. */
-	skillPath: z.string().regex(/^(?:(?!\.{1,2}\/)[\w.-]+\/)*SKILL\.md$/, {
-		error: "is the path of a SKILL.md in the repository",
+	/** The branch it was taken from: what git allows in a branch's name, never a leading -. */
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: they are what is refused.
+	ref: z.string().regex(/^(?!-)[^\u0000- \u007f~^:?*[\\]+$/, {
+		error: "is a branch's name",
 	}),
+	commit: z.string().regex(/^[0-9a-f]{40}$/, { error: "is a commit's SHA" }),
+	/** Its SKILL.md in the source repository: any folder's name, but no . or .. and nothing that drives a terminal. */
+	skillPath: z
+		.string()
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: they are what is refused.
+		.regex(/^(?:(?!\.{1,2}\/)[^/\u0000-\u001f\u007f-\u009f]+\/)*SKILL\.md$/, {
+			error: "is the path of a SKILL.md in the repository",
+		}),
 	computedHash: z
 		.string()
 		.regex(/^[0-9a-f]{64}$/, { error: "is a SHA-256 in hex" }),

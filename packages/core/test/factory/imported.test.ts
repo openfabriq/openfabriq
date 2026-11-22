@@ -127,6 +127,21 @@ describe("what imported-skills.json may hold", () => {
 		).toEqual([
 			"skills.skills/s.skillPath: is the path of a SKILL.md in the repository",
 		]);
+		expect(
+			problems({ "skills/s": { ...ENTRY, skillPath: "x/\u001b[2J/SKILL.md" } }),
+		).toHaveLength(1);
+	});
+
+	it("takes any folder or branch a repository may have, otherwise", () => {
+		for (const skillPath of [
+			"skills/c++/SKILL.md",
+			"my skill/SKILL.md",
+			"skills/café/SKILL.md",
+			".claude/skills/s/SKILL.md",
+		])
+			expect(problems({ "skills/s": { ...ENTRY, skillPath } })).toEqual([]);
+		for (const ref of ["feature+x", "release/1.0", "v2@next"])
+			expect(problems({ "skills/s": { ...ENTRY, ref } })).toEqual([]);
 	});
 });
 

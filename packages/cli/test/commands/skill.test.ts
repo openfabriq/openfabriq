@@ -212,6 +212,35 @@ describe("openfabriq skill add", () => {
 		expect(existsSync(join(repo, "openfabriq/skills/s"))).toBe(false);
 	});
 
+	it("imports a skill from a folder of any name, and refuses one its lock could not hold", async () => {
+		const repo = factory();
+		const skill = "---\nname: cpp\ndescription: C++\n---\nGo.\n";
+		const ok = await skillCommand(
+			{ action: "add", target: "acme/one", name: "cpp" },
+			repo,
+			github({ "skills/c++/SKILL.md": skill }),
+		);
+		expect(ok.code).toBe(0);
+		expect(lockOf(repo).skills["skills/cpp"].skillPath).toBe(
+			"skills/c++/SKILL.md",
+		);
+		const refused = await skillCommand(
+			{ action: "add", target: "acme/two", name: "tdd" },
+			repo,
+			github({
+				"skills/\u001b[2J/SKILL.md":
+					"---\nname: tdd\ndescription: T\n---\nGo.\n",
+			}),
+		);
+		expect(refused.code).toBe(1);
+		expect(refused.output).toContain(
+			"cannot be recorded in imported-skills.json",
+		);
+		expect(refused.output).not.toContain("\u001b");
+		expect(existsSync(join(repo, "openfabriq/skills/tdd"))).toBe(false);
+		expect(Object.keys(lockOf(repo).skills)).toEqual(["skills/cpp"]);
+	});
+
 	it("refuses a repository a command would read as an option, before cloning", async () => {
 		const repo = factory();
 		const calls: string[][] = [];

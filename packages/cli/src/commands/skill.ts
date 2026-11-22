@@ -185,6 +185,18 @@ async function importSkill(
 		existsSync(target)
 	)
 		return done("unchanged");
+	const record = {
+		source: repository,
+		sourceType: "github" as const,
+		ref: source.ref,
+		commit: source.commit,
+		skillPath: found.folder ? `${found.folder}/SKILL.md` : "SKILL.md",
+		computedHash,
+	};
+	// An entry imported-skills.json would refuse would make the whole file unreadable.
+	const refused = readImportedSkills(importedSkillsText({ [key]: record }));
+	if (Array.isArray(refused))
+		return `${repository}'s ${found.name} cannot be recorded in ${IMPORTED_SKILLS}: ${printable(refused.join("; "))}`;
 	rmSync(target, { recursive: true, force: true });
 	for (const file of files) {
 		const to = join(target, file.path);
@@ -192,14 +204,7 @@ async function importSkill(
 		// Keeps a script's mode, so it still runs; a link inside the folder becomes its file.
 		copyFileSync(join(from, file.path), to);
 	}
-	imported.skills[key] = {
-		source: repository,
-		sourceType: "github",
-		ref: source.ref,
-		commit: source.commit,
-		skillPath: found.folder ? `${found.folder}/SKILL.md` : "SKILL.md",
-		computedHash,
-	};
+	imported.skills[key] = record;
 	return done(entry ? "updated" : "imported");
 }
 
