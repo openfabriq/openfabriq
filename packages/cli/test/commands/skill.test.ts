@@ -141,7 +141,7 @@ describe("openfabriq skill add", () => {
 			"Next:",
 			"  - Read openfabriq/qa/agents/tester/skills/tdd/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.",
 			"  - To adapt it, edit openfabriq/qa/agents/tester/agent.md, never the skill itself.",
-			'  - Open a pull request, then run "openfabriq apply" once it is merged.',
+			'  - Run "openfabriq apply" to use it.',
 		]);
 	});
 

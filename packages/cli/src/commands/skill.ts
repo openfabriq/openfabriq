@@ -214,17 +214,17 @@ async function importSkill(
 	return done(entry ? "updated" : "imported");
 }
 
-const MERGE = `  - Open a pull request, then run "openfabriq apply" once it is merged.`;
+const APPLY = `  - Run "openfabriq apply" to use it.`;
 const UPDATED_STEPS = [
 	"Next:",
 	"  - Read what changed: git diff openfabriq/",
-	MERGE,
+	`  - Run "openfabriq apply" to use the new version.`,
 ];
 const importedSteps = (key: string) => [
 	"Next:",
 	`  - Read openfabriq/${key}/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.`,
 	`  - To adapt it, edit ${agentFiles(key)}, never the skill itself.`,
-	MERGE,
+	APPLY,
 ];
 /** The question for skills edited since their import, by name. */
 const OVERWRITE = (names: string[]) =>
@@ -415,7 +415,7 @@ function removeSkill(given: string | undefined, folder: string): CommandResult {
 	if (name) declare(folder, name, undefined);
 	return {
 		code: 0,
-		output: `✓ Removed openfabriq/${key} and its line in factory.yaml's skills. Open a pull request, and run "openfabriq apply" once it is merged.`,
+		output: `✓ Removed openfabriq/${key} and its line in factory.yaml's skills. Run "openfabriq apply" so the agents stop using it.`,
 	};
 }
 
