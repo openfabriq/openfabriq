@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Network } from "@openfabriq/core";
+import { LEARNING_FOLDER, type Network } from "@openfabriq/core";
 import { expect, it } from "vitest";
 import { parseHeads } from "../../src/workspace/hardened-git.js";
 import {
@@ -394,6 +394,18 @@ it("hides the files the Linux sandbox mounts for a shell command, so git add -A 
 		cwd: wt,
 	}).toString();
 	expect(status.trim()).toBe("?? b.txt");
+});
+
+it("leaves out the batch learning stages: no change to commit, none in the run's changed files", async () => {
+	const { clone, wt } = await worktree();
+	mkdirSync(join(wt, LEARNING_FOLDER, "failures"), { recursive: true });
+	writeFileSync(join(wt, LEARNING_FOLDER, "README.md"), "# Learning batch\n");
+	writeFileSync(join(wt, LEARNING_FOLDER, "failures", "r1-check.json"), "{}\n");
+	expect(await workspace.changed(clone, wt, "main")).toEqual({
+		uncommitted: false,
+		ahead: 0,
+	});
+	expect(await workspace.changedFiles(clone, wt, "main")).toEqual([]);
 });
 
 it("tells whether the agent changed the worktree: files or commits", async () => {

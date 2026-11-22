@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { LEARNING_FOLDER } from "@openfabriq/core";
 import { exec } from "../exec.js";
 import { writeFileAtomic } from "../files.js";
 import { githubApp, githubEnv } from "../github/app.js";
@@ -92,11 +93,15 @@ const SANDBOX_MOUNTS = [
 	".claude/",
 ];
 
-/** The clone's info/exclude, written whole and atomically: never read, so a link the agent put there leaks nothing. */
+/**
+ * The clone's info/exclude, written whole and atomically: never read, so a link the agent put there
+ * leaks nothing. With the sandbox's mounts, the batch learning's runs find staged: never committed,
+ * and no change the checks would ask the agent to commit.
+ */
 export function excludeSandboxMounts(clone: string) {
 	writeFileAtomic(
 		join(clone, ".git/info/exclude"),
-		`${SANDBOX_MOUNTS.join("\n")}\n`,
+		`${[...SANDBOX_MOUNTS, `${LEARNING_FOLDER}/`].join("\n")}\n`,
 	);
 }
 
