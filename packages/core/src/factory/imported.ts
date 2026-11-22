@@ -199,9 +199,9 @@ export function skillPlace(
 }
 
 /**
- * factory.yaml with a skill declared, or no longer declared without `skill`. Only the `skills`
- * section is rewritten, in place; the rest of the text and its comments stay as they are. A shared
- * skill is one line; an agent's or an area's, `{ from, agent }`.
+ * factory.yaml with a skill declared, or no longer declared without `skill`. Only that skill's line
+ * changes; the rest of the text and its comments stay as they are, but a `skills` written in flow
+ * style is rewritten whole. A shared skill is one line; an agent's or an area's, `{ from, agent }`.
  */
 export function withDeclaredSkill(
 	factoryYaml: string,
@@ -227,6 +227,36 @@ export function withDeclaredSkill(
 	const lines = Object.entries(skills).map(
 		([key, value]) => `  ${key}: ${declarationText(value)}`,
 	);
+	const entries =
+		isMap(pair?.value) && !pair.value.flow ? pair.value.items : undefined;
+	if (entries?.length && lines.length) {
+		// Only that skill's line changes, so the others keep their comments.
+		const span = (item: (typeof entries)[number]) => {
+			const keyAt = rangeOf(item.key)?.[0] ?? 0;
+			const valueEnd = rangeOf(item.value)?.[1] ?? rangeOf(item.key)?.[1] ?? 0;
+			const newline = factoryYaml.indexOf("\n", valueEnd - 1);
+			const start = factoryYaml.lastIndexOf("\n", keyAt - 1) + 1;
+			return {
+				start,
+				end: newline === -1 ? factoryYaml.length : newline + 1,
+				indent: factoryYaml.slice(start, keyAt),
+			};
+		};
+		const { indent } = span(entries[0] as (typeof entries)[number]);
+		const line = skill ? `${indent}${name}: ${declarationText(skill)}\n` : "";
+		const own = entries.find(
+			(item) => isScalar(item.key) && item.key.value === name,
+		);
+		const { start, end } = own
+			? span(own)
+			: span(entries.at(-1) as (typeof entries)[number]);
+		if (!own) {
+			const text = factoryYaml.slice(0, end);
+			const gap = text.endsWith("\n") ? "" : "\n";
+			return `${text}${gap}${line}${factoryYaml.slice(end)}`;
+		}
+		return `${factoryYaml.slice(0, start)}${line}${factoryYaml.slice(end)}`;
+	}
 	const section = lines.length ? `skills:\n${lines.join("\n")}\n` : "";
 	const keyStart = pair && isScalar(pair.key) ? pair.key.range?.[0] : undefined;
 	const valueEnd = (pair?.value as { range?: number[] } | undefined)
@@ -241,6 +271,9 @@ export function withDeclaredSkill(
 	const after = factoryYaml.slice(valueEnd).replace(/^\n/, "");
 	return `${factoryYaml.slice(0, keyStart)}${section}${after}`;
 }
+
+const rangeOf = (node: unknown) =>
+	(node as { range?: [number, number, number] } | null)?.range;
 
 /** A declaration as factory.yaml writes it: the repository, or `{ from, agent }` and the like. */
 function declarationText(value: unknown): string {

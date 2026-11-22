@@ -169,7 +169,7 @@ async function importedSkillLines(
 			skillHash(skillFiles(join(folder, key))) !== entry.computedHash;
 		if (edited)
 			lines.push(
-				`! ${key}: changed since it was imported from ${source}: put it back as it was, and adapt it in the agent's own body instead; "openfabriq skill add" will not update it until then`,
+				`! ${key}: changed since it was imported from ${source}: put it back as it was, and adapt it in the agent's own body instead; "openfabriq skill update" will not update it until then`,
 			);
 		// The skill's folder in its repository; a skill at the root is the whole repository.
 		const path = skillPath.includes("/")

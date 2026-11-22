@@ -135,6 +135,31 @@ describe("openfabriq skill add", () => {
 		expect(Object.keys(lockOf(repo).skills)).toEqual(["qa/skills/tdd"]);
 	});
 
+	it("refuses a skill already imported in another place, since factory.yaml declares it once", async () => {
+		const repo = factory();
+		const add = (agent?: string) =>
+			skillCommand(
+				{ action: "add", target: "mattpocock/skills", name: "tdd", agent },
+				repo,
+				github(PUBLIC),
+			);
+		expect((await add()).code).toBe(0);
+		const moved = await add("reviewer");
+		expect(moved.code).toBe(1);
+		expect(moved.output).toContain(
+			'tdd is already imported in openfabriq/skills/tdd: run "openfabriq skill remove skills/tdd" first',
+		);
+		expect(Object.keys(lockOf(repo).skills)).toEqual(["skills/tdd"]);
+		expect(
+			existsSync(join(repo, "openfabriq/agents/reviewer/skills/tdd")),
+		).toBe(false);
+		await skillCommand({ action: "remove", target: "skills/tdd" }, repo);
+		expect((await add("reviewer")).code).toBe(0);
+		expect(
+			readFileSync(join(repo, "openfabriq/factory.yaml"), "utf8"),
+		).toContain("  tdd: { from: mattpocock/skills, agent: reviewer }\n");
+	});
+
 	it("takes a repository's only skill, at its root, without its name", async () => {
 		const repo = factory();
 		const result = await skillCommand(
@@ -391,6 +416,18 @@ describe("openfabriq skill remove", () => {
 		);
 		expect(existsSync(join(repo, "openfabriq/imported-skills.json"))).toBe(
 			false,
+		);
+	});
+
+	it("never takes a name every object has for an imported skill", async () => {
+		const repo = factory({ "constructor/notes.md": "Keep.\n" });
+		const result = await skillCommand(
+			{ action: "remove", target: "constructor" },
+			repo,
+		);
+		expect(result.code).toBe(1);
+		expect(existsSync(join(repo, "openfabriq/constructor/notes.md"))).toBe(
+			true,
 		);
 	});
 

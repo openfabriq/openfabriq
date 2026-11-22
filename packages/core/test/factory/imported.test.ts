@@ -223,6 +223,32 @@ describe("declaring a skill in factory.yaml", () => {
 		expect(withDeclaredSkill(moved, "tdd", undefined)).toBe(YAML);
 	});
 
+	it("changes only the skill's own line, so the others keep their comments", () => {
+		const text = `${YAML}skills:\n  # what we import\n  code-review: mattpocock/skills   # shared by every agent\n  web:\n    from: vercel-labs/agent-skills\n    area: qa # by hand\n# about the model\nmodel: opus\n`;
+		const added = withDeclaredSkill(text, "tdd", {
+			from: "mattpocock/skills",
+			agent: "tester",
+		});
+		expect(added).toBe(
+			text.replace(
+				"# by hand\n",
+				"# by hand\n  tdd: { from: mattpocock/skills, agent: tester }\n",
+			),
+		);
+		expect(
+			withDeclaredSkill(added, "code-review", { from: "acme/fork" }),
+		).toContain(
+			"# what we import\n  code-review: acme/fork\n  web:\n    from: vercel-labs/agent-skills\n    area: qa # by hand\n",
+		);
+		expect(withDeclaredSkill(added, "tdd", undefined)).toBe(text);
+		expect(withDeclaredSkill(text, "web", undefined)).toBe(
+			text.replace(
+				"  web:\n    from: vercel-labs/agent-skills\n    area: qa # by hand\n",
+				"",
+			),
+		);
+	});
+
 	it("rewrites a skills section in the middle of the file, and leaves what follows", () => {
 		const text = `${YAML}skills:\n  tdd: mattpocock/skills # tests first\nmodel: opus\n`;
 		expect(withDeclaredSkill(text, "tdd", { from: "acme/fork" })).toBe(

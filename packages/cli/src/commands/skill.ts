@@ -154,7 +154,15 @@ async function importSkill(
 		return `${repository}'s ${found.name} grants itself tools with allowed-tools, which a factory refuses: the agent's tools say what it may use`;
 	const key = skillFolder(found.name, place);
 	const target = join(folder, key);
-	const entry = imported.skills[key];
+	// factory.yaml declares a skill by its name, so the factory imports each name in one place.
+	const elsewhere = Object.keys(imported.skills).find(
+		(folder) => folder !== key && skillPlace(folder)?.name === found.name,
+	);
+	if (elsewhere)
+		return `${found.name} is already imported in openfabriq/${elsewhere}: run "openfabriq skill remove ${elsewhere}" first, then import it again`;
+	const entry = Object.hasOwn(imported.skills, key)
+		? imported.skills[key]
+		: undefined;
 	const done = (status: Imported["status"]) => ({
 		status,
 		name: found.name,
@@ -248,7 +256,7 @@ async function updateSkills(
 		);
 	const declared = factory.importedSkills ?? {};
 	const names = Object.keys(declared).sort();
-	if (only && !declared[only])
+	if (only && !Object.hasOwn(declared, only))
 		return fail(
 			`factory.yaml's skills declares no ${only}${names.length ? `: it declares ${sentenceList(names)}` : ""}`,
 		);
@@ -319,7 +327,7 @@ function removeSkill(given: string | undefined, folder: string): CommandResult {
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
 	const folders = Object.keys(imported.skills).sort();
-	if (!imported.skills[key])
+	if (!Object.hasOwn(imported.skills, key))
 		return fail(
 			`openfabriq/${key} is not an imported skill${folders.length ? `; the imported ones are ${sentenceList(folders)}` : ""}. Delete a skill of your own like any other folder.`,
 		);
