@@ -76,6 +76,18 @@ The skill is never fetched while a run goes on: its folder is reviewed in a pull
 - `openfabriq skill remove skills/code-review` removes the folder and its entry. `validate` refuses an entry whose folder is gone.
 - Like any skill of the factory, an imported skill whose header has `allowed-tools` is refused.
 
+### What a public skill needs from the task
+
+A public skill asks the person for what it lacks: which files to review, which commit to start from, which interfaces to test. An agent of the factory has no one to ask, so the automation's task gives it instead. Three public skills were tried on real runs, with an agent body of one line and no change to the skill:
+
+| Skill | What the task gave it | How it went |
+| --- | --- | --- |
+| `vercel-labs/agent-skills` `web-design-guidelines` | the page to review | Read the rules bundled beside its `SKILL.md`, and reported each finding as `file:line` in the issue. Nothing to adapt |
+| `mattpocock/skills` `tdd` | the function to write, and its test file | Took the function the task named as the interface to test, instead of asking which one, and wrote the tests first. It sometimes wrote several tests at once, which the skill advises against |
+| `mattpocock/skills` `code-review` | the range to review (`HEAD~1...HEAD`) | Reviewed both of its axes in one go, since the agent cannot start sub-agents. It skipped the spec, for lack of one, and said so. It ignored the setup the skill asks for (`/setup-matt-pocock-skills`) |
+
+None of them asked anyone, posted on GitHub itself, or went past the outputs its automation allows. When a skill relies on something the factory does not give, such as its own tracker or a sub-agent, say in the agent's body what to do without it.
+
 ## Skills for command-line tools
 
 A skill is the place to teach an agent a command-line tool: when to use it, which commands to run, what to do with the result. It only describes the tool: openfabriq installs nothing, so the tool must already be where the agent runs ([how to provide one](/factory/agents/#command-line-tools)).
