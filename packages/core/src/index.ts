@@ -15,6 +15,7 @@ export {
 } from "./factory/files.js";
 export {
 	DEFAULT_LEARNING,
+	LEARNING_FOLDER,
 	LESSON_THRESHOLD,
 	learningText,
 	withLearning,

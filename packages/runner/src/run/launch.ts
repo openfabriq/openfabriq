@@ -136,6 +136,8 @@ export interface AgentLaunch {
 	hide: (text: string) => string;
 	time: RunTime;
 	now: () => Date;
+	/** Tools the engine adds for this run, like learning's record_lessons. */
+	tools?: NonNullable<Parameters<typeof createSdkMcpServer>[0]["tools"]>;
 }
 
 /**
@@ -298,7 +300,10 @@ export async function launchAgent(step: AgentLaunch): Promise<{
 				}
 			: {}),
 	});
-	const outputs = outputTools(automation, step.subject, checks.tools);
+	const outputs = outputTools(automation, step.subject, [
+		...checks.tools,
+		...(step.tools ?? []),
+	]);
 	const plugin = deps.workspace.plugin(
 		join(projectDir(repo), "factory"),
 		agent,

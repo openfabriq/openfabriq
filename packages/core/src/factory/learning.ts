@@ -6,6 +6,9 @@ import { LEARNING } from "./wiki.js";
 /** Once a week, Monday morning: what `learning: true` means. */
 export const DEFAULT_LEARNING: Learning = { schedule: "0 8 * * 1" };
 
+/** Where the engine stages a batch in the learning agent's worktree; never committed. */
+export const LEARNING_FOLDER = ".openfabriq-learning";
+
 /** A lesson needs this many failures before the engine proposes an improvement: one failure alone stays a candidate. */
 export const LESSON_THRESHOLD = 2;
 
@@ -52,8 +55,7 @@ function learningAutomation(learning: Learning): Automation {
 		can: [{ action: "create_pull_request" }],
 		concurrency: "repository",
 		from: "maintainers",
-		instructions:
-			"Study the failures the engine staged, record the lesson each one belongs to, and write the improvement the engine asks for, if any.",
+		instructions: `The engine staged this batch in \`${LEARNING_FOLDER}/\`: start with its README.md. Record the lesson of each new failure, then write the improvement the engine asks for, if any. Never commit \`${LEARNING_FOLDER}/\`.`,
 		builtIn: true,
 	};
 }

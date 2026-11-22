@@ -6,6 +6,7 @@ import {
 	loadFactory,
 	type Network,
 	WORKING_LABEL,
+	withLearning,
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentLauncher } from "../../src/agent/claude.js";
@@ -14,7 +15,13 @@ import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub, Review } from "../../src/github/github.js";
 import { signChangesRequested } from "../../src/github/markers.js";
 import { projectDir, readFactoryFolder } from "../../src/index.js";
-import { executeRun, NO_OUTPUT, type RunDeps } from "../../src/run/execute.js";
+import { readLessons, saveLessons } from "../../src/learning/lessons.js";
+import {
+	executeRun,
+	NO_OUTPUT,
+	NOTHING_TO_LEARN,
+	type RunDeps,
+} from "../../src/run/execute.js";
 import { type Verdict, verdictTool } from "../../src/run/internal-review.js";
 import type { Proposal } from "../../src/run/outputs/tools.js";
 import {
@@ -39,7 +46,7 @@ let setupFails: string | undefined;
 let commandFails: string[];
 let uncommitted: boolean;
 let touched: string[];
-const versions: { start?: string; head?: string } = {};
+let versions: { start?: string; head?: string } = {};
 let pushedCommits: string[];
 let subjectState: string | undefined;
 
@@ -241,6 +248,7 @@ beforeEach(() => {
 	commandFails = [];
 	uncommitted = false;
 	touched = [];
+	versions = {};
 	pushedCommits = [];
 	subjectState = undefined;
 });
@@ -2882,5 +2890,102 @@ describe("the internal review (reviewed_by)", () => {
 			"the internal review asks for a person: reviewer gave no verdict",
 		);
 		expect(writes).toContain("labels #9: needs-human");
+	});
+});
+
+describe("a learning run", () => {
+	const learningRun: QueuedRun = {
+		id: "run-learning",
+		repository: REPO,
+		automation: "learning",
+		repoWide: true,
+		event: {
+			key: "schedule:learning",
+			event: "schedule",
+			isPullRequest: false,
+			actor: "",
+			at: "2026-11-23T08:00:00Z",
+		},
+	};
+	const on = () =>
+		withLearning({ ...factory, learning: { schedule: "0 8 * * 1" } });
+	const waiting = () =>
+		saveLessons(REPO, [
+			{
+				id: "L1",
+				cause: "tests are not run",
+				rule: "Run the tests before you finish.",
+				target: "openfabriq/agents/coder/agent.md",
+				status: "candidate",
+				failures: [
+					{ id: "a:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+					{ id: "b:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
+				],
+				createdAt: "2026-11-02T00:00:00Z",
+				updatedAt: "2026-11-02T00:00:00Z",
+			},
+		]);
+	const opening = (launched: string[]): RunDeps => ({
+		...deps(async (step) => {
+			launched.push(step.prompt);
+			return agentProposing([
+				{
+					action: "create_pull_request",
+					title: "learning: tests",
+					body: "Adds a line.",
+				},
+			])(step);
+		}),
+		github: {
+			...fakeGitHub(),
+			createPullRequest: async (_repo, pull) => {
+				lastPullBody = pull.body;
+				return `https://github.com/${REPO}/pull/12`;
+			},
+		},
+	});
+
+	it("is skipped without launching the agent when there is nothing to learn", async () => {
+		const launched: string[] = [];
+		const record = await executeRun(
+			learningRun,
+			on(),
+			opening(launched),
+			"main",
+		);
+		expect(record).toMatchObject({
+			status: "skipped",
+			reason: NOTHING_TO_LEARN,
+		});
+		expect(launched).toEqual([]);
+	});
+
+	it("opens the improvement of the lesson that waits, with the lesson in its description", async () => {
+		waiting();
+		const md = "---\ndescription: Codes\n---\nCode.\n";
+		touched = ["openfabriq/agents/coder/agent.md"];
+		versions = { start: md, head: `${md}Run the tests.\n` };
+		const record = await executeRun(learningRun, on(), opening([]), "main");
+		expect(record.status).toBe("succeeded");
+		expect(lastPullBody).toContain("### Lesson L1");
+		expect(readLessons(REPO)[0]).toMatchObject({
+			status: "proposed",
+			improvement: { number: 12, run: "run-learning" },
+		});
+	});
+
+	it("refuses an improvement that changes an agent's front matter or another file", async () => {
+		waiting();
+		touched = ["openfabriq/agents/coder/agent.md"];
+		versions = {
+			start: "---\ndescription: Codes\n---\nCode.\n",
+			head: "---\ndescription: Codes\ntools: [read, edit, shell]\n---\nCode.\n",
+		};
+		const record = await executeRun(learningRun, on(), opening([]), "main");
+		expect(record.status).toBe("failed");
+		expect(record.reason).toContain(
+			"front matter of openfabriq/agents/coder/agent.md",
+		);
+		expect(readLessons(REPO)[0]?.status).toBe("candidate");
 	});
 });

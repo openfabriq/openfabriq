@@ -17,6 +17,7 @@ import {
 	loadFactory,
 	type Problem,
 	withAnswerMentions,
+	withLearning,
 	withWiki,
 } from "@openfabriq/core";
 import {
@@ -64,7 +65,7 @@ export function readAppliedFiles(repository: string): FactoryFiles | undefined {
 }
 
 /**
- * The applied factory's files, the factory with the engine's wiki agent when its wiki is on and its
+ * The applied factory's files, the factory with the engine's wiki and learning agents when they are on and its
  * answer to mentions on the agents' pull requests, and
  * the problems found loading it; undefined when none is applied.
  */
@@ -75,7 +76,11 @@ export function loadApplied(
 	if (!files) return undefined;
 	const { factory, problems } = loadFactory(files);
 	return factory
-		? { files, factory: withAnswerMentions(withWiki(factory)), problems }
+		? {
+				files,
+				factory: withAnswerMentions(withLearning(withWiki(factory))),
+				problems,
+			}
 		: { files, problems };
 }
 
