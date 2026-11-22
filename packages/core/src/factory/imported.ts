@@ -110,7 +110,7 @@ export function importedSkillsProblems(
 	for (const folder of Object.keys(read.skills).sort())
 		if (!layout.skillFolders.get(folder))
 			inLock(
-				`lists ${folder}, which is not a skill folder of the factory: run "openfabriq skill remove ${folder}"`,
+				`lists ${folder}, which is not a skill folder of the factory: run "openfabriq skill update ${skillPlace(folder)?.name ?? folder}" to import it again, or "openfabriq skill remove ${folder}"`,
 			);
 	const declaredFolders = new Set<string>();
 	for (const [name, skill] of Object.entries(declared).sort()) {

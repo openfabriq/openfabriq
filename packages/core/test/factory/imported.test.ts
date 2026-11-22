@@ -74,7 +74,7 @@ describe("imported-skills.json", () => {
 		expect(
 			errors({ [IMPORTED_SKILLS]: lock({ "skills/code-review": ENTRY }) }),
 		).toEqual([
-			`${IMPORTED_SKILLS}: lists skills/code-review, which is not a skill folder of the factory: run "openfabriq skill remove skills/code-review"`,
+			`${IMPORTED_SKILLS}: lists skills/code-review, which is not a skill folder of the factory: run "openfabriq skill update code-review" to import it again, or "openfabriq skill remove skills/code-review"`,
 			`${IMPORTED_SKILLS}: imports skills/code-review, which factory.yaml's skills does not declare: declare it, or run "openfabriq skill remove skills/code-review"`,
 		]);
 	});

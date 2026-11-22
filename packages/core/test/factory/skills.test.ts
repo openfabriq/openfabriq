@@ -65,7 +65,7 @@ describe("an invalid factory's skills", () => {
 		expect(factory).toBeUndefined();
 		expect(problems.map((p) => `${p.file}: ${p.message}`)).toEqual([
 			"skills/grants/SKILL.md: allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
-			'imported-skills.json: lists skills/tdd, which is not a skill folder of the factory: run "openfabriq skill remove skills/tdd"',
+			'imported-skills.json: lists skills/tdd, which is not a skill folder of the factory: run "openfabriq skill update tdd" to import it again, or "openfabriq skill remove skills/tdd"',
 			'factory.yaml: skills.review: agent "reviewer" does not exist. Use one of: worker',
 		]);
 	});

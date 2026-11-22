@@ -424,6 +424,36 @@ describe("openfabriq skill update", () => {
 		).toBe("mine\n");
 	});
 
+	it("imports again a skill whose folder was deleted to undo an edit, as its message says", async () => {
+		const repo = factory();
+		await skillCommand(
+			{
+				action: "add",
+				target: "mattpocock/skills",
+				name: "tdd",
+				agent: "tester",
+			},
+			repo,
+			github(PUBLIC),
+		);
+		await add(repo, "code-review");
+		const folder = join(repo, "openfabriq/qa/agents/tester/skills/tdd");
+		rmSync(folder, { recursive: true });
+		const result = await update(repo, NEWER, "tdd");
+		expect(result.code).toBe(0);
+		expect(result.output).toContain(
+			"✓ tdd: updated to mattpocock/skills at ccccccc",
+		);
+		expect(result.output).not.toContain("code-review");
+		expect(readFileSync(join(folder, "SKILL.md"), "utf8")).toContain(
+			"Red, then green.",
+		);
+		const files = readFactoryFolder(join(repo, "openfabriq"));
+		expect(
+			loadFactory(files).problems.filter((p) => p.level === "error"),
+		).toEqual([]);
+	});
+
 	it("says what factory.yaml declares when the skill named is not there", async () => {
 		const repo = factory();
 		await add(repo, "tdd");

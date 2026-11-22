@@ -272,36 +272,20 @@ async function updateSkills(
 	folder: string,
 	clone: Cloner,
 ): Promise<CommandResult> {
-	const files = readFactoryFolder(folder);
-	const { factory, problems } = loadFactory(files);
-	if (!factory)
-		return fail(
-			`The factory has ${problems.filter((p) => p.level === "error").length} error(s): run "openfabriq validate", fix them, then update.`,
-		);
-	const declared = factory.importedSkills ?? {};
-	const names = Object.keys(declared).sort();
-	if (only && !Object.hasOwn(declared, only))
-		return fail(
-			`factory.yaml's skills declares no ${only}${names.length ? `: it declares ${sentenceList(names)}` : ""}`,
-		);
-	if (names.length === 0)
-		return fail(
-			`factory.yaml declares no skills: import one with "openfabriq skill add <owner/repo> <skill>"`,
-		);
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
-	const layout = scanLayout(files);
 	const lines: string[] = [];
 	let failed = false;
 	let changed = false;
-	for (const name of only ? [only] : names) {
-		const skill = declared[name];
-		const place = skill && declaredPlace(skill, layout);
-		if (!skill || typeof place === "string" || place === undefined) continue;
+	const update = async (
+		name: string,
+		repository: string,
+		place: SkillPlace,
+	) => {
 		const done = await importSkill(
 			folder,
 			imported,
-			{ repository: skill.from, wanted: name, place },
+			{ repository, wanted: name, place },
 			clone,
 		).catch((error: unknown) => `${errorText(error).split("\n")[0]}`);
 		if (typeof done === "string") {
@@ -316,9 +300,46 @@ async function updateSkills(
 		else {
 			changed = true;
 			lines.push(
-				`✓ ${name}: updated to ${skill.from} at ${done.commit.slice(0, 7)}`,
+				`✓ ${name}: updated to ${repository} at ${done.commit.slice(0, 7)}`,
 			);
 		}
+	};
+	// A skill whose folder was deleted comes back first: without it, the factory is not valid.
+	const restored = new Set<string>();
+	for (const [key, entry] of Object.entries(imported.skills).sort()) {
+		const skill = skillPlace(key);
+		if (!skill || (only && skill.name !== only)) continue;
+		if (existsSync(join(folder, key))) continue;
+		restored.add(skill.name);
+		await update(skill.name, entry.source, skill.place);
+	}
+	if (restored.size) writeImported(folder, imported.skills);
+	const files = readFactoryFolder(folder);
+	const { factory, problems } = loadFactory(files);
+	if (!factory)
+		return fail(
+			[
+				...lines,
+				`The factory has ${problems.filter((p) => p.level === "error").length} error(s): run "openfabriq validate", fix them, then update.`,
+			].join("\n"),
+		);
+	const declared = factory.importedSkills ?? {};
+	const names = Object.keys(declared).sort();
+	if (only && !Object.hasOwn(declared, only))
+		return fail(
+			`factory.yaml's skills declares no ${only}${names.length ? `: it declares ${sentenceList(names)}` : ""}`,
+		);
+	if (names.length === 0)
+		return fail(
+			`factory.yaml declares no skills: import one with "openfabriq skill add <owner/repo> <skill>"`,
+		);
+	const layout = scanLayout(files);
+	for (const name of only ? [only] : names) {
+		const skill = declared[name];
+		const place = skill && declaredPlace(skill, layout);
+		if (restored.has(name) || !skill || typeof place === "string" || !place)
+			continue;
+		await update(name, skill.from, place);
 	}
 	writeImported(folder, imported.skills);
 	if (changed)
