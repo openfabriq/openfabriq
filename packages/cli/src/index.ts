@@ -155,13 +155,18 @@ async function main(line: CommandLine): Promise<CommandResult> {
 			});
 		case "skill":
 			// The current folder's factory, like deploy: the positionals are the skill's.
-			return skillCommand({
-				action: positionals[1],
-				target: positionals[2],
-				name: positionals[3],
-				agent: values.agent,
-				area: values.area,
-			});
+			return skillCommand(
+				{
+					action: positionals[1],
+					target: positionals[2],
+					name: positionals[3],
+					agent: values.agent,
+					area: values.area,
+				},
+				".",
+				exec,
+				canAsk ? terminalConfirm : undefined,
+			);
 		case "secret":
 			return secretCommand(
 				{

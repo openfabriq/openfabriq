@@ -55,10 +55,14 @@ const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const fail = (output: string): CommandResult => ({ code: 1, output });
 
+/** A yes or no from the person at the terminal, no by default; absent when no one can answer. */
+type Confirm = ((question: string) => Promise<boolean>) | undefined;
+
 export async function skillCommand(
 	args: SkillArgs,
 	dir = ".",
 	run = exec,
+	confirm?: Confirm,
 ): Promise<CommandResult> {
 	const folder = factoryFolder(dir);
 	if (!existsSync(join(folder, "factory.yaml")))
@@ -68,9 +72,10 @@ export async function skillCommand(
 	const temp = mkdtempSync(join(tmpdir(), "openfabriq-skill-"));
 	try {
 		const clone = cloner(run, temp);
-		if (args.action === "add") return await addSkill(args, folder, clone);
+		if (args.action === "add")
+			return await addSkill(args, folder, clone, confirm);
 		if (args.action === "update")
-			return await updateSkills(args.target, folder, clone);
+			return await updateSkills(args.target, folder, clone, confirm);
 		if (args.action === "remove") return removeSkill(args.target, folder);
 	} finally {
 		rmSync(temp, { recursive: true, force: true });
@@ -130,8 +135,8 @@ interface Imported {
 
 /**
  * Copies a skill of a repository into its folder of the factory and records it in `imported`, or
- * says why it cannot. A skill edited since its import is kept; one whose content did not change keeps its
- * entry, so a pull request shows only what changed.
+ * says why it cannot. A skill edited since its import is kept, unless `overwrite`; one whose content
+ * did not change keeps its entry, so a pull request shows only what changed.
  */
 async function importSkill(
 	folder: string,
@@ -140,10 +145,11 @@ async function importSkill(
 		repository: string;
 		wanted: string | undefined;
 		place: SkillPlace;
+		overwrite?: boolean;
 	},
 	clone: Cloner,
 ): Promise<Imported | string> {
-	const { repository, wanted, place } = request;
+	const { repository, wanted, place, overwrite = false } = request;
 	const source = await clone(repository);
 	const found = chooseSkill(skillCandidates(source.dir), wanted);
 	if (typeof found === "string") return found;
@@ -170,16 +176,16 @@ async function importSkill(
 		commit: status === "unchanged" && entry ? entry.commit : source.commit,
 	});
 	// A folder deleted since its import is imported again; one edited since is kept.
-	if (
+	const edited =
 		entry &&
 		existsSync(target) &&
-		skillHash(skillFiles(target)) !== entry.computedHash
-	)
-		return done("edited");
+		skillHash(skillFiles(target)) !== entry.computedHash;
+	if (edited && !overwrite) return done("edited");
 	if (!entry && existsSync(target))
 		return `openfabriq/${key} is already a skill of the factory, not one it imported: give it another name, or delete it first`;
 	const computedHash = skillHash(files);
 	if (
+		!edited &&
 		entry?.source === repository &&
 		entry.computedHash === computedHash &&
 		existsSync(target)
@@ -220,19 +226,11 @@ const importedSteps = (key: string) => [
 	`  - To adapt it, edit ${agentFiles(key)}, never the skill itself.`,
 	MERGE,
 ];
-const EDITED = (key: string) =>
-	[
-		`openfabriq/${key} was edited since its import, so it is not overwritten.`,
-		...editedSkillHelp(key),
-	].join("\n");
-
-/** What to do with an imported skill edited since its import, indented below its line: for add, update and doctor. */
-export function editedSkillHelp(key: string): string[] {
-	return [
-		`  To undo the edit: delete openfabriq/${key}, then run "openfabriq skill update ${skillPlace(key)?.name ?? key}".`,
-		`  To adapt the skill, edit ${agentFiles(key)} instead: the skill then keeps its updates.`,
-	];
-}
+/** The question for skills edited since their import, by name. */
+const OVERWRITE = (names: string[]) =>
+	`${sentenceList(names)} ${names.length > 1 ? "were" : "was"} edited since ${names.length > 1 ? "their" : "its"} import. Overwrite your edits with the source's version?`;
+const KEPT_UNASKED = (name: string) =>
+	`! ${name}: edited since its import, kept: run this in a terminal to overwrite it`;
 
 /** Where to adapt an imported skill: its agent's agent.md, or those of the agents that have it. */
 function agentFiles(key: string): string {
@@ -248,6 +246,7 @@ async function addSkill(
 	args: SkillArgs,
 	folder: string,
 	clone: Cloner,
+	confirm: Confirm,
 ): Promise<CommandResult> {
 	const [repository = "", afterAt] = (args.target ?? "").split("@");
 	if (!REPOSITORY.test(repository))
@@ -258,14 +257,21 @@ async function addSkill(
 	if (typeof place === "string") return fail(place);
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
-	const done = await importSkill(
-		folder,
-		imported,
-		{ repository, wanted: args.name ?? afterAt, place },
-		clone,
-	);
+	const request = { repository, wanted: args.name ?? afterAt, place };
+	let done = await importSkill(folder, imported, request, clone);
 	if (typeof done === "string") return fail(done);
-	if (done.status === "edited") return fail(EDITED(done.key));
+	if (done.status === "edited") {
+		if (!confirm) return fail(KEPT_UNASKED(done.name));
+		if (!(await confirm(OVERWRITE([done.name]))))
+			return { code: 0, output: `! ${done.name}: kept as you edited it` };
+		done = await importSkill(
+			folder,
+			imported,
+			{ ...request, overwrite: true },
+			clone,
+		);
+		if (typeof done === "string") return fail(done);
+	}
 	writeImported(folder, imported.skills);
 	declare(folder, done.name, {
 		from: repository,
@@ -286,36 +292,36 @@ async function updateSkills(
 	only: string | undefined,
 	folder: string,
 	clone: Cloner,
+	confirm: Confirm,
 ): Promise<CommandResult> {
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
 	const lines: string[] = [];
 	let failed = false;
 	let changed = false;
+	const edited: { name: string; repository: string; place: SkillPlace }[] = [];
 	const update = async (
 		name: string,
 		repository: string,
 		place: SkillPlace,
+		overwrite = false,
 	) => {
 		const done = await importSkill(
 			folder,
 			imported,
-			{ repository, wanted: name, place },
+			{ repository, wanted: name, place, overwrite },
 			clone,
 		).catch((error: unknown) => `${errorText(error).split("\n")[0]}`);
 		if (typeof done === "string") {
 			failed = true;
 			lines.push(`✗ ${name}: ${done}`);
 		} else if (done.status === "edited")
-			lines.push(
-				`! ${name}: edited since its import, so not updated.`,
-				...editedSkillHelp(done.key),
-			);
+			edited.push({ name, repository, place });
 		else if (done.status === "unchanged") lines.push(`✓ ${name}: up to date`);
 		else {
 			changed = true;
 			lines.push(
-				`✓ ${name}: updated to ${repository} at ${done.commit.slice(0, 7)}`,
+				`✓ ${name}: ${overwrite ? "overwritten with" : "updated to"} ${repository} at ${done.commit.slice(0, 7)}`,
 			);
 		}
 	};
@@ -356,6 +362,17 @@ async function updateSkills(
 			continue;
 		await update(name, skill.from, place);
 	}
+	// One question for every skill edited since its import; no one to ask keeps them all.
+	const overwrite =
+		edited.length > 0 &&
+		confirm !== undefined &&
+		(await confirm(OVERWRITE(edited.map((e) => e.name))));
+	for (const { name, repository, place } of edited)
+		if (overwrite) await update(name, repository, place, true);
+		else
+			lines.push(
+				confirm ? `! ${name}: kept as you edited it` : KEPT_UNASKED(name),
+			);
 	writeImported(folder, imported.skills);
 	if (changed) lines.push("", ...UPDATED_STEPS);
 	return { code: failed ? 1 : 0, output: lines.join("\n") };

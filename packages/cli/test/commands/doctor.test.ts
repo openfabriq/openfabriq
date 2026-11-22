@@ -40,7 +40,9 @@ it("says a skill is ready when every program it installs is there, without repea
 		"✓ skills/browser-evidence: agent-browser is installed",
 	);
 	expect(result.output).not.toContain("! skills/browser-evidence");
-	expect(result.output).toContain("This machine has the programs");
+	expect(result.output).toContain(
+		"Everything this factory needs is installed on this machine.",
+	);
 });
 
 it("looks up the program a skill installs, and fails without it", async () => {
@@ -217,7 +219,7 @@ it("says an imported skill edited since its import, out of date, up to date, or 
 	};
 	const result = await doctorCommand(dir, run, "darwin");
 	expect(result.output).toContain(
-		'! skills/edited: edited since its import from acme/edited, so "openfabriq skill update" skips it.\n  To undo the edit: delete openfabriq/skills/edited, then run "openfabriq skill update edited".',
+		'! skills/edited: edited since its import; "openfabriq skill update" asks before overwriting it',
 	);
 	expect(result.output).toContain(
 		'! skills/stale: acme/stale has a newer version on main: run "openfabriq skill update stale" for a pull request that updates it',

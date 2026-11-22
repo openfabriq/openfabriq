@@ -15,11 +15,7 @@ import { dirname, join } from "node:path";
 import { loadFactory } from "@openfabriq/core";
 import { readFactoryFolder, skillFiles, skillHash } from "@openfabriq/runner";
 import { describe, expect, it } from "vitest";
-import {
-	chooseSkill,
-	editedSkillHelp,
-	skillCommand,
-} from "../../src/commands/skill.js";
+import { chooseSkill, skillCommand } from "../../src/commands/skill.js";
 
 const COMMIT = "c".repeat(40);
 const REVIEW =
@@ -292,13 +288,20 @@ describe("openfabriq skill add", () => {
 		expect((await add({ agent: "tester", area: "qa" })).code).toBe(1);
 	});
 
-	it("updates an imported skill left as it was, and refuses one edited since its import", async () => {
+	it("updates an imported skill left as it was, and asks before overwriting one edited since its import", async () => {
 		const repo = factory();
-		const add = (repository: Record<string, string>) =>
+		const questions: string[] = [];
+		const add = (repository: Record<string, string>, answer?: boolean) =>
 			skillCommand(
 				{ action: "add", target: "mattpocock/skills", name: "code-review" },
 				repo,
 				github(repository),
+				answer === undefined
+					? undefined
+					: async (question) => {
+							questions.push(question);
+							return answer;
+						},
 			);
 		await add(PUBLIC);
 		const newer = {
@@ -318,17 +321,28 @@ describe("openfabriq skill add", () => {
 			join(repo, "openfabriq/skills/code-review/SKILL.md"),
 			"mine\n",
 		);
-		const refused = await add(PUBLIC);
-		expect(refused.code).toBe(1);
-		expect(refused.output).toContain(
-			"openfabriq/skills/code-review was edited since its import, so it is not overwritten.",
-		);
-		expect(
+		const mine = () =>
 			readFileSync(
 				join(repo, "openfabriq/skills/code-review/SKILL.md"),
 				"utf8",
-			),
-		).toBe("mine\n");
+			);
+		const unasked = await add(PUBLIC);
+		expect(unasked.code).toBe(1);
+		expect(unasked.output).toBe(
+			"! code-review: edited since its import, kept: run this in a terminal to overwrite it",
+		);
+		const kept = await add(PUBLIC, false);
+		expect(kept).toEqual({
+			code: 0,
+			output: "! code-review: kept as you edited it",
+		});
+		expect(questions).toEqual([
+			"code-review was edited since its import. Overwrite your edits with the source's version?",
+		]);
+		expect(mine()).toBe("mine\n");
+		const overwritten = await add(PUBLIC, true);
+		expect(overwritten.code).toBe(0);
+		expect(mine()).toBe(REVIEW);
 	});
 
 	it("imports again a skill whose folder was deleted", async () => {
@@ -400,7 +414,14 @@ describe("openfabriq skill update", () => {
 		repo: string,
 		repository: Record<string, string>,
 		target?: string,
-	) => skillCommand({ action: "update", target }, repo, github(repository));
+		confirm?: (question: string) => Promise<boolean>,
+	) =>
+		skillCommand(
+			{ action: "update", target },
+			repo,
+			github(repository),
+			confirm,
+		);
 	const NEWER = {
 		...PUBLIC,
 		"skills/tdd/SKILL.md":
@@ -427,24 +448,38 @@ describe("openfabriq skill update", () => {
 		expect(lockOf(repo).skills["skills/code-review"]).toEqual(before);
 	});
 
-	it("skips a skill edited since its import, and updates only the one named", async () => {
+	it("asks once before overwriting the skills edited since their import, and keeps them unasked", async () => {
 		const repo = factory();
 		await add(repo, "code-review");
 		await add(repo, "tdd");
-		writeFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "mine\n");
+		const tdd = join(repo, "openfabriq/skills/tdd/SKILL.md");
+		const review = join(repo, "openfabriq/skills/code-review/SKILL.md");
+		writeFileSync(tdd, "mine\n");
+		writeFileSync(review, "mine\n");
 		const named = await update(repo, NEWER, "code-review");
-		expect(named.output).toBe("✓ code-review: up to date");
-		const all = await update(repo, NEWER);
-		expect(all.output).toContain(
-			[
-				"! tdd: edited since its import, so not updated.",
-				'  To undo the edit: delete openfabriq/skills/tdd, then run "openfabriq skill update tdd".',
-				"  To adapt the skill, edit the agent.md of the agents that use it instead: the skill then keeps its updates.",
-			].join("\n"),
+		expect(named.output).toBe(
+			"! code-review: edited since its import, kept: run this in a terminal to overwrite it",
 		);
-		expect(
-			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),
-		).toBe("mine\n");
+		const questions: string[] = [];
+		const ask = (answer: boolean) => async (question: string) => {
+			questions.push(question);
+			return answer;
+		};
+		const kept = await update(repo, NEWER, undefined, ask(false));
+		expect(kept.output).toBe(
+			"! code-review: kept as you edited it\n! tdd: kept as you edited it",
+		);
+		expect(readFileSync(tdd, "utf8")).toBe("mine\n");
+		const overwritten = await update(repo, NEWER, undefined, ask(true));
+		expect(overwritten.output).toContain(
+			"✓ code-review: overwritten with mattpocock/skills at ccccccc\n✓ tdd: overwritten with mattpocock/skills at ccccccc",
+		);
+		expect(questions).toEqual([
+			"code-review and tdd were edited since their import. Overwrite your edits with the source's version?",
+			"code-review and tdd were edited since their import. Overwrite your edits with the source's version?",
+		]);
+		expect(readFileSync(tdd, "utf8")).toContain("Red, then green.");
+		expect(readFileSync(review, "utf8")).toBe(REVIEW);
 	});
 
 	it("imports again a skill whose folder was deleted to undo an edit, as its message says", async () => {
@@ -523,12 +558,14 @@ describe("openfabriq skill remove", () => {
 		);
 	});
 
-	it("says where to adapt a skill edited since its import: its agent's agent.md, or the area's agents", () => {
-		expect(editedSkillHelp("qa/agents/tester/skills/tdd")[1]).toContain(
-			"edit openfabriq/qa/agents/tester/agent.md instead",
+	it("says to adapt an area's skill in the agent.md of the area's agents", async () => {
+		const result = await skillCommand(
+			{ action: "add", target: "mattpocock/skills", name: "tdd", area: "qa" },
+			factory(),
+			github(PUBLIC),
 		);
-		expect(editedSkillHelp("qa/skills/tdd")[1]).toContain(
-			"edit the agent.md of the agents in openfabriq/qa/ instead",
+		expect(result.output).toContain(
+			"  - To adapt it, edit the agent.md of the agents in openfabriq/qa/, never the skill itself.",
 		);
 	});
 

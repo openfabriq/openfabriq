@@ -19,7 +19,6 @@ import {
 import type { CommandResult } from "../result.js";
 import { secretWarnings } from "../secret-warnings.js";
 import { missingPrerequisites } from "./prerequisites.js";
-import { editedSkillHelp } from "./skill.js";
 import { checkFactoryFolder } from "./validate.js";
 
 // What this machine lacks for the factory: read only, it installs and runs nothing of the factory.
@@ -102,8 +101,8 @@ export async function doctorCommand(
 		lines.push(
 			"",
 			lacking.length || notInstalled.length
-				? `This machine lacks what is marked ✗ for ${folder}. Install it, then run "openfabriq doctor" again.`
-				: `This machine has the programs ${folder} runs.`,
+				? `Install what is marked ✗, then run "openfabriq doctor" again.`
+				: "Everything this factory needs is installed on this machine.",
 		);
 	}
 	return {
@@ -170,8 +169,7 @@ async function importedSkillLines(
 			skillHash(skillFiles(join(folder, key))) !== entry.computedHash;
 		if (edited)
 			lines.push(
-				`! ${key}: edited since its import from ${source}, so "openfabriq skill update" skips it.`,
-				...editedSkillHelp(key),
+				`! ${key}: edited since its import; "openfabriq skill update" asks before overwriting it`,
 			);
 		// The skill's folder in its repository; a skill at the root is the whole repository.
 		const path = skillPath.includes("/")
