@@ -208,7 +208,18 @@ async function importSkill(
 	return done(entry ? "updated" : "imported");
 }
 
-const NEXT_STEP = `Read its files: it was written for a person at the keyboard. Say how the factory uses it in the agent.md of the agents that use it, not in the skill. Then open a pull request, and run "openfabriq apply" once it is merged.`;
+const MERGE = `  - Open a pull request, then run "openfabriq apply" once it is merged.`;
+const UPDATED_STEPS = [
+	"Next:",
+	"  - Read what changed: git diff openfabriq/",
+	MERGE,
+];
+const importedSteps = (key: string) => [
+	"Next:",
+	`  - Read openfabriq/${key}/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.`,
+	`  - To adapt it, edit ${agentFiles(key)}, never the skill itself.`,
+	MERGE,
+];
 const EDITED = (key: string) =>
 	[
 		`openfabriq/${key} was edited since its import, so it is not overwritten.`,
@@ -217,18 +228,20 @@ const EDITED = (key: string) =>
 
 /** What to do with an imported skill edited since its import, indented below its line: for add, update and doctor. */
 export function editedSkillHelp(key: string): string[] {
-	const skill = skillPlace(key);
-	const place = skill?.place ?? {};
-	const where =
-		"agent" in place
-			? `openfabriq/${key.slice(0, key.lastIndexOf("/skills/"))}/agent.md`
-			: "area" in place
-				? `the agent.md of the agents in openfabriq/${place.area}/`
-				: "the agent.md of the agents that use it";
 	return [
-		`  To undo the edit: delete openfabriq/${key}, then run "openfabriq skill update ${skill?.name ?? key}".`,
-		`  To adapt the skill, edit ${where} instead: the skill then keeps its updates.`,
+		`  To undo the edit: delete openfabriq/${key}, then run "openfabriq skill update ${skillPlace(key)?.name ?? key}".`,
+		`  To adapt the skill, edit ${agentFiles(key)} instead: the skill then keeps its updates.`,
 	];
+}
+
+/** Where to adapt an imported skill: its agent's agent.md, or those of the agents that have it. */
+function agentFiles(key: string): string {
+	const place = skillPlace(key)?.place ?? {};
+	if ("agent" in place)
+		return `openfabriq/${key.slice(0, key.lastIndexOf("/skills/"))}/agent.md`;
+	return "area" in place
+		? `the agent.md of the agents in openfabriq/${place.area}/`
+		: "the agent.md of the agents that use it";
 }
 
 async function addSkill(
@@ -263,7 +276,9 @@ async function addSkill(
 		done.status === "unchanged"
 			? `${done.name} from ${repository} is already up to date in openfabriq/${done.key}`
 			: `${done.status === "updated" ? "Updated" : "Imported"} ${done.name} from ${repository} at ${done.commit.slice(0, 7)} into openfabriq/${done.key}, declared in factory.yaml`;
-	return { code: 0, output: [`✓ ${what}`, "", NEXT_STEP].join("\n") };
+	const steps =
+		done.status === "unchanged" ? [] : ["", ...importedSteps(done.key)];
+	return { code: 0, output: [`✓ ${what}`, ...steps].join("\n") };
 }
 
 /** Updates every skill factory.yaml declares, or the one named, to its source's last commit. */
@@ -342,8 +357,7 @@ async function updateSkills(
 		await update(name, skill.from, place);
 	}
 	writeImported(folder, imported.skills);
-	if (changed)
-		lines.push("", NEXT_STEP.replace("Read its files", "Read the changes"));
+	if (changed) lines.push("", ...UPDATED_STEPS);
 	return { code: failed ? 1 : 0, output: lines.join("\n") };
 }
 

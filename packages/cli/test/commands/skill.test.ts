@@ -129,6 +129,26 @@ describe("openfabriq skill add", () => {
 		).toBe(true);
 	});
 
+	it("lists what to do next: read the skill, adapt it in its agent's agent.md, open a pull request", async () => {
+		const result = await skillCommand(
+			{
+				action: "add",
+				target: "mattpocock/skills",
+				name: "tdd",
+				agent: "tester",
+			},
+			factory(),
+			github(PUBLIC),
+		);
+		expect(result.output.split("\n").slice(1)).toEqual([
+			"",
+			"Next:",
+			"  - Read openfabriq/qa/agents/tester/skills/tdd/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.",
+			"  - To adapt it, edit openfabriq/qa/agents/tester/agent.md, never the skill itself.",
+			'  - Open a pull request, then run "openfabriq apply" once it is merged.',
+		]);
+	});
+
 	it("puts an area's skill in its skills folder", async () => {
 		const repo = factory();
 		await skillCommand(
@@ -397,6 +417,9 @@ describe("openfabriq skill update", () => {
 		expect(result.output).toContain("✓ code-review: up to date");
 		expect(result.output).toContain(
 			"✓ tdd: updated to mattpocock/skills at ccccccc",
+		);
+		expect(result.output).toContain(
+			"Next:\n  - Read what changed: git diff openfabriq/\n",
 		);
 		expect(
 			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),
