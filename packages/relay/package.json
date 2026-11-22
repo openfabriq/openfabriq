@@ -11,8 +11,8 @@
 		"bundle": "wrangler deploy --dry-run --outdir dist"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-plugin": "1.5.1",
-		"wrangler": "4.157.0",
-		"workerd": "1.20261104.1"
+		"@cloudflare/vitest-plugin": "1.8.1",
+		"wrangler": "4.161.0",
+		"workerd": "1.20261113.1"
 	}
 }
