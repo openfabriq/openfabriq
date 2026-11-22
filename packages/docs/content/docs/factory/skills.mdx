@@ -69,7 +69,7 @@ openfabriq skill update          # every skill factory.yaml declares
 openfabriq skill update tdd      # that one only
 ```
 
-`skill update` takes each declared skill from the last commit of its repository's default branch. A skill whose content did not change keeps its entry, so the pull request shows only what changed. Before overwriting a skill edited since its import, `skill update` asks once, no by default; with no one at a terminal to answer, it keeps the edits. To adapt an imported skill, edit the `agent.md` of the agents that use it rather than the skill, so updates never touch your changes. `openfabriq doctor` says when an imported skill has a newer version, or was edited since its import; neither fails `doctor`, and an unreachable repository is a line of its own. After an update, read the changes, then run `openfabriq apply`.
+`skill update` takes each declared skill from the last commit of its repository's default branch. A skill whose content did not change keeps its entry, so the pull request shows only what changed. Before overwriting a skill edited since its import, `skill update` asks once, no by default; with no one at a terminal to answer, it keeps the edits. To adapt an imported skill, edit the `agent.md` of the agents that use it rather than the skill, so updates never touch your changes. `openfabriq doctor` says when an imported skill has a newer version, or was edited since its import; neither fails `doctor`, and an unreachable repository is a line of its own. After an update, read the skills that changed before you run `openfabriq apply`: its plan lists their files, not what they say.
 
 ### What openfabriq keeps
 

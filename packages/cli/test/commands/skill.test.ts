@@ -440,7 +440,7 @@ describe("openfabriq skill update", () => {
 			"✓ tdd: updated to mattpocock/skills at ccccccc",
 		);
 		expect(result.output).toContain(
-			"Next:\n  - Read what changed: git diff openfabriq/\n",
+			'Next: run "openfabriq apply" to use the new version.',
 		);
 		expect(
 			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),

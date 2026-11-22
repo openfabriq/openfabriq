@@ -215,11 +215,7 @@ async function importSkill(
 }
 
 const APPLY = `  - Run "openfabriq apply" to use it.`;
-const UPDATED_STEPS = [
-	"Next:",
-	"  - Read what changed: git diff openfabriq/",
-	`  - Run "openfabriq apply" to use the new version.`,
-];
+const UPDATED_STEPS = [`Next: run "openfabriq apply" to use the new version.`];
 const importedSteps = (key: string) => [
 	"Next:",
 	`  - Read openfabriq/${key}/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.`,
