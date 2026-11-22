@@ -251,3 +251,27 @@ export function missingFiles({
 			missing.push({ file: folder, message: `missing ${folder}/SKILL.md` });
 	return missing;
 }
+
+/**
+ * The skills whose SKILL.md grants tools with allowed-tools: Claude Code would let the agent use
+ * them without asking, and the factory alone says which tools an agent may use.
+ */
+export function grantingSkills(
+	files: FactoryFiles,
+	{ skillFolders }: Layout,
+): Omit<Problem, "level">[] {
+	return [...skillFolders.keys()].sort().flatMap((folder) => {
+		const file = `${folder}/SKILL.md`;
+		const split = splitFrontMatter(files[file] ?? "");
+		const header = typeof split === "string" ? undefined : split.header;
+		return header && typeof header === "object" && "allowed-tools" in header
+			? [
+					{
+						file,
+						message:
+							"allowed-tools grants tools, but the factory lists the tools an agent may use: remove it, and add what the agent needs to its tools",
+					},
+				]
+			: [];
+	});
+}

@@ -7,6 +7,7 @@ import { parseCan } from "./can.js";
 import { factoryProblems } from "./factory-rules.js";
 import {
 	duplicateNames,
+	grantingSkills,
 	type Layout,
 	misnamedFolders,
 	misplacedAreas,
@@ -64,6 +65,7 @@ export function loadFactory(files: FactoryFiles): {
 		...misnamedFolders(layout),
 		...misplacedAreas(files, layout),
 		...duplicateNames(layout),
+		...grantingSkills(files, layout),
 	);
 	const { wiki, problems: wikiProblems } = readWiki(
 		fields.wiki,

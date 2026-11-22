@@ -35,6 +35,8 @@ What holds for any work on the code, such as the stack, the commands and the com
 
 Keep skills short and prescriptive. What varies from one automation to another goes in that automation's task.
 
+A skill never grants tools: the agent's `tools` say what it may use. `openfabriq validate` refuses a `SKILL.md` whose header has `allowed-tools`.
+
 The engine loads only the factory's skills and the repository's project settings, never those of the machine (`~/.claude/`).
 
 ## Skills for command-line tools
