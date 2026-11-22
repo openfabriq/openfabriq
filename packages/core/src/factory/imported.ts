@@ -8,27 +8,45 @@ import type { FactoryFiles, Problem } from "./types.js";
  */
 export const IMPORTED_SKILLS = "imported-skills.json";
 
+/**
+ * A GitHub repository, owner/repo: never starting with -, which a command would read as an
+ * option, nor `.` or `..` as its name, which would lead a GitHub API path elsewhere.
+ */
+export const REPOSITORY =
+	/^[A-Za-z0-9][A-Za-z0-9-]*\/(?!\.{1,2}$)(?!-)[A-Za-z0-9._-]+$/;
+
 const ImportedSkill = z.strictObject({
-	/** The GitHub repository, owner/repo. */
-	source: z.string().regex(/^[\w.-]+\/[\w.-]+$/, {
+	source: z.string().regex(REPOSITORY, {
 		error: "is a GitHub repository, like mattpocock/skills",
 	}),
 	sourceType: z.literal("github"),
 	/** The branch it was taken from. */
-	ref: z.string().min(1),
+	ref: z.string().regex(/^(?!-)[\w./-]+$/, { error: "is a branch's name" }),
 	commit: z.string().regex(/^[0-9a-f]{40}$/, { error: "is a commit's SHA" }),
 	/** Its SKILL.md in the source repository. */
-	skillPath: z.string().regex(/(^|\/)SKILL\.md$/, {
-		error: "is the path of a SKILL.md",
+	skillPath: z.string().regex(/^(?:(?!\.{1,2}\/)[\w.-]+\/)*SKILL\.md$/, {
+		error: "is the path of a SKILL.md in the repository",
 	}),
 	computedHash: z
 		.string()
 		.regex(/^[0-9a-f]{64}$/, { error: "is a SHA-256 in hex" }),
 });
-const ImportedSkillsFile = z.strictObject({
-	version: z.literal(1),
-	skills: z.record(z.string(), ImportedSkill),
-});
+const ImportedSkillsFile = z
+	.strictObject({
+		version: z.literal(1),
+		skills: z.record(z.string(), ImportedSkill),
+	})
+	// A key is a skill's folder in openfabriq/, never a path that leaves it: skill remove deletes it.
+	.superRefine(({ skills }, ctx) => {
+		for (const folder of Object.keys(skills))
+			if (skillPlace(folder) === undefined)
+				ctx.addIssue({
+					code: "custom",
+					path: ["skills", folder],
+					message:
+						"is a skill's folder in openfabriq/, like skills/code-review",
+				});
+	});
 
 export type ImportedSkill = z.infer<typeof ImportedSkill>;
 export type ImportedSkills = z.infer<typeof ImportedSkillsFile>;
@@ -97,9 +115,11 @@ export function skillFolder(name: string, place: SkillPlace): string {
 export function skillPlace(
 	folder: string,
 ): { name: string; place: SkillPlace } | undefined {
-	const match = /^(?:([^/]+)\/)?(?:agents\/([^/]+)\/)?skills\/([^/]+)$/.exec(
-		folder,
-	);
+	// Names only: lowercase letters, digits and -, so no part is . or .. or leaves openfabriq/.
+	const match =
+		/^(?:([a-z0-9][a-z0-9-]*)\/)?(?:agents\/([a-z0-9][a-z0-9-]*)\/)?skills\/([a-z0-9][a-z0-9-]*)$/.exec(
+			folder,
+		);
 	if (!match) return undefined;
 	const [, area, agent, name = ""] = match;
 	const place: SkillPlace = agent

@@ -21,6 +21,7 @@ export {
 	type ImportedSkill,
 	type ImportedSkills,
 	importedSkillsText,
+	REPOSITORY,
 	readImportedSkills,
 	type SkillPlace,
 	skillFolder,

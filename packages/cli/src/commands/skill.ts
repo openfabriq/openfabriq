@@ -16,6 +16,7 @@ import {
 	IMPORTED_SKILLS,
 	type ImportedSkills,
 	importedSkillsText,
+	REPOSITORY,
 	readImportedSkills,
 	type SkillPlace,
 	scanLayout,
@@ -46,7 +47,6 @@ export interface SkillArgs {
 
 /** The skill's name in its SKILL.md, the name its folder takes: lowercase letters, digits and -. */
 const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 
 const fail = (output: string): CommandResult => ({ code: 1, output });
 
@@ -269,7 +269,9 @@ export function chooseSkill(
 	);
 	if (skills.length === 0)
 		return "This repository has no skill: no SKILL.md in it";
-	const names = sentenceList([...new Set(skills.map((s) => s.name))].sort());
+	const names = sentenceList(
+		[...new Set(skills.map((s) => printable(s.name)))].sort(),
+	);
 	const skill = wanted
 		? skills.find(
 				(s) => s.name === wanted || s.folder.split("/").at(-1) === wanted,
@@ -282,6 +284,11 @@ export function chooseSkill(
 			? `This repository has no skill named ${wanted}: its skills are ${names}`
 			: `This repository has several skills, name one: ${names}`;
 	if (!SKILL_NAME.test(skill.name))
-		return `The skill's name, ${skill.name}, cannot be a folder of the factory: a skill's name is lowercase letters, digits and -`;
+		return `The skill's name, ${printable(skill.name)}, cannot be a folder of the factory: a skill's name is lowercase letters, digits and -`;
 	return skill;
 }
+
+/** A name read from a repository, without the control characters that would drive the terminal. */
+const printable = (name: string) =>
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: they are what is removed.
+	name.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");

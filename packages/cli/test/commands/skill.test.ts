@@ -184,6 +184,18 @@ describe("openfabriq skill add", () => {
 		expect(existsSync(join(repo, "openfabriq/skills/s"))).toBe(false);
 	});
 
+	it("refuses a repository a command would read as an option, before cloning", async () => {
+		const repo = factory();
+		const calls: string[][] = [];
+		const result = await skillCommand(
+			{ action: "add", target: "-x/skills", name: "tdd" },
+			repo,
+			github(PUBLIC, calls),
+		);
+		expect(result.code).toBe(1);
+		expect(calls).toEqual([]);
+	});
+
 	it("refuses an unknown agent or area, and both at once", async () => {
 		const repo = factory();
 		const add = (args: object) =>
@@ -358,6 +370,12 @@ describe("the skill to import from a repository", () => {
 		expect(chooseSkill([skill("skills/x", "Code Review")], undefined)).toMatch(
 			/cannot be a folder of the factory/,
 		);
+		expect(
+			chooseSkill(
+				[skill("a/x", "x\u001b]0;pwned\u0007"), skill("b/y", "y")],
+				undefined,
+			),
+		).toBe("This repository has several skills, name one: x]0;pwned and y");
 		expect(chooseSkill([], undefined)).toBe(
 			"This repository has no skill: no SKILL.md in it",
 		);

@@ -22,6 +22,13 @@ describe("an imported skill's folder", () => {
 			expect(skillPlace(folder)).toEqual({ name: "tdd", place });
 		}
 		expect(skillPlace("agents/reviewer/agent.md")).toBeUndefined();
+		for (const outside of [
+			"../skills/x",
+			"skills/..",
+			"qa/../skills/x",
+			"../../.ssh",
+		])
+			expect(skillPlace(outside)).toBeUndefined();
 	});
 });
 
@@ -82,5 +89,39 @@ describe("imported-skills.json", () => {
 		expect(problem).toMatch(
 			new RegExp(`^${IMPORTED_SKILLS}: skills.skills/code-review.commit: `),
 		);
+	});
+});
+
+describe("what imported-skills.json may hold", () => {
+	const problems = (skills: Record<string, unknown>) => {
+		const read = readImportedSkills(lock(skills));
+		return Array.isArray(read) ? read : [];
+	};
+
+	it("refuses a key that is no skill folder, so skill remove never deletes outside openfabriq/", () => {
+		expect(problems({ "../../.ssh": ENTRY })).toEqual([
+			"skills.../../.ssh: is a skill's folder in openfabriq/, like skills/code-review",
+		]);
+	});
+
+	it("refuses a repository a command would read as an option, or whose name leads elsewhere", () => {
+		for (const source of ["-x/skills", "acme/..", "acme/.", "acme/-x", "acme"])
+			expect(problems({ "skills/s": { ...ENTRY, source } })).toEqual([
+				"skills.skills/s.source: is a GitHub repository, like mattpocock/skills",
+			]);
+		expect(
+			problems({ "skills/s": { ...ENTRY, source: "acme/.github" } }),
+		).toEqual([]);
+	});
+
+	it("refuses a branch or a path with characters a terminal or a URL would read", () => {
+		expect(
+			problems({ "skills/s": { ...ENTRY, ref: "main\u001b[2J" } }),
+		).toEqual(["skills.skills/s.ref: is a branch's name"]);
+		expect(
+			problems({ "skills/s": { ...ENTRY, skillPath: "../x/SKILL.md" } }),
+		).toEqual([
+			"skills.skills/s.skillPath: is the path of a SKILL.md in the repository",
+		]);
 	});
 });
