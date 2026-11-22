@@ -17,12 +17,15 @@ export async function outsideLearning(
 	const outside = touched.filter((p) => !isImprovable(p));
 	if (outside.length)
 		return `learning's commits change ${outside.join(", ")}: an improvement changes the Markdown of the factory's skills and the body of its agent.md files only`;
-	for (const path of touched.filter((p) => p.endsWith("/agent.md"))) {
+	for (const path of touched) {
 		const { start, head } = await versions(path);
+		if (head === undefined)
+			return `learning's commits remove ${path}: an improvement adds to the factory's text, it never removes a file`;
+		if (!path.endsWith("/agent.md")) continue;
 		const before = start === undefined ? undefined : frontMatter(start);
 		const after = head === undefined ? undefined : frontMatter(head);
 		if (before === undefined || after === undefined || before !== after)
-			return `learning's commits change the front matter of ${path}, or add or remove it: an improvement changes the body of an agent.md only`;
+			return `learning's commits change the front matter of ${path}, or add it: an improvement changes the body of an existing agent.md only`;
 	}
 	return undefined;
 }

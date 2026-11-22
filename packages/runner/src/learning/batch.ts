@@ -104,7 +104,7 @@ async function evidence(
 					readIn(runDir(repository, failure.run), "failed-checks.json"),
 				)
 			: undefined;
-	// The maintainers' own reviews, never the engine's.
+	// The people's reviews that asked for changes, never the engine's: the run itself only started for a maintainer.
 	const comments =
 		failure.kind === "changes_requested" && failure.number !== undefined
 			? await github
@@ -243,24 +243,27 @@ export async function prepareBatch(step: {
 }): Promise<LearningBatch | undefined> {
 	const { repository, factory, github, now } = step;
 	let lessons = readLessons(repository);
-	const seen: Lesson[] = [];
+	const resolved: Lesson[] = [];
 	for (const lesson of lessons.filter((l) => l.improvement)) {
 		const number = lesson.improvement?.number;
 		if (lesson.status !== "proposed" || number === undefined) continue;
-		const state = await github
+		const pull = await github
 			.subject(repository, number, true)
-			.then((pull) => String(pull.state ?? ""))
+			.then((p) => ({
+				state: String(p.state ?? ""),
+				...(typeof p.mergedAt === "string" ? { mergedAt: p.mergedAt } : {}),
+			}))
 			.catch((error: unknown) => {
 				step.log?.(
 					`${repository}: could not read improvement #${number}: ${errorText(error)}`,
 				);
-				return "";
+				return { state: "" };
 			});
-		const next = followed(lesson, state, now());
-		if (next) seen.push(next);
+		const next = followed(lesson, pull, now());
+		if (next) resolved.push(next);
 	}
-	saveLessons(repository, seen);
-	lessons = lessons.map((l) => seen.find((s) => s.id === l.id) ?? l);
+	saveLessons(repository, resolved);
+	lessons = lessons.map((l) => resolved.find((s) => s.id === l.id) ?? l);
 
 	const failures = projectFailures(repository, step.runs, factory);
 	// shortcut: the newest failures first; an older one waits for a quieter batch.

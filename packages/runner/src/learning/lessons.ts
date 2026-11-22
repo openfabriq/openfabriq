@@ -36,6 +36,8 @@ export interface Lesson {
 	updatedAt: string;
 	/** When the engine saw its improvement merged or closed. */
 	resolvedAt?: string;
+	/** When GitHub merged its improvement: failures after it came back. */
+	mergedAt?: string;
 }
 
 /** What the learning agent says of a lesson: an existing one the failures join, or a new one. */
@@ -176,12 +178,13 @@ export function group(
 	return { lessons: all, changed };
 }
 
-/** A lesson once its improvement's pull request is seen merged, closed, or still open. */
+/** A lesson once its improvement's pull request is seen merged (GitHub's `mergedAt`), closed, or still open. */
 export function followed(
 	lesson: Lesson,
-	state: string,
+	pull: { state: string; mergedAt?: string | undefined },
 	now: Date,
 ): Lesson | undefined {
+	const { state, mergedAt } = pull;
 	if (lesson.status !== "proposed") return undefined;
 	const status =
 		state === "MERGED"
@@ -191,11 +194,20 @@ export function followed(
 				: undefined;
 	if (!status) return undefined;
 	const at = now.toISOString();
-	return { ...lesson, status, resolvedAt: at, updatedAt: at };
+	return {
+		...lesson,
+		status,
+		resolvedAt: at,
+		...(status === "promoted" && mergedAt ? { mergedAt } : {}),
+		updatedAt: at,
+	};
 }
 
-/** Failures that joined a lesson after its improvement was merged: the cause came back. */
-export const cameBack = (lesson: Lesson): LessonFailure[] =>
-	lesson.status === "promoted" && lesson.resolvedAt
-		? lesson.failures.filter((f) => f.at > (lesson.resolvedAt ?? ""))
+/** The failures of a lesson that happened after its improvement was merged: the cause came back. */
+export function cameBack(lesson: Lesson): LessonFailure[] {
+	// GitHub's merge time; an older lesson has only the batch that saw it.
+	const merged = lesson.mergedAt ?? lesson.resolvedAt;
+	return lesson.status === "promoted" && merged
+		? lesson.failures.filter((f) => f.at > merged)
 		: [];
+}

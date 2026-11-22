@@ -131,24 +131,34 @@ describe("lessons", () => {
 				at: "2026-11-03T00:00:00Z",
 			},
 		});
-		expect(followed(proposed, "OPEN", NOW)).toBeUndefined();
-		expect(followed(proposed, "MERGED", NOW)?.status).toBe("promoted");
-		const rejected = followed(proposed, "CLOSED", NOW);
+		expect(followed(proposed, { state: "OPEN" }, NOW)).toBeUndefined();
+		expect(
+			followed(
+				proposed,
+				{ state: "MERGED", mergedAt: "2026-11-04T00:00:00Z" },
+				NOW,
+			),
+		).toMatchObject({ status: "promoted", mergedAt: "2026-11-04T00:00:00Z" });
+		const rejected = followed(proposed, { state: "CLOSED" }, NOW);
 		expect(rejected?.status).toBe("rejected");
 		expect(nextToImprove(rejected ? [rejected] : [])).toBeUndefined();
 	});
 
-	it("count the failures that came back after their improvement was merged", () => {
+	it("count the failures that came back after GitHub merged their improvement, even before a batch saw it", () => {
 		const promoted = lesson({
 			id: "L1",
 			status: "promoted",
+			mergedAt: "2026-11-05T00:00:00Z",
 			resolvedAt: "2026-11-10T00:00:00Z",
 			failures: [
 				{ id: "a", agent: "coder", at: "2026-11-01T00:00:00Z" },
+				{ id: "b", agent: "coder", at: "2026-11-07T00:00:00Z" },
 				{ id: "c", agent: "coder", at: "2026-11-12T00:00:00Z" },
 			],
 		});
-		expect(cameBack(promoted).map((f) => f.id)).toEqual(["c"]);
+		expect(cameBack(promoted).map((f) => f.id)).toEqual(["b", "c"]);
+		const { mergedAt: _, ...older } = promoted;
+		expect(cameBack(older).map((f) => f.id)).toEqual(["c"]);
 	});
 
 	it.each([
@@ -186,7 +196,7 @@ describe("the guard of learning's pull requests", () => {
 		).toBeUndefined();
 	});
 
-	it("refuses another file, a changed front matter, a new or removed agent.md", async () => {
+	it("refuses another file, a changed front matter, a new agent.md, a removed file", async () => {
 		expect(
 			await outsideLearning(
 				["openfabriq/factory.yaml", "openfabriq/skills/x/SKILL.md"],
@@ -208,6 +218,12 @@ describe("the guard of learning's pull requests", () => {
 		).toContain("front matter");
 		expect(
 			await outsideLearning(path, versions(agentMd("x: y"), undefined)),
-		).toContain("front matter");
+		).toContain("remove openfabriq/agents/coder/agent.md");
+		expect(
+			await outsideLearning(
+				["openfabriq/skills/x/SKILL.md"],
+				versions("# X\n", undefined),
+			),
+		).toContain("never removes a file");
 	});
 });

@@ -43,6 +43,9 @@ const github = (states: Record<number, string> = {}) =>
 	({
 		subject: async (_repo: string, number: number) => ({
 			state: states[number] ?? "OPEN",
+			...(states[number] === "MERGED"
+				? { mergedAt: "2026-11-05T00:00:00Z" }
+				: {}),
 		}),
 		reviews: async () => [],
 	}) as unknown as GitHub;
@@ -211,6 +214,7 @@ describe("a batch of learning", () => {
 			{ ...base, id: "L4", status: "candidate" },
 		]);
 		const learning = await batch([], github({ 7: "MERGED", 8: "CLOSED" }));
+		expect(readLessons(REPO)[0]?.mergedAt).toBe("2026-11-05T00:00:00Z");
 		expect(readLessons(REPO).map((l) => [l.id, l.status])).toEqual([
 			["L1", "promoted"],
 			["L2", "rejected"],
