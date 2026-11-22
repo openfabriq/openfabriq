@@ -10,7 +10,13 @@ import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { getMDXComponents } from "@/components/mdx";
 import { SiteFooter } from "@/components/site-footer";
-import { absolute, breadcrumbList, pageMetadata, sectionOf } from "@/lib/site";
+import {
+	absolute,
+	breadcrumbList,
+	docsTitle,
+	pageMetadata,
+	sectionOf,
+} from "@/lib/site";
 import { source } from "@/lib/source";
 
 interface Props {
@@ -62,7 +68,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 	const page = source.getPage(slug);
 	if (!page) notFound();
 	return pageMetadata({
-		title: page.data.title,
+		title: docsTitle(page.data.title, page.url),
 		description: page.data.description ?? "",
 		path: page.url,
 	});

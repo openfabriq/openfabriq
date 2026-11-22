@@ -16,14 +16,19 @@ it("asks gh about an issue with gh issue, about a pull request with gh pr", asyn
 		await githubSubjectState("https://github.com/acme/app/issues/4"),
 	).toEqual({ merged: false, open: false, needsHuman: false });
 	run.mockResolvedValueOnce(
-		'{"state":"MERGED","labels":[{"name":"Needs-Human"}]}',
+		'{"state":"MERGED","labels":[{"name":"Needs-Human"}],"mergedAt":"2026-10-09T10:00:00Z"}',
 	);
 	expect(await githubSubjectState(PR)).toEqual({
 		merged: true,
+		mergedAt: "2026-10-09T10:00:00Z",
 		open: false,
 		needsHuman: true,
 	});
-	expect(run.mock.calls.map((c) => c[1]?.[0])).toEqual(["issue", "pr"]);
+	// An issue has no merge date to ask for.
+	expect(run.mock.calls.map((c) => [c[1]?.[0], c[1]?.at(-1)])).toEqual([
+		["issue", "state,labels"],
+		["pr", "state,labels,mergedAt"],
+	]);
 	run.mockRejectedValueOnce(new Error("gh: not found"));
 	expect(await githubSubjectState(PR)).toBeUndefined();
 });

@@ -27,7 +27,7 @@ The site's address is `https://openfabriq.dev`; a fork sets `OPENFABRIQ_SITE_URL
 
 ## Audience statistics
 
-To count visits with [Plausible](https://plausible.io), which sets no cookies, build with `PLAUSIBLE_SCRIPT`, the address of its script (for example `https://plausible.example.com/js/script.js`). The pages report under the site's domain, the host of its address, which is the domain to add in Plausible. Without the variable, the pages load no script.
+To count visits with [Plausible](https://plausible.io), which sets no cookies, build with `PLAUSIBLE_SCRIPT`, the address of its script (for example `https://plausible.example.com/js/script.js`). The pages report under the site's domain, the host of its address, which is the domain to add in Plausible. To count them with [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/) too, build with `CLOUDFLARE_ANALYTICS_TOKEN`, the token of the site in Cloudflare (its automatic setup does not reach pages a Worker serves). Without these variables, the pages load no script.
 
 ## Tables of variables
 

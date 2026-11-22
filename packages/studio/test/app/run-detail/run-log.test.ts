@@ -7,6 +7,7 @@ import {
 	sinceQueued,
 	type ToolCall,
 	toolCalls,
+	working,
 } from "../../../app/src/features/run-detail/run-log.js";
 import { detail } from "./detail.js";
 
@@ -182,4 +183,39 @@ it("starts the reviewer in the log at each round of the internal review, in time
 		"2026-11-03T10:00:45.000Z",
 		"2026-11-03T10:02:00.000Z",
 	]);
+});
+
+it("says who works on a running run, and counts from when that began", () => {
+	const started = {
+		status: "running" as const,
+		startedAt: "2026-11-03T10:00:10.000Z",
+	};
+	const phase = {
+		agent: "change-reviewer",
+		round: 1,
+		limit: 2,
+		since: "2026-11-03T10:04:00.000Z",
+	};
+	expect(working(detail(started))).toEqual({
+		label: "Working…",
+		since: "2026-11-03T10:00:10.000Z",
+	});
+	expect(
+		working(detail(started, { phase: { ...phase, doing: "reviewing" } })),
+	).toEqual({
+		label: "change-reviewer is reviewing, round 1 of 2",
+		since: "2026-11-03T10:04:00.000Z",
+	});
+	expect(
+		working(
+			detail(started, {
+				phase: { ...phase, doing: "fixing", agent: "implementer" },
+			}),
+		),
+	).toEqual({
+		label: "implementer is fixing the findings of round 1",
+		since: "2026-11-03T10:04:00.000Z",
+	});
+	expect(working(detail())).toBeUndefined();
+	expect(working(detail({ status: "running" }))).toBeUndefined();
 });

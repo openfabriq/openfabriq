@@ -1,0 +1,12 @@
+// The documentation site on Cloudflare: the static export of `pnpm docs:build`, served as a Worker's assets.
+// Cloudflare builds it from the repository root: build `pnpm docs:build`, deploy `npx wrangler@4.157.0 deploy --config packages/docs/wrangler.jsonc`.
+{
+	"name": "openfabriq-docs",
+	"compatibility_date": "2026-11-01",
+	"assets": {
+		"directory": "./out",
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "404-page"
+	},
+	"routes": [{ "pattern": "openfabriq.dev", "custom_domain": true }]
+}

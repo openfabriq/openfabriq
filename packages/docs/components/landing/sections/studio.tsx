@@ -7,7 +7,8 @@ import { SectionHeading } from "./section-heading";
  */
 export function Studio() {
 	return (
-		<section aria-labelledby="studio" className="py-24 sm:py-32">
+		// data-nosnippet: Google used this section as the home's search snippet instead of its description.
+		<section aria-labelledby="studio" data-nosnippet className="py-24 sm:py-32">
 			<div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
 				<SectionHeading
 					id="studio"

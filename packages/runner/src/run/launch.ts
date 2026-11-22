@@ -199,6 +199,7 @@ export async function launchAgent(step: AgentLaunch): Promise<{
 	const reviews =
 		reviewer &&
 		internalReview({
+			author: automation.agent,
 			reviewer: reviewer.name,
 			limit: factory.limits.review_rounds,
 			budgetUsd: factory.limits.usd_per_run,

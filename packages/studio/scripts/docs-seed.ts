@@ -132,6 +132,8 @@ interface Seed extends Partial<RunRecord> {
 
 const MIN = 60_000;
 let cursor = Date.now();
+/** When a run last worked on each pull request. */
+const lastOn = new Map<string, number>();
 
 function run(seed: Seed): void {
 	const {
@@ -166,6 +168,11 @@ function run(seed: Seed): void {
 		...rest,
 	} as RunRecord);
 	if (ended) cursor += ms;
+	// The merge dates need the last run on each pull request.
+	for (const o of rest.outputs ?? [])
+		if (o.url?.includes("/pull/")) lastOn.set(o.url, cursor);
+	if (rest.isPullRequest && rest.number !== undefined)
+		lastOn.set(pull(rest.number), cursor);
 	const dir = join(projectDir(REPO), "runs", seed.id);
 	mkdirSync(dir, { recursive: true });
 	if (prompt) writeFileSync(join(dir, "prompt.md"), prompt);
@@ -1012,23 +1019,6 @@ run({
 // --- The studio. ---
 
 const merged = new Set([pull(42), pull(45), pull(57)]);
-/** GitHub's merged pull requests: the factory's, one with a person's commit, then the team's. */
-const ago = (hours: number) =>
-	new Date(Date.now() - hours * 3_600_000).toISOString();
-const mergedPulls = [
-	{ n: 42, issue: 7, merge: 3, person: true },
-	{ n: 45, issue: 30, merge: 22 },
-	{ n: 57, issue: 50, merge: 46 },
-	{ n: 31, issue: 220, merge: 120 },
-	{ n: 33, issue: 400, merge: 300 },
-	{ n: 36, issue: 160, merge: 70 },
-	{ n: 38, issue: 900, merge: 610 },
-].map(({ n, issue, merge, person }) => ({
-	url: pull(n),
-	mergedAt: ago(merge),
-	commits: [commit(n), ...(person ? ["5e1f00d"] : [])],
-	issueOpenedAt: ago(issue),
-}));
 /** A canned chat answer about the runs above, streamed like the real one. */
 async function* fakeChat({ signal }: ChatTurnInput): AsyncIterable<ChatEvent> {
 	const wait = (ms: number) => sleep(ms, undefined, { signal });
@@ -1063,12 +1053,18 @@ async function* fakeChat({ signal }: ChatTurnInput): AsyncIterable<ChatEvent> {
 	}
 	yield { type: "done", costUsd: 0.04, durationMs: 4800 };
 }
-const server = startStudio(0, undefined, {
+const server = startStudio(Number(process.env.DOCS_SEED_PORT ?? 0), undefined, {
 	chat: fakeChat,
-	mergedPulls: async () => mergedPulls,
 	subjectState: async (url) =>
 		merged.has(url)
-			? { merged: true, open: false }
+			? {
+					merged: true,
+					// Within the hour after its last run.
+					mergedAt: new Date(
+						(lastOn.get(url) ?? Date.now()) + 40 * MIN,
+					).toISOString(),
+					open: false,
+				}
 			: { merged: false, open: true },
 });
 await new Promise((ok) => server.once("listening", ok));

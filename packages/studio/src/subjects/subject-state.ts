@@ -4,6 +4,8 @@
  */
 export interface SubjectState {
 	merged: boolean;
+	/** When a pull request was merged, as GitHub says. */
+	mergedAt?: string;
 	/** Still open: it may yet be merged or closed, so it is asked about again. */
 	open: boolean;
 	/** Still carries `needs-human`; undefined where the subject has no labels (Linear, Sentry). */

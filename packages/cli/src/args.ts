@@ -18,6 +18,7 @@ export function readCommandLine(args: string[]) {
 			org: { type: "string" },
 			workflows: { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
+			version: { type: "boolean", short: "v", default: false },
 		},
 	});
 	const [given, dir = "."] = positionals;
@@ -29,7 +30,7 @@ export function readCommandLine(args: string[]) {
 export type CommandLine = ReturnType<typeof readCommandLine>;
 
 /** Commands whose output says how they went: in a terminal, it is led by ✓ (or ✗ on failure). */
-const REPORTS = ["init", "apply", "connect", "secret", "update"];
+const REPORTS = ["init", "apply", "connect", "deploy", "secret", "update"];
 
 export const reportsHowItWent = (command: string | undefined) =>
 	REPORTS.includes(command ?? "");

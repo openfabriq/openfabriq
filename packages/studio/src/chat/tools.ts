@@ -8,7 +8,6 @@ import {
 import { z } from "zod";
 import { agentOrderByProject } from "../board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "../board/board.js";
-import type { MergedPulls } from "../metrics/merged-pulls.js";
 import {
 	computeMetrics,
 	PERIODS,
@@ -34,12 +33,11 @@ export function appChatTools(
 	repository: string,
 	subjectStates: (urls: string[], maxAgeMs?: number) => Promise<SubjectStates>,
 	now = () => new Date(),
-	mergedPulls: MergedPulls = async () => [],
 ): ChatTool[] {
 	return [
 		readTool(
 			"metrics",
-			"The numbers of the Overview page over a period: runs by status, cost by agent and by day (chat included), pull requests opened and merged, human interventions (handoffs, failed runs, refused outputs), the runs done without anyone stepping in, what the failed runs cost, the applied outputs by kind, and the gains as GitHub tells: the factory's merged pull requests with no commit of a person, and the median time from issue to merge, the factory's against the team's over 90 days.",
+			"The numbers of the Overview page over a period: runs by status, cost by agent and by day (chat included), runs that needed nobody, pull requests opened and merged, issues an agent opened a pull request for and those resolved by a merge, human interventions (handoffs, failed runs, refused outputs), the applied outputs by action, and the cost by what came of the work.",
 			{ period: z.enum(PERIODS).default("7d") },
 			async ({ period }) => {
 				const runs = readRuns(repository);
@@ -49,7 +47,6 @@ export function appChatTools(
 					now(),
 					await subjectStates(pullRequestUrls(runs)),
 					readChats(repository),
-					await mergedPulls(repository),
 				);
 			},
 		),

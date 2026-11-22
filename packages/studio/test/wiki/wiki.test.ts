@@ -17,6 +17,7 @@ const REPO = "acme/task-app";
 let server: ReturnType<typeof startStudio>;
 let port: number;
 let token: string;
+let wakes = 0;
 
 beforeAll(async () => {
 	process.env.OPENFABRIQ_HOME = mkdtempSync(join(tmpdir(), "openfabriq-home-"));
@@ -28,7 +29,7 @@ beforeAll(async () => {
 	writeApplied(REPO, files);
 	const app = mkdtempSync(join(tmpdir(), "openfabriq-app-"));
 	writeFileSync(join(app, "index.html"), "<!doctype html>");
-	server = startStudio(0, app);
+	server = startStudio(0, app, { wake: () => wakes++ });
 	await new Promise((ok) => server.once("listening", ok));
 	port = (server.address() as AddressInfo).port;
 	token = readFileSync(studioTokenPath(), "utf8");
@@ -96,6 +97,7 @@ it("refuses a refresh that does not come from the studio's own page", async () =
 	expect((await refresh({ cookie: "" })).status).toBe(401);
 	expect((await refresh({}, { project: "acme/other" })).status).toBe(404);
 	expect(requests()).toEqual([]);
+	expect(wakes).toBe(0);
 });
 
 it("asks the engine for one wiki run, like openfabriq run wiki, and not a second one", async () => {
@@ -103,6 +105,8 @@ it("asks the engine for one wiki run, like openfabriq run wiki, and not a second
 	expect(requests()).toEqual([
 		expect.objectContaining({ automation: "wiki", by: "studio" }),
 	]);
+	// The engine takes it now, not at its next reading of GitHub.
+	expect(wakes).toBe(1);
 	// A reload of the page knows: the button stays off.
 	const res = await fetch(`http://127.0.0.1:${port}/api/wiki?project=${REPO}`, {
 		headers: { cookie: `${cookieName(port)}=${token}` },
@@ -112,4 +116,5 @@ it("asks the engine for one wiki run, like openfabriq run wiki, and not a second
 	expect(again.status).toBe(409);
 	expect(again.text).toContain("already being updated");
 	expect(requests()).toHaveLength(1);
+	expect(wakes).toBe(1);
 });

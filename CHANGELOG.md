@@ -4,6 +4,61 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+
+- The studio's chat message box now has a stable name, "Message", so a screen reader announces it the same way whatever suggestion the placeholder shows.
+- A schedule of `*/1 * * * *` now reads "every minute" in `plan` and the studio, instead of "every 1 minutes".
+
+## [0.1.6] - 2026-11-17
+
+### Changed
+
+- The npm package lists keywords (`claude-code`, `ai-agents`, `github-automation`, `self-hosted`…), so `npm search` finds it.
+- The README, also shown on npm, opens with a short introduction and the Quickstart: install with Homebrew or npm, then `openfabriq init` and `openfabriq start`.
+
+## [0.1.5] - 2026-11-17
+
+### Changed
+
+- The studio opens in the light theme by default, even when the system is in dark mode. The theme button goes light, dark, then system, and "system" is now remembered by name: if you had picked it, pick it again once.
+- During an internal review, a run's page now says who works: "change-reviewer is reviewing, round 1 of 2", or "implementer is fixing the findings of round 1", and its timer counts from when that began. A run without a reviewer still shows "Working…" with the run's elapsed time.
+
+## [0.1.4] - 2026-11-16
+
+### Changed
+
+- `openfabriq init` now asks whether an agent should review each change before the pull request opens, whichever example the factory starts from, and adds or removes the reviewer accordingly.
+- The studio's **Generate the wiki** starts the run at once, instead of at the engine's next reading of GitHub, up to a minute later.
+- The studio's overview shows four figures per tab. **Productivity**: autonomy, merge rate, issues resolved by a merged pull request, and human interventions, with the runs per day, autonomy and success as a 7-day average, and the pull requests opened and merged since the start of the period. **Cost and return**: spent, cost per run, per merged pull request and per agent hour, the cost per day and per agent, and where the money went. A note explains each figure that needs it. "Merged as written" and "Issue to merge" are gone, and the studio no longer reads the repository's merged pull requests with GraphQL.
+
+## [0.1.3] - 2026-11-16
+
+### Added
+
+- `openfabriq deploy coolify` runs the engine on your Coolify through its API, with no variables to export: it asks for Coolify's address and token and a Claude credential, masked, uses the GitHub App of `connect github`, gives the studio a domain if you want, with sign-in with GitHub, a password, or both, deploys, and reports the engine's checks. `openfabriq connect github --url` now also saves the app's client for sign-in with GitHub.
+
+### Changed
+
+- `openfabriq connect github` no longer shows the app's key and client secret once it has saved them, and gives the terminal back as soon as it is done. `openfabriq connect github env >> .env` writes a server's variables.
+- The documentation's Coolify page sets the engine up with `openfabriq deploy coolify`; the Claude Code prompt for Coolify is gone.
+
+## [0.1.2] - 2026-11-16
+
+### Added
+
+- `openfabriq --version` (or `-v`) prints the installed version.
+
+### Changed
+
+- Releases are staged on npm by the release workflow, with provenance, and published once a maintainer approves them; the Homebrew formula follows npm by itself.
+
+## [0.1.1] - 2026-11-16
+
+### Changed
+
+- **The documentation site is online** at [openfabriq.dev](https://openfabriq.dev), and the npm package's homepage points to it.
+- **The README** opens with "Your AI software factory, as code.", and its video plays again.
+
 ## [0.1.0] - 2026-11-16
 
 The first public release, 0.1.0, built from November 1 to 7, 2026: a factory described in a few files that runs on a developer's machine or a team's server, easy to set up and pleasant to follow.

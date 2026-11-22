@@ -28,7 +28,6 @@ import { appChatTools } from "./chat/tools.js";
 import { connectorRoutes } from "./connector/routes.js";
 import { jsonAnswer, refuse, send, textAnswer } from "./http/answer.js";
 import { staticFile } from "./http/static-files.js";
-import { cachedMergedPulls, type MergedPulls } from "./metrics/merged-pulls.js";
 import { answerRead, findWrite, readRoutes, writeRoutes } from "./routes.js";
 import { askSubject } from "./subjects/ask-subject.js";
 import { cachedStates } from "./subjects/cached-states.js";
@@ -58,9 +57,9 @@ export function startStudio(
 		chat?: ChatTurn;
 		/** Asks whether a subject is still open; GitHub, Linear and Sentry by default. */
 		subjectState?: AskSubject;
-		/** A repository's merged pull requests; GitHub through gh by default. */
-		mergedPulls?: MergedPulls;
 		access?: StudioAccess;
+		/** Tells the engine a manual run was asked, so it takes it now rather than at its next tick. */
+		wake?: () => void;
 	} = {},
 ): Server {
 	const { password, url: studioUrl, github: client } = deps.access ?? {};
@@ -84,8 +83,7 @@ export function startStudio(
 		github: github !== undefined,
 	};
 	const subjectStates = cachedStates(deps.subjectState ?? askSubject());
-	const mergedPulls = cachedMergedPulls(deps.mergedPulls);
-	const reads = readRoutes(subjectStates, mergedPulls);
+	const reads = readRoutes(subjectStates);
 	// The studio's sign-in and the connector's take the same password: one count of failures.
 	const failures = failedLogins();
 	// On the studio's https address only: Claude reaches it from Anthropic's cloud.
@@ -98,7 +96,7 @@ export function startStudio(
 					failures,
 					server: () =>
 						factoryMcpServer((repository) =>
-							appChatTools(repository, subjectStates, undefined, mergedPulls),
+							appChatTools(repository, subjectStates),
 						),
 					grantsPath: join(home(), "mcp-grants.json"),
 				})
@@ -120,12 +118,7 @@ export function startStudio(
 					chatTurn(
 						input,
 						undefined,
-						appChatTools(
-							input.repository,
-							subjectStates,
-							undefined,
-							mergedPulls,
-						),
+						appChatTools(input.repository, subjectStates),
 					)),
 			projects,
 			threadsDir,
@@ -134,6 +127,7 @@ export function startStudio(
 		refreshWiki: (req, res) =>
 			refreshWiki(req, res, {
 				projects,
+				...(deps.wake ? { wake: deps.wake } : {}),
 				...(studioUrl ? { url: studioUrl } : {}),
 			}),
 	});

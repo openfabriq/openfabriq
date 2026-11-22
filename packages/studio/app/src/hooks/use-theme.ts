@@ -2,7 +2,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEMO, parentDark, watchParentTheme } from "../lib/demo.js";
 
 export type Theme = "system" | "light" | "dark";
-const THEMES: Theme[] = ["system", "light", "dark"];
+/** The button's cycle, from the default: the studio is drawn light first. */
+const THEMES: Theme[] = ["light", "dark", "system"];
 
 /** The theme the person chose, kept on this machine, and the button's next choice. */
 export function useTheme(): [Theme, () => void] {
@@ -12,9 +13,9 @@ export function useTheme(): [Theme, () => void] {
 		if (docs !== undefined) return docs ? "dark" : "light";
 		try {
 			const saved = localStorage.getItem("openfabriq-theme");
-			return saved === "light" || saved === "dark" ? saved : "system";
+			return saved === "dark" || saved === "system" ? saved : "light";
 		} catch {
-			return "system";
+			return "light";
 		}
 	});
 	useEffect(() => {
@@ -28,8 +29,8 @@ export function useTheme(): [Theme, () => void] {
 		};
 		apply();
 		try {
-			if (theme === "system") localStorage.removeItem("openfabriq-theme");
-			else localStorage.setItem("openfabriq-theme", theme);
+			// "system" is saved by name: no key means light, the default.
+			localStorage.setItem("openfabriq-theme", theme);
 		} catch {
 			// private windows: the choice lasts until the tab closes
 		}
@@ -47,7 +48,7 @@ export function useTheme(): [Theme, () => void] {
 		theme,
 		() =>
 			setTheme(
-				(t) => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length] ?? "system",
+				(t) => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length] ?? "light",
 			),
 	];
 }

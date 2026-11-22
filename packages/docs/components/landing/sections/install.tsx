@@ -25,12 +25,9 @@ export function Install({ children }: { children?: ReactNode }) {
 						From install to a running factory.
 					</h2>
 					<p className="mt-6 max-w-lg text-lg leading-relaxed text-pretty text-fd-muted-foreground">
-						<code className="font-mono text-[0.85em] text-fd-foreground">
-							init
-						</code>{" "}
-						opens a Claude Code session that reads your repository, asks a few
-						questions and writes the folder. You review the plan, apply it, and
-						start.
+						<code className="of-inline-code">init</code> opens a Claude Code
+						session that reads your repository, asks a few questions and writes
+						the folder. You review the plan, apply it, and start.
 					</p>
 					<div className="mt-9 flex flex-wrap gap-3">
 						<Link

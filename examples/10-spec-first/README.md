@@ -1,4 +1,4 @@
-# 10: Spec first, a human gate between the spec and the code
+# 10: Spec first, a human gate before the code
 
 For changes worth thinking about before building, the spec comes first, and a person approves it. A maintainer adds `needs-spec` to an issue: an agent writes the spec (problem, goals, non-goals, design, acceptance criteria, open questions) and proposes it as a pull request with no code. A human reviews it, answers the open questions, and merges it. Only then, when they add `ready-for-agent`, does an agent build from the merged spec. Before the code pull request opens, a reviewer on a different model checks the change against the spec, criterion by criterion, in a real browser for what shows in the app, and sends its findings back to the implementer until it approves: nothing of that loop is written on GitHub. A human merges the code too.
 

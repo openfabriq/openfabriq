@@ -33,6 +33,7 @@ export async function refreshWiki(
 		projects: () => string[];
 		url?: URL;
 		request?: typeof requestWikiRun;
+		wake?: () => void;
 	},
 ): Promise<void> {
 	const read = await readAppPost(req, {
@@ -52,5 +53,6 @@ export async function refreshWiki(
 		);
 	if (asked === "busy")
 		return refuse(res, 409, "The wiki is already being updated.");
+	deps.wake?.();
 	send(res, jsonAnswer(202, { asked: true }));
 }

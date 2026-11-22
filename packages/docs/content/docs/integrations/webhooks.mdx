@@ -1,6 +1,6 @@
 ---
 title: Webhooks
-description: Start the factory from any service that can send a signed webhook.
+description: Start the factory from any service that can send a signed webhook, through the relay, and give the agent the event's content as data.
 ---
 
 Any service that can send a webhook can start an automation: a failed deploy, an uptime alert, a payment dispute, a form submission. Your [relay](/deployment/relay/) checks the request's signature and keeps it until the engine collects it, even while your machine sleeps.

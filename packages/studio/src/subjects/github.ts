@@ -13,15 +13,21 @@ export async function githubSubjectState(
 	try {
 		// In app mode, the token of the repository in the address.
 		const env = await githubEnv(pathname.split("/").slice(1, 3).join("/"));
-		const { state, labels } = JSON.parse(
-			await exec("gh", [kind, "view", url, "--json", "state,labels"], {
+		const fields = kind === "pr" ? "state,labels,mergedAt" : "state,labels";
+		const { state, labels, mergedAt } = JSON.parse(
+			await exec("gh", [kind, "view", url, "--json", fields], {
 				...(env ? { env } : {}),
 				// Four asked at a time: one frozen gh would hold the board and the metrics for good.
 				timeoutMs: GH_TIMEOUT_MS,
 			}),
-		) as { state: string; labels: { name: string }[] };
+		) as {
+			state: string;
+			labels: { name: string }[];
+			mergedAt?: string | null;
+		};
 		return {
 			merged: state === "MERGED",
+			...(mergedAt ? { mergedAt } : {}),
 			open: state === "OPEN",
 			needsHuman: includesName(
 				labels.map((l) => l.name),

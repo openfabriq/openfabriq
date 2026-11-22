@@ -1,12 +1,12 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="packages/docs/public/brand/openfabriq-logo-dark.svg">
-    <img src="packages/docs/public/brand/openfabriq-logo-light.svg" alt="openfabriq" width="293" height="52">
+    <source media="(prefers-color-scheme: dark)" srcset="https://openfabriq.dev/brand/openfabriq-logo-dark.svg">
+    <img src="https://openfabriq.dev/brand/openfabriq-logo-light.svg" alt="openfabriq" width="293" height="52">
   </picture>
 </p>
 
 <p align="center">
-  <strong>The Terraform of software factories.</strong><br>
+  <strong>Your AI software factory, as code.</strong><br>
   AI agents that triage, implement, review and fix your GitHub repository,<br>
   described in readable files and run on your machine or your team's server.
 </p>
@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg" alt="macOS and Linux">
 </p>
 
-https://github.com/user-attachments/assets/fdcf155e-c12c-477c-b8cc-7241f437d87c
+https://github.com/user-attachments/assets/495cb83b-c666-4ce6-a7ce-a97feb6db24c
 
 <p align="center">
   <sub>openfabriq in 85 seconds. Voice by elevenlabs.io · Music: The Warm Minimal by Pumpupthemind (Pixabay)</sub>
@@ -33,15 +33,38 @@ https://github.com/user-attachments/assets/fdcf155e-c12c-477c-b8cc-7241f437d87c
 
 ---
 
-openfabriq runs a **software factory**: a small team of Claude agents that triage issues, implement them, review pull requests, investigate errors or keep documentation up to date, each at a moment you choose.
+openfabriq runs a team of Claude agents on your GitHub repository: they triage issues, implement them and review pull requests. You describe them in an `openfabriq/` folder of the repository, and the engine runs them on your machine or your team's server. Agents never hold GitHub credentials, and a person merges.
 
-You describe the factory in an `openfabriq/` folder of your repository, in Markdown and YAML that a non-developer can read. `openfabriq plan` shows what will change, security first; `openfabriq apply` applies it. The engine then runs on your computer or your team's server, with your Claude Code subscription (or an Anthropic API key) and your `gh` login. Agents propose; the engine writes to GitHub only what you allowed; a person merges.
+## Quickstart
 
-It is for teams that keep their code on GitHub, already use Claude Code, and want agents on their repository without handing them the keys.
+You need macOS or Linux, with [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](https://cli.github.com) logged in.
+
+Install with Homebrew:
+
+```bash
+brew install openfabriq/tap/openfabriq
+```
+
+Or with npm (Node.js 24+):
+
+```bash
+npm install -g openfabriq
+```
+
+Then, in your repository:
+
+```bash
+openfabriq init     # Claude Code reads the repository and writes openfabriq/ with you
+openfabriq start    # applies the factory once you confirm, runs it and serves the studio
+```
+
+Label an issue `ready-for-agent` and watch the run appear. Later, `openfabriq plan` shows what a change to the folder would do, security first, and `openfabriq apply` applies it. On Linux, `openfabriq doctor` lists the sandbox packages to install.
+
+> **This repository runs its own factory**: see its [`openfabriq/`](openfabriq) folder and the [pull requests it opened](https://github.com/openfabriq/openfabriq/pulls?q=is%3Apr+author%3Aapp%2Fopenfabriq).
 
 <p align="center">
-  <img src="packages/docs/public/screenshots/studio/run.png" alt="The studio showing a run: issue #44 was labeled, the implementer opened a pull request in 11 minutes for $1.36, and the engine ran the project's tests, type check and lint." width="880">
-  <br><sub>A run in the studio: what started it, what the agent reported, and the checks the engine ran before the pull request left the machine.</sub>
+  <img src="packages/docs/public/screenshots/studio/board.png" alt="The studio's board: issues and pull requests in four columns, Waiting, Working, Needs you and Done, each card with the agent on it and what it cost." width="880">
+  <br><sub>The board in the studio: every issue and pull request the factory touches, the agent on it, what it cost, and what needs you.</sub>
 </p>
 
 ## A factory is a folder
@@ -110,30 +133,15 @@ The issue text is data, not instructions.
 
 A maintainer adds `ready-for-agent` to an issue. Within a minute the implementer starts in a fresh checkout; a few minutes later a pull request is open, and it has passed `pnpm test` and `pnpm lint`. Stages hand work to each other through GitHub, as a team would: a label, a pull request or a review starts the next automation.
 
-## Quickstart
+## Review the plan, then apply
 
-**You need** macOS or Linux, [Node.js](https://nodejs.org) 24+, [Claude Code](https://claude.com/claude-code) logged in, the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`), and a git identity. The first command checks Claude Code, the GitHub CLI and the git identity, and says how to fix what is missing. On Linux, also install `bubblewrap`, `socat` and `ripgrep` for the sandbox: `openfabriq doctor` checks them.
+`openfabriq plan` compares the folder with the factory this machine runs and lists every change. Security changes come first: a command that will run on the machine, a new maintainer, a tool an agent gains, a right an automation gains. Agents, automations and labels to create follow.
 
-**Install** the command:
+<p align="center">
+  <img src="packages/docs/public/screenshots/cli/plan.png" alt="openfabriq plan on a new factory: the security changes first, in red, each line led by a green +." width="880">
+</p>
 
-```bash
-brew install openfabriq/tap/openfabriq    # or: npm install -g openfabriq
-```
-
-**Create and run a factory**, in your repository:
-
-```bash
-cd your-repository
-openfabriq init        # Claude Code reads the repository, asks a few questions, writes openfabriq/
-openfabriq validate    # checks the files, offline
-openfabriq plan        # shows what apply would change, security changes first
-openfabriq apply       # creates the missing labels on GitHub; this machine now runs the factory
-openfabriq start       # watches GitHub every minute and serves the studio
-```
-
-`start` prints the studio's address (`http://127.0.0.1:4310/?token=…`): what the factory did and what it cost, each run read like a Claude Code session, a board, the workflow as a graph, and a read-only chat about the factory. Label an issue `ready-for-agent` and watch the run appear.
-
-No Claude Code at hand? `openfabriq init --example 01-quickstart` copies a [template](#templates) to adapt by hand.
+Nothing changes until `openfabriq apply`. It asks for confirmation, creates the missing labels on GitHub, and copies `openfabriq/` to `~/.openfabriq/`; that copy is what runs. A pull request that edits the folder changes nothing until it is merged and applied, so run `plan` on it and review the effects of the change, not only its text.
 
 ## How it works
 

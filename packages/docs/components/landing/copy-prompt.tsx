@@ -4,7 +4,6 @@ import { Check, ChevronRight, Copy, SquareTerminal, X } from "lucide-react";
 import { useRef } from "react";
 import { useCopy } from "@/hooks/use-copy";
 import { cn } from "@/lib/cn";
-import { COOLIFY_PROMPT } from "@/lib/coolify-prompt";
 import { INSTALL_PROMPT } from "@/lib/install-prompt";
 import { MACHINE_PROMPT, SETUP_PROMPT } from "@/lib/setup-prompt";
 
@@ -12,13 +11,11 @@ const PROMPTS = {
 	setup: SETUP_PROMPT,
 	machine: MACHINE_PROMPT,
 	install: INSTALL_PROMPT,
-	coolify: COOLIFY_PROMPT,
 };
 
 /**
  * Copies a prompt, to paste into Claude Code: by default the one that sets openfabriq up in a
- * repository; `machine` only installs openfabriq on this machine; `install` installs the engine on a server over SSH, `coolify` on a Coolify through
- * its API. As a banner, the prompt can be read first; compact (the setup prompt only), it is one
+ * repository; `machine` only installs openfabriq on this machine; `install` installs the engine on a server over SSH. As a banner, the prompt can be read first; compact (the setup prompt only), it is one
  * line that links to where it can be read.
  */
 export function CopyPrompt({
@@ -145,7 +142,8 @@ export function CopyPrompt({
 							</strong>{" "}
 							Paste one prompt into Claude Code on your computer: it sets the
 							server up over SSH and starts the engine. It never asks for your
-							tokens: you type them into <code>.env</code> yourself.
+							tokens: you type them into{" "}
+							<code className="of-inline-code">.env</code> yourself.
 						</>
 					) : kind === "machine" ? (
 						<>
@@ -156,16 +154,6 @@ export function CopyPrompt({
 							openfabriq and checks your logins. It never logs in or installs
 							system packages for you: it tells you the command.
 						</>
-					) : kind === "coolify" ? (
-						<>
-							<strong className="font-medium text-fd-foreground">
-								Let Claude Code set it up on your Coolify.
-							</strong>{" "}
-							Paste one prompt into Claude Code on your computer: it creates the
-							application through Coolify's API, adds its variables and deploys
-							it. Your credentials stay in your terminal's environment: it never
-							prints them.
-						</>
 					) : (
 						<>
 							<strong className="font-medium text-fd-foreground">
@@ -173,7 +161,7 @@ export function CopyPrompt({
 							</strong>{" "}
 							One prompt for Claude Code installs openfabriq and what it needs,
 							writes a first factory with you and saves it. You then run one
-							command: <code>openfabriq start</code>.
+							command: <code className="of-inline-code">openfabriq start</code>
 						</>
 					)}
 				</p>

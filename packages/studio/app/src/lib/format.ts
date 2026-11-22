@@ -40,15 +40,6 @@ export const duration = (ms?: number) => {
 	return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
 };
 
-/** "45 min", "5 h 20 min", "3.2 days": how long something waited. */
-export const wait = (ms: number) => {
-	const min = Math.round(ms / 60_000);
-	if (min < 60) return `${min} min`;
-	if (min < 48 * 60)
-		return `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}`;
-	return `${(min / 1440).toFixed(1)} days`;
-};
-
 export const tokens = (n: number) =>
 	n >= 1_000_000
 		? `${(n / 1_000_000).toFixed(1)}M`

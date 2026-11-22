@@ -210,6 +210,7 @@ Gently rounded: 6px on tags, 8px on small controls, 12px on fields, buttons and 
 ### Buttons
 - **Primary:** ink fill, panel text, 44px tall, 12px radius, 20px horizontal padding, 15px medium, raised shadow; hover drops to 90% opacity and the trailing arrow slides 2px.
 - **Ghost control:** 28px, 6px radius, muted text, accent-grey fill on hover (Pause/Play, copy).
+- **Film call:** the hero's third action, after the install command: a 44px ink disc with a play mark, rings that leave it in a slow, steady wave, one every 1.6s (`of-beckon`, still under reduced motion), and two lines, "Watch the film" (15px semibold) over "85 seconds" (13px muted). Hover raises a soft pill behind disc and words (sunken in light, panel in dark), nothing else moves. The film opens in a modal at 30% volume.
 
 ### Copy Command
 - A 44px mono field with a muted `$`, the command, and an icon button that turns into a green check (arriving via `of-digit`) and announces "Copied". The panel tone sits on the ground; the quiet (sunken) tone sits inside cards and may wrap, always keeping its last word whole.

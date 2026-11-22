@@ -3,7 +3,7 @@ import { GITHUB } from "./layout.shared";
 /**
  * The prompt a visitor pastes into Claude Code, on their own computer, to install the engine on a
  * server over SSH. The secrets stay out of the conversation: the agent writes .env with them
- * empty, and the person fills them in. Coolify has its own prompt (coolify-prompt.ts).
+ * empty, and the person fills them in. Coolify has its command, openfabriq deploy coolify.
  */
 export const INSTALL_PROMPT = `Install the openfabriq engine on a server. openfabriq runs AI agents described in an openfabriq/ folder of GitHub repositories; the engine is one Docker container: ${GITHUB}
 

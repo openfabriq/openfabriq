@@ -33,8 +33,8 @@ it("explains when there is no factory", () => {
 });
 
 it("never reads a folder that holds no factory, like a whole repository", () => {
-	// openfabriq's own repository: no openfabriq/ folder, no factory.yaml, and node_modules.
-	expect(validateCommand(ROOT)).toEqual({
+	// The CLI's package: no openfabriq/ folder, no factory.yaml, and node_modules.
+	expect(validateCommand(join(ROOT, "packages/cli"))).toEqual({
 		code: 1,
 		output: expect.stringContaining('Run "openfabriq init"'),
 	});

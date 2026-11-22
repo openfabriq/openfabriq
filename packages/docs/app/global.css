@@ -274,6 +274,44 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	animation: of-pulse 1.6s var(--of-ease) infinite;
 }
 
+/* The film's play disc calls: rings leave it in a steady wave, one starting as the last one fades. */
+@keyframes of-beckon {
+	from {
+		box-shadow: 0 0 0 0
+			color-mix(in oklch, var(--color-fd-foreground) 40%, transparent);
+	}
+	to {
+		box-shadow: 0 0 0 12px transparent;
+	}
+}
+.of-beckon::before,
+.of-beckon::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	/* A gentle ease-out, not the site's sharp one: a wave has no dead time between its rings. */
+	animation: of-beckon 3.2s cubic-bezier(0.33, 0.6, 0.5, 1) infinite;
+}
+.of-beckon::after {
+	animation-delay: -1.6s;
+}
+
+/* A command or a key inside a sentence: mono on a light tint of the text colour, so it reads as something to type, on any surface. */
+.of-inline-code {
+	padding: 0.12em 0.4em;
+	border: 1px solid
+		color-mix(in oklch, var(--color-fd-foreground) 9%, transparent);
+	border-radius: 6px;
+	background: color-mix(in oklch, var(--color-fd-foreground) 5%, transparent);
+	color: var(--color-fd-foreground);
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	white-space: nowrap;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+
 /* The engine's link: a signal travels from the cause to the effect. */
 @keyframes of-signal {
 	from {
@@ -339,6 +377,8 @@ html:not(.dark) :where(figure.shiki, .of-code) span[style*="#6E7781"] {
 	.of-digit,
 	.of-enter,
 	.of-pulse,
+	.of-beckon::before,
+	.of-beckon::after,
 	.of-signal {
 		animation: none;
 	}

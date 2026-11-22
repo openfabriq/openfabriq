@@ -128,16 +128,35 @@ describe("connectGithub", () => {
 			app_id: "42",
 			slug: "openfabriq-acme",
 			private_key: "PEM",
+			client_id: "Iv1.client",
+			client_secret: "client-secret",
+			studio_url: "https://factory.example.com",
 		});
 		expect(statSync(join(home, "secrets.json")).mode & 0o777).toBe(0o600);
+		// Saved: the key and the client secret stay out of the terminal, where they would remain.
 		expect(result.output).toContain("GITHUB_APP_ID=42");
 		expect(result.output).toContain(
-			`GITHUB_APP_PRIVATE_KEY=${Buffer.from("PEM").toString("base64")}`,
+			'"openfabriq connect github env >> .env" writes its variables',
 		);
-		expect(result.output).toContain("GITHUB_APP_CLIENT_ID=Iv1.client");
-		expect(result.output).toContain("GITHUB_APP_CLIENT_SECRET=client-secret");
-		// The key is in the command's result, never in what it prints along the way.
-		expect(printed.join("\n")).not.toContain("PEM");
+		const shown = [...printed, result.output].join("\n");
+		for (const secret of [
+			"PEM",
+			Buffer.from("PEM").toString("base64"),
+			"client-secret",
+		])
+			expect(shown).not.toContain(secret);
+		// What a server's .env needs, on demand.
+		const env = await connectGithub(
+			{ ask: async () => "", print: () => {} },
+			{ action: "env" },
+		);
+		expect(env.code).toBe(0);
+		expect(env.output.split("\n").filter((l) => !l.startsWith("#"))).toEqual([
+			"GITHUB_APP_ID=42",
+			`GITHUB_APP_PRIVATE_KEY=${Buffer.from("PEM").toString("base64")}`,
+			"GITHUB_APP_CLIENT_ID=Iv1.client",
+			"GITHUB_APP_CLIENT_SECRET=client-secret",
+		]);
 	});
 
 	it("still gives the key when it cannot save it: GitHub shows it only once", async () => {
@@ -181,6 +200,15 @@ describe("connectGithub", () => {
 		});
 		expect(result.code).toBe(1);
 		expect(() => saved()).toThrow();
+	});
+
+	it("says to connect first when env finds no app", async () => {
+		expect(
+			await connectGithub(
+				{ ask: async () => "", print: () => {} },
+				{ action: "env" },
+			),
+		).toMatchObject({ code: 1, output: expect.stringContaining("first") });
 	});
 
 	it("prints a repository's token only in app mode", async () => {

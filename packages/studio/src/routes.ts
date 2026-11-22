@@ -17,7 +17,6 @@ import { agentOrderByProject } from "./board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "./board/board.js";
 import { listThreads, readThread, threadsDir } from "./chat/threads.js";
 import { matchPath } from "./http/match-path.js";
-import type { MergedPulls } from "./metrics/merged-pulls.js";
 import { PERIODS, pullRequestUrls, runsInPeriod } from "./metrics/metrics.js";
 import { projectsMetrics } from "./metrics/projects.js";
 import { runWithSubjectState } from "./runs/run-detail.js";
@@ -98,7 +97,6 @@ const ofFactory = (
 /** The GET routes of the API, by path. */
 export function readRoutes(
 	subjectStates: AskSubjects,
-	mergedPulls: MergedPulls = async () => [],
 ): Record<string, ReadRoute> {
 	return {
 		"/api/projects": ({ projects }) => ok(projects),
@@ -135,12 +133,7 @@ export function readRoutes(
 			const states = await subjectStates(
 				pullRequestUrls(runsInPeriod(all, period, new Date())),
 			);
-			const merged = Object.fromEntries(
-				await Promise.all(
-					repositories.map(async (r) => [r, await mergedPulls(r)] as const),
-				),
-			);
-			return ok(projectsMetrics(repositories, all, period, states, merged));
+			return ok(projectsMetrics(repositories, all, period, states));
 		},
 		"/api/settings": ofFactory((repository, { factory, files }) =>
 			settingsOf(repository, factory, files["factory.yaml"]),

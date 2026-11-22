@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -242,8 +242,24 @@ export async function labelReviewedPush(
 	);
 }
 
+/**
+ * What a reviewed run is doing now, as phase.json keeps it for the studio while it runs: its
+ * reviewer reading a round, or its author fixing the findings of one. No file: the author works
+ * on the change, before any review or after the last one.
+ */
+export interface ReviewPhase {
+	doing: "reviewing" | "fixing";
+	agent: string;
+	round: number;
+	limit: number;
+	/** When this phase began. */
+	since: string;
+}
+
 /** What one review needs from the run: the reviewer's launch, the worktree to put back, the budget and the time. */
 export interface ReviewStep {
+	/** The agent whose change is reviewed. */
+	author: string;
 	reviewer: string;
 	limit: number;
 	/** usd_per_run: the budget the reviews of a run share. */
@@ -270,6 +286,12 @@ export interface ReviewStep {
 export function internalReview(step: ReviewStep) {
 	const all: ReviewRound[] = [];
 	const spent = () => all.reduce((sum, r) => sum + r.costUsd, 0);
+	const phaseFile = join(step.runDir, "phase.json");
+	const phase = (doing: ReviewPhase["doing"], agent: string, round: number) =>
+		writeFileSync(
+			phaseFile,
+			`${JSON.stringify({ doing, agent, round, limit: step.limit, since: step.now().toISOString() } satisfies ReviewPhase)}\n`,
+		);
 
 	async function once(): Promise<ReviewRound> {
 		const round = all.length + 1;
@@ -342,12 +364,17 @@ export function internalReview(step: ReviewStep) {
 		rounds: all,
 		limit: step.limit,
 		async run(): Promise<ReviewRound> {
+			phase("reviewing", step.reviewer, all.length + 1);
 			const round = await once();
 			all.push(round);
 			writeFileSync(
 				join(step.runDir, "reviews.json"),
 				`${JSON.stringify(all, null, 2)}\n`,
 			);
+			// The harness's rule: needs_changes within the limit goes back to the author.
+			if (round.verdict === "needs_changes" && all.length < step.limit)
+				phase("fixing", step.author, round.round);
+			else rmSync(phaseFile, { force: true });
 			return round;
 		},
 		outcome: () => reviewOutcome(step.reviewer, all, step.limit),

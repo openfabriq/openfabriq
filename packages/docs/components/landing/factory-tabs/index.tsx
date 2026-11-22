@@ -173,7 +173,7 @@ export function FactoryTabs({
 							<p className="text-[16px] leading-snug font-semibold text-balance text-fd-foreground">
 								{about.title}
 							</p>
-							<p className="mt-2.5 text-[14px] leading-relaxed text-pretty text-fd-muted-foreground [&_code]:font-mono [&_code]:text-[0.9em] [&_code]:text-fd-foreground">
+							<p className="mt-2.5 text-[14px] leading-relaxed text-pretty text-fd-muted-foreground">
 								{about.text}
 							</p>
 						</div>

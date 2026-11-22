@@ -32,6 +32,8 @@ export function runDetail(
 		...(files.changedFiles ? { changedFiles: files.changedFiles } : {}),
 		// reviewed_by: how the internal review went, round by round.
 		...(files.reviews ? { reviews: files.reviews } : {}),
+		// reviewed_by: who works now; a run that ended does nothing more.
+		...(files.phase && run.status === "running" ? { phase: files.phase } : {}),
 		transcript: parseTranscript(files.transcript),
 		story: runStory(run, all, graph, factory),
 	};

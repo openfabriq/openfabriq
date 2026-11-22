@@ -1,5 +1,4 @@
 import type { AgentHue } from "../../lib/agent-hue.js";
-import { duration, wait } from "../../lib/format.js";
 import type { Board, Metrics } from "../../lib/types.js";
 
 // The overview's figures from a project's metrics: what each card shows, in words and numbers.
@@ -25,12 +24,15 @@ export function axisTicks(max: number, minStep = 0): number[] {
 }
 
 const STEPPED_IN = [
-	{ key: "handoffs", words: ["handoff", "handoffs"] },
+	{ key: "handoffs", words: ["handed to a person", "handed to a person"] },
 	{ key: "failedRuns", words: ["failed run", "failed runs"] },
-	{ key: "refusedOutputs", words: ["refused output", "refused outputs"] },
+	{
+		key: "refusedOutputs",
+		words: ["blocked by the factory's rules", "blocked by the factory's rules"],
+	},
 ] as const;
 
-/** "2 handoffs · 1 failed run"; a figure made of one part only names it, its number being the figure's. */
+/** "2 handed to a person · 1 failed run"; a figure made of one part only names it, its number being the figure's. */
 const breakdown = (parts: [number, string][]) => {
 	const [first, ...rest] = parts;
 	return first && rest.length === 0
@@ -38,93 +40,45 @@ const breakdown = (parts: [number, string][]) => {
 		: parts.map(([n, word]) => `${n} ${word}`).join(" · ");
 };
 
+/** A share as a whole percent, such as "89%"; undefined of nothing. */
+const share = (part: number, whole: number) =>
+	whole > 0 ? `${Math.round((part / whole) * 100)}%` : undefined;
+
 /** The productivity cards' lines: what each figure is made of, only what is not zero. */
 export function productivity(m: Metrics) {
+	const { opened, merged, closed, unknown } = m.pullRequests;
+	const open = opened - merged - closed - unknown;
+	const { finished, autonomous } = m.autonomy;
+	const issues = m.issues;
 	const { outputs } = m;
 	return {
-		/** "2 handoffs · 1 failed run". */
+		/** The finished runs nobody had to step in, "89%", and of how many. */
+		autonomy: share(autonomous, finished),
+		autonomyWords:
+			finished > 0 ? `${autonomous} of ${finished} finished runs` : "",
+		/** The merged share of the pull requests a person decided on, "82%"; the open ones are not counted. */
+		mergeRate: share(merged, merged + closed),
+		mergeRateWords: [
+			merged + closed > 0 && `${merged} of ${merged + closed} decided`,
+			open > 0 && `${open} still open, not counted`,
+		]
+			.filter(Boolean)
+			.join(" · "),
+		/** "of 27 an agent opened a pull request for". */
+		issuesWords:
+			issues.attempted > 0
+				? `of ${issues.attempted} an agent opened a pull request for`
+				: "",
+		/** "2 handed to a person · 1 failed run". */
 		steppedInWords: breakdown(
 			STEPPED_IN.filter((s) => m.interventions[s.key] > 0).map((s) => {
 				const n = m.interventions[s.key];
 				return [n, s.words[n === 1 ? 0 : 1]];
 			}),
 		),
-		/** The applied outputs, most first, and the most as the bars' full width. */
+		/** The applied outputs, most first. */
 		outputs,
 		applied: outputs.reduce((sum, a) => sum + a.count, 0),
-		most: outputs[0]?.count ?? 0,
-	};
-}
-
-/** The finished runs nobody had to step in on: "87%", and "26 of 30 finished runs · 2h 10m of agent work". */
-export function unaided(m: Metrics) {
-	const finished = m.runs.succeeded + m.runs.failed;
-	return {
-		share:
-			finished > 0
-				? `${Math.round((m.runs.unaided / finished) * 100)}%`
-				: undefined,
-		words: [
-			finished > 0 && `${m.runs.unaided} of ${finished} finished runs`,
-			m.agentTimeMs > 0 && `${duration(m.agentTimeMs)} of agent work`,
-		]
-			.filter(Boolean)
-			.join(" · "),
-	};
-}
-
-const pulls = (n: number) => `${n} pull ${n === 1 ? "request" : "requests"}`;
-
-/** The gains cards: merged as written, and how long an issue waits for its merge against the team. */
-export function gains(m: Metrics) {
-	const { asWritten, changed, unknown } = m.gains.merged;
-	const { factoryMs, factoryPulls, teamMs, teamPulls } = m.gains.issueToMerge;
-	return {
-		/** Undefined until a merged pull request can be told. */
-		asWritten: asWritten + changed > 0 ? asWritten : undefined,
-		/** "of 5 merged · 1 changed by a person · 2 not checked". */
-		asWrittenWords: [
-			asWritten + changed + unknown > 0 &&
-				`of ${asWritten + changed + unknown} merged`,
-			changed > 0 && `${changed} changed by a person`,
-			unknown > 0 && `${unknown} not checked`,
-		]
-			.filter(Boolean)
-			.join(" · "),
-		issueToMerge: factoryMs === undefined ? undefined : wait(factoryMs),
-		/** "median of 4 pull requests · your team: 3.2 days, 12 pull requests in 90 days". */
-		issueToMergeWords: [
-			factoryPulls > 0 && `median of ${pulls(factoryPulls)}`,
-			teamMs !== undefined &&
-				`your team: ${wait(teamMs)}, ${pulls(teamPulls)} in 90 days`,
-		]
-			.filter(Boolean)
-			.join(" · "),
-	};
-}
-
-/** The return cards: what a pull request merged as written cost, and the time an issue gains against the team's. */
-export function returns(m: Metrics) {
-	const { asWritten } = m.gains.merged;
-	const { factoryMs, teamMs } = m.gains.issueToMerge;
-	const gap =
-		factoryMs !== undefined && teamMs !== undefined
-			? teamMs - factoryMs
-			: undefined;
-	return {
-		perAsWritten: asWritten > 0 ? m.cost.totalUsd / asWritten : undefined,
-		/** "4.2 days", or "3 h lost" when the factory is slower. */
-		timeGained:
-			gap === undefined
-				? undefined
-				: gap >= 0
-					? wait(gap)
-					: `${wait(-gap)} lost`,
-		/** "issue to merge: 6 h, your team: 4.2 days". */
-		timeGainedWords:
-			factoryMs !== undefined && teamMs !== undefined
-				? `issue to merge: ${wait(factoryMs)}, your team: ${wait(teamMs)}`
-				: "",
 	};
 }
 
@@ -156,7 +110,65 @@ export function costRatios(m: Metrics) {
 				? (m.cost.totalUsd - m.cost.chatUsd) / m.runs.total
 				: undefined,
 		perMergedPr: merged > 0 ? m.cost.totalUsd / merged : undefined,
+		/** The agents' cost, without the chat, per hour they spent working. */
+		perAgentHour:
+			m.agentTimeMs > 0
+				? (m.cost.totalUsd - m.cost.chatUsd) / (m.agentTimeMs / 3_600_000)
+				: undefined,
 	};
+}
+
+const OUTCOMES = [
+	{ key: "merged", label: "Merged pull requests", color: "var(--ok)" },
+	{ key: "open", label: "Pull requests still open", color: "var(--accent)" },
+	{ key: "closed", label: "Closed without merge", color: "var(--bad)" },
+	{ key: "failed", label: "Failed runs", color: "var(--warn)" },
+	{ key: "other", label: "Other work", color: "var(--fg-2)" },
+] as const;
+
+/** Where the money went: the runs' cost by what came of their work, then the chat; only what spent. */
+export function outcomeParts(m: Metrics) {
+	return [
+		...OUTCOMES.map((o) => ({ ...o, value: m.cost.byOutcome[o.key] })),
+		{
+			key: "chat",
+			label: "Chat",
+			color: "var(--fg-3)",
+			value: m.cost.chatUsd,
+		},
+	].filter((p) => p.value > 0);
+}
+
+type Day = Metrics["byDay"][number];
+
+/**
+ * Day by day, the share of the finished runs that needed nobody, and of those that succeeded, over the
+ * `window` days up to that day (fewer at the start of the period); undefined while none has finished.
+ */
+export function rollingRates(byDay: Day[], window = 7) {
+	return byDay.map((d, i) => {
+		const span = byDay.slice(Math.max(0, i - window + 1), i + 1);
+		const sum = (key: "finished" | "succeeded" | "autonomous") =>
+			span.reduce((total, x) => total + x[key], 0);
+		const finished = sum("finished");
+		return {
+			day: d.day,
+			finished,
+			autonomy: finished > 0 ? sum("autonomous") / finished : undefined,
+			success: finished > 0 ? sum("succeeded") / finished : undefined,
+		};
+	});
+}
+
+/** The factory's pull requests opened and merged since the start of the period, day by day. */
+export function cumulativePullRequests(byDay: Day[]) {
+	let opened = 0;
+	let merged = 0;
+	return byDay.map((d) => {
+		opened += d.opened;
+		merged += d.merged;
+		return { day: d.day, opened, merged };
+	});
 }
 
 /** How many of the project's cards wait for a person; undefined until the board is read. */

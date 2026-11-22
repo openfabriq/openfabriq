@@ -44,14 +44,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
 	const t = template((await params).slug);
 	if (!t) return {};
-	return {
-		...pageMetadata({
-			title: t.title,
-			description: t.does,
-			path: `/templates/${t.slug}/`,
-		}),
-		title: `${t.title} · Templates`,
-	};
+	return pageMetadata({
+		title: t.title,
+		description: t.does,
+		path: `/templates/${t.slug}/`,
+	});
 }
 
 /** A README link, from where it is written (examples/<name>/) to where the reader is. */

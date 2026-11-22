@@ -25,6 +25,8 @@ export function Composer({
 			<ComposerPrimitive.Input
 				rows={1}
 				autoFocus
+				// A stable name: the placeholder changes with the suggestion.
+				aria-label="Message"
 				placeholder={
 					suggestion ?? "Ask about the factory, its agents or its runs"
 				}

@@ -145,7 +145,7 @@ export function RunDemo() {
 							<p className="mt-1 text-xs text-fd-muted-foreground">
 								The agent proposes. The engine runs the checks, then applies
 								only what
-								<code className="mx-1 font-mono">can</code>allows.
+								<code className="of-inline-code mx-1">can</code>allows.
 							</p>
 							{outputState(log, 0) === null && (
 								<p className="mt-4 rounded-xl border border-dashed border-of-line px-3 py-4 text-center text-xs text-fd-muted-foreground">

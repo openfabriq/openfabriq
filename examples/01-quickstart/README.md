@@ -1,4 +1,4 @@
-# 01: Quickstart
+# 01: Quickstart, from an issue to a pull request
 
 The smallest useful factory: one repository, one agent, one deliverable. A maintainer adds the `ready-for-agent` label to an issue; the implementation agent opens a pull request; a human reviews and merges. To change the pull request, the maintainer asks in a comment that mentions `@openfabriq`: "@openfabriq add a test for an empty title". That part is native: the engine sends the implementer back to its own pull request when a maintainer mentions `@openfabriq`, without an automation to write. Two automations send it back too, written down: when a review requests changes, and when the pull request conflicts with its base.
 
