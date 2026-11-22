@@ -127,6 +127,20 @@ function LearningPage({
 					improvements to skills and agent.md, by pull request only.
 				</p>
 			)}
+			{data.learning && data.unheard.length > 0 && (
+				<p className="panel mb-6 px-5 py-4 text-sm text-fg-2">
+					Failed checks and changes a maintainer asks for on GitHub count as
+					failures only when an automation of the factory runs on them. None
+					runs on{" "}
+					{data.unheard.map((event, i) => (
+						<span key={event}>
+							{i > 0 && " or "}
+							{code(event)}
+						</span>
+					))}
+					: learning does not see those failures.
+				</p>
+			)}
 			<div className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
 				<Card title="Failures">
 					<Figure value={n.failures}>over the period</Figure>
@@ -220,8 +234,8 @@ function LessonPage({
 	id: string;
 }) {
 	const { data, error } = useApi<LessonAnswer>(
+		// Read once: the diff comes from GitHub.
 		`/api/learning/${encodeURIComponent(id)}${query({ project })}`,
-		30_000,
 	);
 	if (error && !data) return <ErrorNote>{error}</ErrorNote>;
 	if (!data) return <PageSkeleton />;
@@ -253,7 +267,14 @@ function LessonPage({
 					<p className="panel px-5 py-4 text-sm text-fg">{data.rule}</p>
 				</Section>
 				{data.diff && (
-					<Section title="The change it proposes">
+					<Section
+						title="The change it proposes"
+						aside={
+							data.diffFrom === "run"
+								? "As the learning run proposed it: GitHub did not answer"
+								: "As on the pull request"
+						}
+					>
 						<div className="panel overflow-hidden">
 							{data.diff.files.map((file) => (
 								<div key={file.path}>

@@ -116,6 +116,10 @@ beforeAll(async () => {
 	const app = temp("openfabriq-app-");
 	writeFileSync(join(app, "index.html"), "<!doctype html><title>app</title>");
 	server = startStudio(0, app, {
+		pullDiff: async (_repo, number) =>
+			number === 12
+				? "diff --git a/x.md b/x.md\n--- a/x.md\n+++ b/x.md\n@@ -1 +1,2 @@\n x\n+Run the tests.\n"
+				: undefined,
 		subjectState: async (url) => {
 			asked.push(url);
 			if (url === ISSUE) return { merged: false, open: true };
@@ -548,6 +552,8 @@ it("serves learning: its numbers, its lessons and one lesson's improvement, read
 	const { status, body } = await json(`/api/learning?${p}&period=all`);
 	expect(status).toBe(200);
 	expect(body.learning).toBeUndefined();
+	// 02-sdlc's fixture reworks a pull request on requested changes, not on failed checks.
+	expect(body.unheard).toEqual(["pull_request.checks_failed"]);
 	expect(body.numbers).toEqual({
 		failures: 1,
 		lessons: 1,
@@ -560,6 +566,8 @@ it("serves learning: its numbers, its lessons and one lesson's improvement, read
 	expect(detail.body).toMatchObject({
 		id: "L1",
 		targetUrl: `https://github.com/${REPO}/blob/HEAD/openfabriq/agents/implementer/agent.md`,
+		diffFrom: "pull request",
+		diff: { total: 1, files: [{ path: "x.md", add: 1, del: 0 }] },
 		failures: [
 			{ id: "run-check:check", summary: 'the check "test" failed (npm test)' },
 			{ id: "old:check" },

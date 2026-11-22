@@ -1081,7 +1081,7 @@ const lessons = [
 		status: "proposed",
 		failures: [
 			{
-				id: "implement-37:changes_requested",
+				id: "implement-37:review",
 				agent: "implementer",
 				at: ago(9 * DAY),
 			},
@@ -1158,6 +1158,11 @@ async function* fakeChat({ signal }: ChatTurnInput): AsyncIterable<ChatEvent> {
 }
 const server = startStudio(Number(process.env.DOCS_SEED_PORT ?? 0), undefined, {
 	chat: fakeChat,
+	// Learning's improvement as GitHub would show it.
+	pullDiff: async (_repo, number) =>
+		number === 66
+			? "diff --git a/openfabriq/agents/implementer/agent.md b/openfabriq/agents/implementer/agent.md\n--- a/openfabriq/agents/implementer/agent.md\n+++ b/openfabriq/agents/implementer/agent.md\n@@ -14,3 +14,5 @@\n Write a test for each behavior the contract describes.\n \n+When you stream a response, decide what the reader sees if it fails halfway: end the stream with an error line, log it, and test that failure.\n+\n ## When you are done\n"
+			: undefined,
 	subjectState: async (url) =>
 		merged.has(url)
 			? {

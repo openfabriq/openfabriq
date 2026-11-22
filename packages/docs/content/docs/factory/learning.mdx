@@ -43,7 +43,7 @@ Only signals about the quality of the work:
 - failed checks on GitHub (`pull_request.checks_failed`) on a pull request the factory opened;
 - requested changes (`pull_request.changes_requested`) on a pull request the factory opened, by a maintainer.
 
-The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs.
+The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs. The Learning page says so when none does.
 
 Not a failure: a run that hit `usd_per_run` or `minutes_per_run`, an error of Claude Code, a broken `setup`, a service not connected, a site the network refused, an output the factory does not allow. Those are settled in `factory.yaml`, not taught to an agent. The runs of learning and of the [wiki](/factory/wiki/) never count, so learning never learns from itself.
 
@@ -62,7 +62,8 @@ The engine checks every improvement before it leaves the machine, instead of tru
 
 - **only the factory's text**: a Markdown file of a [skill](/factory/skills/) of the factory, or an `agent.md`;
 - **only the body of an `agent.md`**: its front matter (description, tools, network, model) stays byte for byte, so an agent never proposes more rights for itself;
-- never `factory.yaml`, an `automation.md`, a script, nor anything outside `openfabriq/`.
+- never `factory.yaml`, an `automation.md`, a script, nor anything outside `openfabriq/`;
+- never a file removed: an improvement adds to the factory's text.
 
 An improvement that breaks one of these rules is refused, and the run says why. The engine never merges a pull request under `openfabriq/`: a person does, then runs `openfabriq apply`. On a [server](/deployment/docker/), the engine applies the factory when its container starts.
 
@@ -76,9 +77,9 @@ Losing the engine's state loses the candidates, never the promoted lessons. See 
 
 The **Learning** page, read-only, with a badge in the menu that counts the improvements to review:
 
-- four numbers: **Failures** over the period, **Lessons** not resolved yet, improvements **To review**, and failures that **Came back** after an improvement meant to fix them was merged;
+- four numbers: **Failures** over the period, **Lessons** not resolved yet, improvements **To review**, and failures that **Came back** after GitHub merged an improvement meant to fix them;
 - the improvements to review, the candidate lessons (*1 failure, needs 2*), then the history, merged or closed;
-- **Explore** an improvement: its cause, its rule, the change its pull request proposes, the failures it comes from, and **Review on GitHub**. The studio has no approve or merge button: you review on GitHub.
+- **Explore** an improvement: its cause, its rule, the change its pull request proposes as GitHub has it now, the failures it comes from, and **Review on GitHub**. The studio has no approve or merge button: you review on GitHub.
 
 Failures are counted from the journal even with learning off; the page then says how to turn it on. An agent's page has one line, such as *3 failures, 1 improvement to review*, that leads to the Learning page. The `metrics` tool of the [chat](/studio/chat/) and of the [MCP connector](/mcp/tools/#metrics) has the four numbers in its `learning` field.
 

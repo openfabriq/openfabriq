@@ -21,4 +21,4 @@ export type WikiAnswer = Awaited<ReturnType<typeof wikiOf>>;
 /** GET /api/learning */
 export type LearningAnswer = ReturnType<typeof learningOf>;
 /** GET /api/learning/:id */
-export type LessonAnswer = NonNullable<ReturnType<typeof lessonOf>>;
+export type LessonAnswer = NonNullable<Awaited<ReturnType<typeof lessonOf>>>;

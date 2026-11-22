@@ -58,6 +58,11 @@ export function startStudio(
 		/** Asks whether a subject is still open; GitHub, Linear and Sentry by default. */
 		subjectState?: AskSubject;
 		access?: StudioAccess;
+		/** A pull request's diff; gh by default. */
+		pullDiff?: (
+			repository: string,
+			number: number,
+		) => Promise<string | undefined>;
 		/** Tells the engine a manual run was asked, so it takes it now rather than at its next tick. */
 		wake?: () => void;
 	} = {},
@@ -83,7 +88,7 @@ export function startStudio(
 		github: github !== undefined,
 	};
 	const subjectStates = cachedStates(deps.subjectState ?? askSubject());
-	const reads = readRoutes(subjectStates);
+	const reads = readRoutes(subjectStates, deps.pullDiff);
 	// The studio's sign-in and the connector's take the same password: one count of failures.
 	const failures = failedLogins();
 	// On the studio's https address only: Claude reaches it from Anthropic's cloud.

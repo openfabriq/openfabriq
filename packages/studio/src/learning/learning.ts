@@ -12,6 +12,7 @@ import {
 } from "@openfabriq/runner";
 import { type Period, runsInPeriod } from "../metrics/metrics.js";
 import { changedFiles } from "../runs/run-files.js";
+import { diffFiles } from "./pull-diff.js";
 
 /** A lesson as the Learning page lists it. */
 const lessonRow = (lesson: Lesson) => ({
@@ -27,6 +28,21 @@ const lessonRow = (lesson: Lesson) => ({
 	...(lesson.improvement ? { improvement: lesson.improvement } : {}),
 	...(lesson.resolvedAt ? { resolvedAt: lesson.resolvedAt } : {}),
 });
+
+/** The failures that come from GitHub: the journal holds them only when an automation of the factory ran on them. */
+const FROM_GITHUB = [
+	"pull_request.checks_failed",
+	"pull_request.changes_requested",
+] as const;
+
+/** The GitHub events of failures no automation of the factory runs on: learning never sees those failures. */
+export const unheard = (factory: Factory) =>
+	FROM_GITHUB.filter(
+		(event) =>
+			!Object.values(factory.automations).some(
+				(a) => !a.builtIn && a.when.some((t) => t.event === event),
+			),
+	);
 
 /** At most this many recent failures on the page. */
 const RECENT = 20;
@@ -73,6 +89,7 @@ export function learningOf(
 				}
 			: {}),
 		threshold: LESSON_THRESHOLD,
+		unheard: unheard(factory),
 		numbers: {
 			failures: failures.length,
 			lessons: lessons.filter(
@@ -91,12 +108,17 @@ export function learningOf(
 	};
 }
 
-/** What GET /api/learning/:id sends: one lesson, its failures, and the diff its improvement proposed. */
-export function lessonOf(
+/**
+ * What GET /api/learning/:id sends: one lesson, its failures, and its improvement's diff, read on
+ * the pull request (`diffFrom: "pull request"`), or as the learning run committed it when GitHub
+ * cannot tell (`"run"`).
+ */
+export async function lessonOf(
 	repository: string,
 	factory: Factory,
 	runs: RunRecord[],
 	id: string,
+	pullDiff: (repository: string, number: number) => Promise<string | undefined>,
 ) {
 	const lesson = readLessons(repository).find((l) => l.id === id);
 	if (!lesson) return undefined;
@@ -106,7 +128,11 @@ export function lessonOf(
 	const failures = lesson.failures.map(
 		(f): Failure | (typeof lesson.failures)[number] => all.get(f.id) ?? f,
 	);
-	// The diff the learning run committed and opened the pull request with.
+	const read =
+		lesson.improvement &&
+		(await pullDiff(repository, lesson.improvement.number));
+	const onPull = read ? diffFiles(read) : [];
+	// Otherwise the diff the learning run committed and opened the pull request with.
 	const file =
 		lesson.improvement &&
 		join(
@@ -115,8 +141,9 @@ export function lessonOf(
 			lesson.improvement.run,
 			"changed-files.json",
 		);
-	const diff =
-		file && existsSync(file)
+	const diff = onPull.length
+		? { total: onPull.length, files: onPull }
+		: file && existsSync(file)
 			? changedFiles(readFileSync(file, "utf8"))
 			: undefined;
 	return {
@@ -124,6 +151,6 @@ export function lessonOf(
 		failures,
 		cameBackIds: cameBack(lesson).map((f) => f.id),
 		targetUrl: `https://github.com/${repository}/blob/HEAD/${lesson.target}`,
-		...(diff ? { diff } : {}),
+		...(diff ? { diff, diffFrom: onPull.length ? "pull request" : "run" } : {}),
 	};
 }

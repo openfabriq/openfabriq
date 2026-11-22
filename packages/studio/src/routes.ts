@@ -18,6 +18,7 @@ import { boardColumns, subjectsToAsk } from "./board/board.js";
 import { listThreads, readThread, threadsDir } from "./chat/threads.js";
 import { matchPath } from "./http/match-path.js";
 import { learningOf, lessonOf } from "./learning/learning.js";
+import { githubPullDiff } from "./learning/pull-diff.js";
 import { PERIODS, pullRequestUrls, runsInPeriod } from "./metrics/metrics.js";
 import { projectsMetrics } from "./metrics/projects.js";
 import { runWithSubjectState } from "./runs/run-detail.js";
@@ -98,6 +99,11 @@ const ofFactory = (
 /** The GET routes of the API, by path. */
 export function readRoutes(
 	subjectStates: AskSubjects,
+	/** A pull request's diff on GitHub, for learning's improvements. */
+	pullDiff: (
+		repository: string,
+		number: number,
+	) => Promise<string | undefined> = githubPullDiff,
 ): Record<string, ReadRoute> {
 	return {
 		"/api/projects": ({ projects }) => ok(projects),
@@ -146,7 +152,13 @@ export function readRoutes(
 		},
 		"/api/learning/:id": async (request) => {
 			const found = await ofFactory((repository, { factory }) =>
-				lessonOf(repository, factory, request.runs(), request.params.id ?? ""),
+				lessonOf(
+					repository,
+					factory,
+					request.runs(),
+					request.params.id ?? "",
+					pullDiff,
+				),
 			)(request);
 			return found.status === 200 && found.body === undefined
 				? error(404, "No such lesson.")
