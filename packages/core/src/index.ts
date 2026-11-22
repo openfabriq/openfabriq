@@ -13,6 +13,12 @@ export {
 	resourceFolder,
 	splitArea,
 } from "./factory/files.js";
+export {
+	DEFAULT_LEARNING,
+	LESSON_THRESHOLD,
+	learningText,
+	withLearning,
+} from "./factory/learning.js";
 export { loadFactory } from "./factory/load.js";
 export { machineNeeds } from "./factory/needs.js";
 export {
@@ -31,6 +37,7 @@ export type {
 	Automation,
 	Factory,
 	FactoryFiles,
+	Learning,
 	Limits,
 	McpServer,
 	MergeConditions,
@@ -39,7 +46,7 @@ export type {
 	Trigger,
 	Wiki,
 } from "./factory/types.js";
-export { WIKI, withWiki } from "./factory/wiki.js";
+export { LEARNING, WIKI, withWiki } from "./factory/wiki.js";
 export {
 	agentOrder,
 	type WorkflowEdge,

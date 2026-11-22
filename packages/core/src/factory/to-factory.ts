@@ -1,13 +1,14 @@
 import type { Signature } from "../vocabulary.js";
 import type { Layout } from "./files.js";
 import type { FactoryShape, Parsed } from "./schema.js";
-import type { Agent, Automation, Factory, Wiki } from "./types.js";
+import type { Agent, Automation, Factory, Learning, Wiki } from "./types.js";
 
 /** The factory factory.yaml describes, or undefined while one of its required keys is missing. */
 export function toFactory(
 	fields: Parsed<typeof FactoryShape>,
 	read: {
 		wiki: Wiki | undefined;
+		learning: Learning | undefined;
 		layout: Layout;
 		agents: Record<string, Agent>;
 		automations: Record<string, Automation>;
@@ -65,6 +66,7 @@ export function toFactory(
 				}
 			: {}),
 		...(read.wiki ? { wiki: read.wiki } : {}),
+		...(read.learning ? { learning: read.learning } : {}),
 		...(fields.signature === false ? { signature: false as const } : {}),
 		...(fields.answer_mentions === false
 			? { answerMentions: false as const }

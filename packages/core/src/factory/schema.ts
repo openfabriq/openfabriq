@@ -154,6 +154,29 @@ export const FactoryShape = {
 			},
 		)
 		.optional(),
+	// Off by default; true turns it on, each week; the schedule's cron is checked in learning.ts.
+	learning: z
+		.union(
+			[
+				z.boolean(),
+				z.strictObject(
+					{ schedule: z.string().trim().min(1).optional() },
+					{
+						error: (issue) =>
+							issue.code === "unrecognized_keys"
+								? issue.keys
+										.map((key) => unknownWord("key", key, ["schedule"]))
+										.join("; ")
+								: undefined,
+					},
+				),
+			],
+			{
+				error:
+					'is true, false, or a schedule, like learning: { schedule: "0 8 * * 1" }',
+			},
+		)
+		.optional(),
 	// On by default: an agent answers mentions on the pull requests it opened (answer-mentions.ts).
 	answer_mentions: z
 		.boolean({

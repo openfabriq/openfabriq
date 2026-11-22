@@ -707,6 +707,7 @@ it("reports every problem of an invalid factory at once", () => {
 		'error factory.yaml: repository: must look like "owner/name", got "not-a-repo"',
 		"error factory.yaml: maintainers is required",
 		"error agents/empty: missing agents/empty/agent.md",
+		"error factory.yaml: learning.schedule: needs 5 fields (minute hour day month weekday), got 2",
 		'error agents/coder/agent.md: unknown tool "bash" in tools. Use one of: read, edit, shell, web, commands',
 		'error automations/bad-event/automation.md: unknown event "issue.label" in when. Did you mean "issue.labeled"?',
 		'error automations/bad-event/automation.md: unknown permission "add_coment" in can. Did you mean "add_comment"?',

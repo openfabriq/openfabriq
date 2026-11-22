@@ -29,6 +29,7 @@ import {
 import {
 	diffFields,
 	identity,
+	learning,
 	repositoryAndLimitChanges,
 	signatureChange,
 	timezoneChange,
@@ -65,6 +66,7 @@ const TOPICS: ((
 	networkGains,
 	(_before, _after, files) => fileChanges(files.before, files.after),
 	wiki,
+	learning,
 	mentions,
 ];
 
@@ -146,7 +148,7 @@ function diffByName<T>(
 	return { lines, counts };
 }
 
-/** The factory as its files write it: without what the engine adds, the wiki's agent and the answer to mentions. */
+/** The factory as its files write it: without what the engine adds, the wiki's and learning's agents and the answer to mentions. */
 function withoutEngineAdditions(factory: Factory): Factory {
 	const engines = (name: string) => factory.agents[name]?.builtIn === true;
 	return {
