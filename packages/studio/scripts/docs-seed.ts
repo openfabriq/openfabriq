@@ -59,7 +59,7 @@ const borrowed = [
 ];
 writeApplied(REPO, {
 	...sdlc,
-	"factory.yaml": yaml,
+	"factory.yaml": `${yaml}learning: true\n`,
 	...Object.fromEntries(borrowed.map((p) => [p, String(chat[p])])),
 });
 if (!readAppliedFactory(REPO))
@@ -598,7 +598,7 @@ run({
 	number: 49,
 	title: "Remember the last filter between visits",
 	status: "failed",
-	reason: "The checks failed: typecheck",
+	reason: 'the check "typecheck" failed (npm run typecheck)',
 	ms: 9 * MIN,
 	costUsd: 1.08,
 	steps: [
@@ -1016,6 +1016,104 @@ run({
 	status: "queued",
 });
 
+// --- Learning: a batch that opened an improvement, and its lessons. ---
+
+const ago = (minutes: number) =>
+	new Date(Date.now() - minutes * MIN).toISOString();
+run({
+	ago: 3 * 60,
+	id: "learning-66",
+	automation: "learning",
+	agent: "learning",
+	event: "schedule",
+	ms: 3 * MIN,
+	costUsd: 0.41,
+	outputs: [
+		{
+			action: "create_pull_request",
+			summary: "learning: end a streamed file with its error",
+			status: "applied",
+			url: pull(66),
+		},
+	],
+});
+writeFileSync(
+	join(projectDir(REPO), "runs/learning-66/changed-files.json"),
+	JSON.stringify({
+		total: 1,
+		files: [
+			{
+				path: "openfabriq/agents/implementer/agent.md",
+				add: 2,
+				del: 0,
+				patch:
+					"@@ -14,3 +14,5 @@\n Write a test for each behavior the contract describes.\n \n+When you stream a response, decide what the reader sees if it fails halfway: end the stream with an error line, log it, and test that failure.\n+\n ## When you are done\n",
+			},
+		],
+	}),
+);
+const lessons = [
+	{
+		id: "L1",
+		cause: "the implementer forgets the changelog",
+		rule: "Add a line under Unreleased in CHANGELOG.md for each change a user sees.",
+		target: "openfabriq/agents/implementer/agent.md",
+		status: "promoted",
+		failures: [
+			{ id: "implement-31:review", agent: "implementer", at: ago(20 * DAY) },
+			{ id: "implement-33:review", agent: "implementer", at: ago(18 * DAY) },
+		],
+		improvement: {
+			url: pull(38),
+			number: 38,
+			run: "learning-38",
+			at: ago(17 * DAY),
+		},
+		createdAt: ago(18 * DAY),
+		updatedAt: ago(14 * DAY),
+		resolvedAt: ago(14 * DAY),
+	},
+	{
+		id: "L2",
+		cause: "a stream that fails halfway leaves a truncated file and no error",
+		rule: "When you stream a response, decide what the reader sees if it fails halfway: end the stream with an error line, log it, and test that failure.",
+		target: "openfabriq/agents/implementer/agent.md",
+		status: "proposed",
+		failures: [
+			{
+				id: "implement-37:changes_requested",
+				agent: "implementer",
+				at: ago(9 * DAY),
+			},
+			{ id: "implement-44:review", agent: "implementer", at: ago(5 * DAY) },
+		],
+		improvement: {
+			url: pull(66),
+			number: 66,
+			run: "learning-66",
+			at: ago(3 * 60),
+		},
+		createdAt: ago(9 * DAY),
+		updatedAt: ago(3 * 60),
+	},
+	{
+		id: "L3",
+		cause: "the implementer calls a helper that does not exist yet",
+		rule: "Before you use a helper, find it with grep; write it in the same change when it is missing.",
+		target: "openfabriq/skills/typescript/SKILL.md",
+		status: "candidate",
+		failures: [
+			{ id: "implement-49:check", agent: "implementer", at: ago(3 * DAY) },
+		],
+		createdAt: ago(3 * 60),
+		updatedAt: ago(3 * 60),
+	},
+];
+writeFileSync(
+	join(projectDir(REPO), "lessons.jsonl"),
+	`${lessons.map((l) => JSON.stringify(l)).join("\n")}\n`,
+);
+
 // --- The studio. ---
 
 const merged = new Set([pull(42), pull(45), pull(57)]);
@@ -1035,7 +1133,12 @@ async function* fakeChat({ signal }: ChatTurnInput): AsyncIterable<ChatEvent> {
 	yield {
 		type: "tool-result",
 		id: "t1",
-		result: [{ id: "implement-49", reason: "The checks failed: typecheck" }],
+		result: [
+			{
+				id: "implement-49",
+				reason: 'the check "typecheck" failed (npm run typecheck)',
+			},
+		],
 	};
 	yield {
 		type: "tool-call",

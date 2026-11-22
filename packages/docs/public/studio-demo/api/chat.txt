@@ -1,10 +1,10 @@
-data: {"type":"session","sessionId":"f408bc8d-ad29-4a9c-b880-a2785cdf9808"}
+data: {"type":"session","sessionId":"b9897208-9b2f-4bde-a692-24b59bd674e8"}
 
 data: {"type":"reasoning","delta":"Find the failed runs of the week first."}
 
 data: {"type":"tool-call","id":"t1","name":"list_runs","args":{"status":"failed"}}
 
-data: {"type":"tool-result","id":"t1","result":[{"id":"implement-49","reason":"The checks failed: typecheck"}]}
+data: {"type":"tool-result","id":"t1","result":[{"id":"implement-49","reason":"the check \"typecheck\" failed (npm run typecheck)"}]}
 
 data: {"type":"tool-call","id":"t2","name":"read_run","args":{"id":"implement-49"}}
 
