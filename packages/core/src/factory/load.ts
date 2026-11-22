@@ -18,6 +18,7 @@ import {
 	splitArea,
 	splitFrontMatter,
 } from "./files.js";
+import { importedSkillsProblems } from "./imported.js";
 import {
 	AgentShape,
 	AutomationShape,
@@ -66,6 +67,7 @@ export function loadFactory(files: FactoryFiles): {
 		...misplacedAreas(files, layout),
 		...duplicateNames(layout),
 		...grantingSkills(files, layout),
+		...importedSkillsProblems(files, layout),
 	);
 	const { wiki, problems: wikiProblems } = readWiki(
 		fields.wiki,

@@ -39,6 +39,43 @@ A skill never grants tools: the agent's `tools` say what it may use. `openfabriq
 
 The engine loads only the factory's skills and the repository's project settings, never those of the machine (`~/.claude/`).
 
+## Import a public skill
+
+Good skills already exist in public repositories, listed on [skills.sh](https://skills.sh). `openfabriq skill add` copies one into the factory as plain files, pinned to the commit it came from:
+
+```bash
+openfabriq skill add mattpocock/skills code-review                   # → openfabriq/skills/code-review/
+openfabriq skill add mattpocock/skills code-review --agent reviewer  # → openfabriq/agents/reviewer/skills/code-review/
+openfabriq skill add mattpocock/skills code-review --area qa         # → openfabriq/qa/skills/code-review/
+```
+
+The repository is read with `gh`, so a private one works too; `owner/repo@code-review` is the same as naming the skill after the repository. A repository with a single skill needs no name. With `--agent`, the skill goes into that agent's own folder, in its area if it has one.
+
+The skill is never fetched while a run goes on: its folder is reviewed in a pull request, and `plan` shows its changes like any other file. Read it before you merge: a public skill is written for a person at the keyboard ("ask the user", "run `gh pr comment`"), while an agent of the factory has no one to ask and goes through the outputs its automation allows. Keep the imported skill as it is, and say in the agent's body how the factory uses it.
+
+`openfabriq/imported-skills.json` records, for each imported skill's folder, its repository, branch, commit and content hash. The hash is the `computedHash` of the [`skills` CLI](https://github.com/vercel-labs/skills)'s `skills-lock.json`, so both tools agree on a skill's content. The command writes this file; never edit it by hand.
+
+```json title="openfabriq/imported-skills.json"
+{
+  "version": 1,
+  "skills": {
+    "skills/code-review": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "ref": "main",
+      "commit": "4f2a…",
+      "skillPath": "skills/code-review/SKILL.md",
+      "computedHash": "93c3…"
+    }
+  }
+}
+```
+
+- `openfabriq doctor` says when an imported skill was changed since it was imported, and when its repository has a newer version. Neither fails `doctor`: an unreachable repository is a line of its own.
+- To update a skill, run the same `skill add` again, then open a pull request. It refuses a skill changed by hand, which the update would lose: put it back as it was imported, or delete the folder first. It also refuses to overwrite a skill of your own with the same name.
+- `openfabriq skill remove skills/code-review` removes the folder and its entry. `validate` refuses an entry whose folder is gone.
+- Like any skill of the factory, an imported skill whose header has `allowed-tools` is refused.
+
 ## Skills for command-line tools
 
 A skill is the place to teach an agent a command-line tool: when to use it, which commands to run, what to do with the result. It only describes the tool: openfabriq installs nothing, so the tool must already be where the agent runs ([how to provide one](/factory/agents/#command-line-tools)).

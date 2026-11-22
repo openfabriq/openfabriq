@@ -11,8 +11,19 @@ export { isEngineVariable, looksSecret, secretNames } from "./factory/env.js";
 export {
 	areasOf,
 	resourceFolder,
+	scanLayout,
 	splitArea,
+	splitFrontMatter,
 } from "./factory/files.js";
+export {
+	IMPORTED_SKILLS,
+	type ImportedSkill,
+	type ImportedSkills,
+	importedSkillsText,
+	isHashed,
+	readImportedSkills,
+	skillHash,
+} from "./factory/imported.js";
 export { loadFactory } from "./factory/load.js";
 export { machineNeeds } from "./factory/needs.js";
 export {

@@ -15,6 +15,7 @@ import { mcpCommand } from "./commands/mcp.js";
 import { checkPrerequisites, ghLogin } from "./commands/prerequisites.js";
 import { runCommand } from "./commands/run.js";
 import { secretCommand } from "./commands/secret.js";
+import { skillCommand } from "./commands/skill.js";
 import { startCommand } from "./commands/start/index.js";
 import { statusCommand } from "./commands/status.js";
 import { updateCommand } from "./commands/update.js";
@@ -60,6 +61,10 @@ Commands:
   deploy coolify           run the engine on your Coolify, through its API: asks for Coolify's
                            address and token and a Claude credential; uses the GitHub App
                            of "connect github"
+  skill add <owner/repo> [skill] [--agent name | --area name]
+                           copy a public skill into openfabriq/, pinned to its commit
+                           in imported-skills.json; run again to update it
+  skill remove <folder>    remove an imported skill, like skills/code-review
   secret set <NAME> [--project owner/repo]
                            keep the value of a secret the factory declares, on this machine only
   update                   install the latest openfabriq, or say how when it came another way
@@ -146,6 +151,15 @@ async function main(line: CommandLine): Promise<CommandResult> {
 						// "deploy coolify" takes no folder: the repository is the current one.
 						await exec("git", ["remote", "get-url", "origin"]),
 					),
+			});
+		case "skill":
+			// The current folder's factory, like deploy: the positionals are the skill's.
+			return skillCommand({
+				action: positionals[1],
+				target: positionals[2],
+				name: positionals[3],
+				agent: values.agent,
+				area: values.area,
 			});
 		case "secret":
 			return secretCommand(

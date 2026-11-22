@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { skillHash } from "@openfabriq/core";
 import { projectDir, recordRefusals } from "@openfabriq/runner";
 import { expect, it } from "vitest";
 import { doctorCommand } from "../../src/commands/doctor.js";
@@ -168,4 +169,68 @@ it("as a GitHub App, says whether it is installed on the factory's repository", 
 	expect(missing.output).toContain(
 		"install it at https://github.com/apps/openfabriq-acme/installations/new",
 	);
+});
+
+it("says an imported skill changed by hand, out of date, up to date, or out of reach", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "doctor-skills-"));
+	const skill = "---\nname: s\ndescription: S\n---\nDo.\n";
+	const files: Record<string, string> = {
+		"factory.yaml": "name: F\nrepository: acme/app\nmaintainers: [alice]\n",
+		"agents/a/agent.md": "---\ndescription: A\n---\nGo.\n",
+		"automations/x/automation.md":
+			"---\nwhen: [issue.opened]\nagent: a\ncan: [add_comment]\n---\nGo.\n",
+	};
+	const hash = skillHash([
+		{ path: "SKILL.md", content: new TextEncoder().encode(skill) },
+	]);
+	const entry = (source: string) => ({
+		source,
+		sourceType: "github",
+		ref: "main",
+		commit: "a".repeat(40),
+		skillPath: "skills/s/SKILL.md",
+		computedHash: hash,
+	});
+	const skills: Record<string, unknown> = {};
+	for (const [key, source] of [
+		["skills/fresh", "acme/fresh"],
+		["skills/stale", "acme/stale"],
+		["agents/a/skills/far", "acme/far"],
+		["skills/edited", "acme/edited"],
+	] as const) {
+		files[`${key}/SKILL.md`] = key === "skills/edited" ? "mine\n" : skill;
+		skills[key] = entry(source);
+	}
+	files["imported-skills.json"] = JSON.stringify({ version: 1, skills });
+	for (const [path, text] of Object.entries(files)) {
+		mkdirSync(join(dir, path, ".."), { recursive: true });
+		writeFileSync(join(dir, path), text);
+	}
+	const asked: string[] = [];
+	const run = async (command: string, args: string[]) => {
+		if (command !== "gh") return "";
+		const url = args[1] ?? "";
+		asked.push(url);
+		if (url.startsWith("repos/acme/far/")) throw new Error("HTTP 404\nmore");
+		const pinned = url.includes("sha=aaaa");
+		return url.startsWith("repos/acme/stale/") && !pinned ? "new\n" : "old\n";
+	};
+	const result = await doctorCommand(dir, run, "darwin");
+	expect(result.output).toContain(
+		"! skills/edited: changed since it was imported from acme/edited",
+	);
+	expect(result.output).toContain(
+		'! skills/stale: acme/stale has a newer version on main: run "openfabriq skill add acme/stale stale" for a pull request that updates it',
+	);
+	expect(result.output).toContain(
+		"✓ skills/fresh: as imported from acme/fresh, and up to date",
+	);
+	expect(result.output).toContain(
+		"! agents/a/skills/far: could not ask acme/far for a newer version (HTTP 404)",
+	);
+	expect(asked).toContain(
+		`repos/acme/fresh/commits?sha=main&per_page=1&path=skills%2Fs`,
+	);
+	// Said, not a failure.
+	expect(result.code).toBe(0);
 });

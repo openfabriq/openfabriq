@@ -1,4 +1,12 @@
-import { machineNeeds, sentenceList, unlistedSites } from "@openfabriq/core";
+import { join } from "node:path";
+import {
+	IMPORTED_SKILLS,
+	machineNeeds,
+	readImportedSkills,
+	sentenceList,
+	skillHash,
+	unlistedSites,
+} from "@openfabriq/core";
 import {
 	errorText,
 	exec,
@@ -9,6 +17,7 @@ import {
 import type { CommandResult } from "../result.js";
 import { secretWarnings } from "../secret-warnings.js";
 import { missingPrerequisites } from "./prerequisites.js";
+import { skillFiles } from "./skill.js";
 import { checkFactoryFolder } from "./validate.js";
 
 // What this machine lacks for the factory: read only, it installs and runs nothing of the factory.
@@ -87,6 +96,7 @@ export async function doctorCommand(
 				"The skills say what they need (doctor looks up the programs they install; check the rest yourself):",
 				...unsure.map(([skill, text]) => `! ${skill}: ${text}`),
 			);
+		lines.push(...(await importedSkillLines(folder, files, run)));
 		lines.push(
 			"",
 			lacking.length || notInstalled.length
@@ -136,4 +146,68 @@ function networkLines(
 		: [
 				"✓ network reaches every site the factory names, and no site was refused in its last runs",
 			];
+}
+
+/**
+ * Each imported skill: changed by hand since it was imported, or with a newer version upstream.
+ * Said, not a failure: GitHub may be out of reach, and an update is a pull request of its own.
+ */
+async function importedSkillLines(
+	folder: string,
+	files: Record<string, string>,
+	run: typeof exec,
+): Promise<string[]> {
+	const text = files[IMPORTED_SKILLS];
+	const read = text === undefined ? undefined : readImportedSkills(text);
+	// validate has said what is wrong with the file.
+	if (!read || Array.isArray(read)) return [];
+	const lines: string[] = [];
+	for (const [key, entry] of Object.entries(read.skills).sort()) {
+		const { source, ref, commit, skillPath } = entry;
+		if (skillHash(skillFiles(join(folder, key))) !== entry.computedHash) {
+			lines.push(
+				`! ${key}: changed since it was imported from ${source}: put it back as it was, and adapt it in the agent's own body instead; "openfabriq skill add" will not update it until then`,
+			);
+			continue;
+		}
+		// The last commit that touched the skill's folder, on its branch and at the pinned commit.
+		const path = skillPath.includes("/")
+			? skillPath.slice(0, skillPath.lastIndexOf("/"))
+			: "";
+		const last = (at: string) =>
+			run("gh", [
+				"api",
+				`repos/${source}/commits?sha=${encodeURIComponent(at)}&per_page=1${path ? `&path=${encodeURIComponent(path)}` : ""}`,
+				"-q",
+				'.[0].sha // ""',
+			]).then((out) => out.trim());
+		try {
+			const [latest, pinned] = [await last(ref), await last(commit)];
+			lines.push(
+				!latest
+					? `! ${key}: ${source} no longer has ${skillPath} on ${ref}`
+					: latest !== pinned
+						? `! ${key}: ${source} has a newer version on ${ref}: run "${updateCommand(key, source)}" for a pull request that updates it`
+						: `✓ ${key}: as imported from ${source}, and up to date`,
+			);
+		} catch (error) {
+			lines.push(
+				`! ${key}: could not ask ${source} for a newer version (${errorText(error).split("\n")[0]})`,
+			);
+		}
+	}
+	return lines;
+}
+
+/** The skill add that updates an imported skill, from its folder: --agent or --area as it was added. */
+function updateCommand(key: string, source: string): string {
+	const parts = key.split("/");
+	const name = parts.at(-1) ?? "";
+	const agent = /(?:^|\/)agents\/([^/]+)\/skills\//.exec(key)?.[1];
+	const where = agent
+		? ` --agent ${agent}`
+		: parts.length === 3
+			? ` --area ${parts[0]}`
+			: "";
+	return `openfabriq skill add ${source} ${name}${where}`;
 }
