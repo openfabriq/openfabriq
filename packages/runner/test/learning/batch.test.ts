@@ -171,6 +171,40 @@ describe("a batch of learning", () => {
 		expect(takeRequests(REPO)).toEqual([]);
 	});
 
+	it("asks for the next batch at once when another lesson waits for its improvement", async () => {
+		const waiting = (id: string) => ({
+			id,
+			cause: "c",
+			rule: "r",
+			target: "openfabriq/agents/coder/agent.md",
+			failures: [
+				{ id: `${id}a:check`, agent: "coder", at: "2026-11-01T00:00:00Z" },
+				{ id: `${id}b:check`, agent: "coder", at: "2026-11-02T00:00:00Z" },
+			],
+			status: "candidate" as const,
+			createdAt: "2026-11-02T00:00:00Z",
+			updatedAt: "2026-11-02T00:00:00Z",
+		});
+		saveLessons(REPO, [waiting("L1"), waiting("L2")]);
+		const learning = await batch([]);
+		if (!learning) throw new Error("a lesson waits");
+		expect(learning.improving()?.id).toBe("L1");
+		learning.finish(
+			[
+				{
+					action: "create_pull_request",
+					status: "applied",
+					summary: "learning: L1",
+					url: "https://github.com/acme/app/pull/9",
+				},
+			],
+			"l1",
+		);
+		expect(takeRequests(REPO)).toMatchObject([
+			{ id: "learning-l1", automation: "learning", by: "learning" },
+		]);
+	});
+
 	it("refuses a pull request no lesson asked for", async () => {
 		const learning = await batch([failed("r1", "2026-11-20T10:00:00Z")]);
 		const reviewed = learning?.review({
@@ -197,8 +231,8 @@ describe("a batch of learning", () => {
 			createdAt: "2026-11-01T00:00:00Z",
 			updatedAt: "2026-11-01T00:00:00Z",
 			failures: [
-				{ id: "a", agent: "coder", at: "2026-11-01T00:00:00Z" },
-				{ id: "b", agent: "coder", at: "2026-11-02T00:00:00Z" },
+				{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+				{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
 			],
 		};
 		const improvement = (number: number) => ({

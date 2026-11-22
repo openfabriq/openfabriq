@@ -43,6 +43,7 @@ export {
 export type { Failure, FailureKind } from "./learning/failures.js";
 export {
 	cameBack,
+	failedRuns,
 	type Lesson,
 	type LessonFailure,
 	type LessonStatus,

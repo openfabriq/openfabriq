@@ -13,9 +13,15 @@ export const FAILURE_WORDS: Record<string, string> = {
 	changes_requested: "A maintainer asked for changes",
 };
 
-/** A candidate lesson's progress: "1 failure, needs 2". */
-export const candidateNote = (failures: number, threshold: number) =>
-	`${count(failures, "failure")}, needs ${threshold}`;
+/** A candidate lesson's progress: "1 failure, needs 2"; "2 failures in 1 run, needs 2 runs" when runs repeat. */
+export const candidateNote = (
+	failures: number,
+	runs: number,
+	threshold: number,
+) =>
+	runs === failures
+		? `${count(failures, "failure")}, needs ${threshold}`
+		: `${count(failures, "failure")} in ${count(runs, "run")}, needs ${threshold} runs`;
 
 /** The line on an agent's page: "3 failures, 1 improvement to review"; none without either. */
 export function agentLearningLine(

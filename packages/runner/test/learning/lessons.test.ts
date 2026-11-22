@@ -116,6 +116,25 @@ describe("lessons", () => {
 		});
 	});
 
+	it("count runs, not failures, for the threshold: a run that failed its review and its checks is one incident", () => {
+		const once = lesson({
+			id: "L1",
+			failures: [
+				{ id: "r1:review", agent: "coder", at: "2026-11-01T00:00:00Z" },
+				{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+			],
+		});
+		expect(nextToImprove([once])).toBeUndefined();
+		const twice = {
+			...once,
+			failures: [
+				...once.failures,
+				{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
+			],
+		};
+		expect(nextToImprove([twice])?.id).toBe("L1");
+	});
+
 	it("follow their improvement: merged is promoted, closed unmerged is rejected, and never proposed again", () => {
 		const proposed = lesson({
 			id: "L1",

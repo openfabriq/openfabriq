@@ -4,6 +4,7 @@ import { type Factory, LESSON_THRESHOLD, learningText } from "@openfabriq/core";
 import {
 	cameBack,
 	type Failure,
+	failedRuns,
 	type Lesson,
 	type LessonFailure,
 	projectDir,
@@ -24,6 +25,8 @@ export interface LessonRow {
 	status: Lesson["status"];
 	/** How many failures the lesson holds. */
 	failures: number;
+	/** How many runs they come from: what the threshold counts. */
+	runs: number;
 	agents: string[];
 	/** How many of them came back after its improvement was merged. */
 	cameBack: number;
@@ -68,6 +71,7 @@ const lessonRow = (lesson: Lesson): LessonRow => ({
 	target: lesson.target,
 	status: lesson.status,
 	failures: lesson.failures.length,
+	runs: failedRuns(lesson),
 	agents: [...new Set(lesson.failures.map((f) => f.agent))].sort(),
 	cameBack: cameBack(lesson).length,
 	updatedAt: lesson.updatedAt,

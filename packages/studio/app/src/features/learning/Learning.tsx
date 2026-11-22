@@ -171,7 +171,7 @@ function LearningPage({
 						<LessonList
 							rows={data.candidates}
 							project={project}
-							aside={(r) => candidateNote(r.failures, data.threshold)}
+							aside={(r) => candidateNote(r.failures, r.runs, data.threshold)}
 						/>
 					</Section>
 				)}

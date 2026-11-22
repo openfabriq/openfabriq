@@ -74,11 +74,19 @@ export function newFailures(failures: Failure[], lessons: Lesson[]): Failure[] {
 	return failures.filter((f) => !held.has(f.id));
 }
 
-/** A lesson with enough failures and no improvement yet: the engine proposes one. */
+/**
+ * How many runs a lesson's failures come from: a run whose review asked for changes and whose
+ * checks then failed is one incident, not two. A failure's id is `<run id>:<kind>`.
+ */
+export const failedRuns = (lesson: Lesson) =>
+	new Set(lesson.failures.map((f) => f.id.slice(0, f.id.lastIndexOf(":"))))
+		.size;
+
+/** A lesson whose failures come from enough runs, and no improvement yet: the engine proposes one. */
 export const awaitsImprovement = (lesson: Lesson) =>
 	lesson.status === "candidate" &&
 	!lesson.improvement &&
-	lesson.failures.length >= LESSON_THRESHOLD;
+	failedRuns(lesson) >= LESSON_THRESHOLD;
 
 /** The next lesson to improve: the oldest that awaits one. */
 export const nextToImprove = (lessons: Lesson[]) =>

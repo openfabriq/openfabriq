@@ -5,8 +5,8 @@ import {
 } from "../../../app/src/features/learning/learning-view.js";
 
 it("says how far a candidate lesson is from its improvement", () => {
-	expect(candidateNote(1, 2)).toBe("1 failure, needs 2");
-	expect(candidateNote(3, 2)).toBe("3 failures, needs 2");
+	expect(candidateNote(1, 1, 2)).toBe("1 failure, needs 2");
+	expect(candidateNote(2, 1, 2)).toBe("2 failures in 1 run, needs 2 runs");
 });
 
 it("gives an agent's page one line, only when learning has something about it", () => {

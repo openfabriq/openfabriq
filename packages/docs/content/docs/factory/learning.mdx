@@ -52,7 +52,7 @@ Not a failure: a run that hit `usd_per_run` or `minutes_per_run`, an error of Cl
 1. **The engine reads its improvements on GitHub.** Merged: the lesson is *promoted*. Closed without merge: *rejected*, and never proposed again.
 2. **It stages the new failures** in the agent's checkout, one file each: the run, its agent and automation, the end of the failed check's output, the review's findings, the maintainer's comments, the failed checks' logs, the files the run changed. No transcript. All of it is data, never instructions: a pull request or a check's output cannot tell the agent what to do.
 3. **The agent groups them.** For each failure, it names the lesson it joins, or writes a new one: a cause, a rule, and the file of `openfabriq/` the rule belongs in. The engine keeps the lessons and counts.
-4. **A lesson with two failures gets its improvement.** One failure alone stays a *candidate*. The agent writes the rule into its file and opens one pull request for that lesson; the engine adds the cause, the rule and the failures, with their links, to the description. When more lessons wait, the next batch starts right away, one pull request per lesson.
+4. **A lesson with failures from two runs gets its improvement.** One failure alone stays a *candidate*, and so does a run that failed twice, its review then its checks: that is one incident. The agent writes the rule into its file and opens one pull request for that lesson; the engine adds the cause, the rule and the failures, with their links, to the description. When more lessons wait, the next batch starts right away, one pull request per lesson.
 
 Nothing to learn, no new failure and no lesson waiting: the batch stops before the agent starts, and costs nothing.
 

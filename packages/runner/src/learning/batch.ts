@@ -159,7 +159,7 @@ function batchInstructions(
 			: ["- No new failure this time: do not call record_lessons."]),
 		improve
 			? `- ${improveText(improve)}`
-			: `- record_lessons says whether a lesson now has ${LESSON_THRESHOLD} failures and needs its improvement. Otherwise you are done.`,
+			: `- record_lessons says whether a lesson now has failures from ${LESSON_THRESHOLD} runs and needs its improvement. Otherwise you are done.`,
 	].join("\n\n");
 }
 
@@ -307,7 +307,7 @@ export async function prepareBatch(step: {
 		return `Recorded ${result.changed.length} lesson${result.changed.length === 1 ? "" : "s"}. ${
 			improving
 				? improveText(improving)
-				: `No lesson has ${LESSON_THRESHOLD} failures without an improvement: you are done.`
+				: `No lesson has failures from ${LESSON_THRESHOLD} runs without an improvement: you are done.`
 		}`;
 	};
 
