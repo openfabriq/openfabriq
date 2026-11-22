@@ -91,16 +91,23 @@ export function projectSwitchHref(
 	return `#/${menuPageOf(page)}${query({ project, ...kept })}`;
 }
 
+/** The pages that need the list of projects to show. */
+const PAGES_NEEDING_PROJECTS = [
+	"agents",
+	"chat",
+	"workflow",
+	"wiki",
+	"learning",
+	"settings",
+];
+
 /** Whether a page waits for the list of projects before it shows: those that need it, and any without a project. */
 export const waitsForProjects = (
 	page: string,
 	projects: string[] | undefined,
 	project: string | undefined,
 ) =>
-	(!projects &&
-		["agents", "chat", "workflow", "wiki", "learning", "settings"].includes(
-			page,
-		)) ||
+	(!projects && PAGES_NEEDING_PROJECTS.includes(page)) ||
 	(!project && !projects);
 
 /** What the breadcrumb names after the page: the run or agent open, or the overview's view. */

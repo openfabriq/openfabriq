@@ -108,7 +108,7 @@ export function isImprovable(path: string): boolean {
  * The lessons once the agent's groupings are applied, and those that changed; or why the groupings
  * cannot be taken: every new failure goes to exactly one lesson, existing or new.
  */
-export function group(
+export function groupIntoLessons(
 	lessons: Lesson[],
 	staged: Failure[],
 	groupings: Grouping[],
@@ -179,7 +179,7 @@ export function group(
 }
 
 /** A lesson once its improvement's pull request is seen merged (GitHub's `mergedAt`), closed, or still open. */
-export function followed(
+export function resolvedByPullRequest(
 	lesson: Lesson,
 	pull: { state: string; mergedAt?: string | undefined },
 	now: Date,

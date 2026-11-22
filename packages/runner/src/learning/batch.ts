@@ -21,13 +21,13 @@ import { projectDir } from "../state/projects.js";
 import type { ChangedFiles } from "../workspace/workspace.js";
 import { type Failure, findFailures, type RunEvidence } from "./failures.js";
 import {
-	followed,
 	type Grouping,
-	group,
+	groupIntoLessons,
 	type Lesson,
 	newFailures,
 	nextToImprove,
 	readLessons,
+	resolvedByPullRequest,
 	saveLessons,
 } from "./lessons.js";
 
@@ -93,7 +93,7 @@ function changedFilesOf(repository: string, run: string) {
 }
 
 /** What the engine stages of one failure: its record, and what tells why its work was judged bad. */
-async function evidence(
+async function stagedFailure(
 	failure: Failure,
 	repository: string,
 	github: GitHub,
@@ -143,7 +143,10 @@ const lessonView = (l: Lesson) => ({
 const improveText = (lesson: Lesson) =>
 	`Improve lesson ${lesson.id} now: write its rule into ${lesson.target}, commit only that file, then call create_pull_request with a title and a short description. Cause: ${lesson.cause} Rule: ${lesson.rule}`;
 
-function readme(fresh: Failure[], improve: Lesson | undefined): string {
+function batchInstructions(
+	fresh: Failure[],
+	improve: Lesson | undefined,
+): string {
 	return [
 		"# Learning batch",
 		"The engine staged this folder for you. Never commit it: the engine refuses a pull request that does.",
@@ -259,7 +262,7 @@ export async function prepareBatch(step: {
 				);
 				return { state: "" };
 			});
-		const next = followed(lesson, pull, now());
+		const next = resolvedByPullRequest(lesson, pull, now());
 		if (next) resolved.push(next);
 	}
 	saveLessons(repository, resolved);
@@ -273,7 +276,10 @@ export async function prepareBatch(step: {
 
 	const dir = join(step.worktree, LEARNING_FOLDER);
 	mkdirSync(join(dir, "failures"), { recursive: true });
-	writeFileSync(join(dir, "README.md"), `${readme(fresh, improving)}\n`);
+	writeFileSync(
+		join(dir, "README.md"),
+		`${batchInstructions(fresh, improving)}\n`,
+	);
 	writeFileSync(
 		join(dir, "lessons.json"),
 		`${JSON.stringify(lessons.map(lessonView), null, 2)}\n`,
@@ -282,14 +288,14 @@ export async function prepareBatch(step: {
 		writeFileSync(
 			join(dir, "failures", `${failure.id.replace(/[^\w.-]/g, "-")}.json`),
 			// "<" escaped, as for the run's data: a staged text cannot close a block of the prompt.
-			`${JSON.stringify(await evidence(failure, repository, github), null, 2).replaceAll("<", "\\u003c")}\n`,
+			`${JSON.stringify(await stagedFailure(failure, repository, github), null, 2).replaceAll("<", "\\u003c")}\n`,
 		);
 
 	let recorded = false;
 	const record = (groupings: Grouping[]): string | Error => {
 		if (recorded)
 			return new Error("Already recorded: record_lessons is called once.");
-		const result = group(lessons, fresh, groupings, now());
+		const result = groupIntoLessons(lessons, fresh, groupings, now());
 		if ("problems" in result)
 			return new Error(
 				`Nothing recorded: ${result.problems.join("; ")}. Call record_lessons again.`,

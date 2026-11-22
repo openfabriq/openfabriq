@@ -4,6 +4,7 @@ import { agentProblems, parseTools } from "./agent-rules.js";
 import { answerMentionsNameClashes } from "./answer-mentions.js";
 import { automationProblems } from "./automation-rules.js";
 import { parseCan } from "./can.js";
+import { LEARNING, reservedNameClashes, WIKI } from "./engine-names.js";
 import { factoryProblems } from "./factory-rules.js";
 import {
 	duplicateNames,
@@ -36,7 +37,7 @@ import type {
 	Problem,
 } from "./types.js";
 import { parseWhen } from "./when.js";
-import { LEARNING, readWiki, reservedNameClashes, WIKI } from "./wiki.js";
+import { readWiki } from "./wiki.js";
 
 type Fields = Parsed<typeof FactoryShape>;
 /** A problem of one file, before loadFactory says whether it is an error or a warning. */

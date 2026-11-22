@@ -23,7 +23,7 @@ const PERIODS: { value: Period; label: string }[] = [
 
 type Row = LearningAnswer["toReview"][number];
 
-const code = (text: string) => (
+const inlineCode = (text: string) => (
 	<code className="rounded-md bg-sunken px-1.5 py-0.5 font-mono text-xs text-fg ring-1 ring-line">
 		{text}
 	</code>
@@ -121,10 +121,11 @@ function LearningPage({
 			</PageHeader>
 			{!data.learning && (
 				<p className="panel mb-6 px-5 py-4 text-sm text-fg-2">
-					Learning is off. To turn it on, add {code("learning: true")} to{" "}
-					{code("openfabriq/factory.yaml")}, then run {code("openfabriq apply")}
-					: each week the engine studies the work that failed, and proposes
-					improvements to skills and agent.md, by pull request only.
+					Learning is off. To turn it on, add {inlineCode("learning: true")} to{" "}
+					{inlineCode("openfabriq/factory.yaml")}, then run{" "}
+					{inlineCode("openfabriq apply")}: each week the engine studies the
+					work that failed, and proposes improvements to skills and agent.md, by
+					pull request only.
 				</p>
 			)}
 			{data.learning && data.unheard.length > 0 && (
@@ -135,7 +136,7 @@ function LearningPage({
 					{data.unheard.map((event, i) => (
 						<span key={event}>
 							{i > 0 && " or "}
-							{code(event)}
+							{inlineCode(event)}
 						</span>
 					))}
 					: learning does not see those failures.

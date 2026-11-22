@@ -1,7 +1,7 @@
 import { parseCron } from "../cron/parse.js";
 import { cronWords } from "../cron/words.js";
+import { LEARNING } from "./engine-names.js";
 import type { Agent, Automation, Factory, Learning } from "./types.js";
-import { LEARNING } from "./wiki.js";
 
 /** Once a week, Monday morning: what `learning: true` means. */
 export const DEFAULT_LEARNING: Learning = { schedule: "0 8 * * 1" };

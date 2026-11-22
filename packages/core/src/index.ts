@@ -7,6 +7,7 @@ export {
 	answerMentionsName,
 	withAnswerMentions,
 } from "./factory/answer-mentions.js";
+export { LEARNING, WIKI } from "./factory/engine-names.js";
 export { isEngineVariable, looksSecret, secretNames } from "./factory/env.js";
 export {
 	areasOf,
@@ -47,7 +48,7 @@ export type {
 	Trigger,
 	Wiki,
 } from "./factory/types.js";
-export { LEARNING, WIKI, withWiki } from "./factory/wiki.js";
+export { withWiki } from "./factory/wiki.js";
 export {
 	agentOrder,
 	type WorkflowEdge,

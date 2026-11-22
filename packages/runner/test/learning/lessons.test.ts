@@ -6,13 +6,13 @@ import type { Failure } from "../../src/learning/failures.js";
 import { outsideLearning } from "../../src/learning/guard.js";
 import {
 	cameBack,
-	followed,
-	group,
+	groupIntoLessons,
 	isImprovable,
 	type Lesson,
 	newFailures,
 	nextToImprove,
 	readLessons,
+	resolvedByPullRequest,
 	saveLessons,
 } from "../../src/learning/lessons.js";
 
@@ -58,7 +58,7 @@ describe("lessons", () => {
 	});
 
 	it("take each new failure into an existing lesson or a new one", () => {
-		const grouped = group(
+		const grouped = groupIntoLessons(
 			[lesson({ id: "L1" })],
 			[failure("r1:check"), failure("r2:review", "writer")],
 			[
@@ -91,7 +91,7 @@ describe("lessons", () => {
 
 	it("refuse groupings that leave out a failure, take one twice, or aim beyond skills and agent.md", () => {
 		expect(
-			group(
+			groupIntoLessons(
 				[],
 				[failure("r1:check"), failure("r2:check")],
 				[
@@ -131,15 +131,17 @@ describe("lessons", () => {
 				at: "2026-11-03T00:00:00Z",
 			},
 		});
-		expect(followed(proposed, { state: "OPEN" }, NOW)).toBeUndefined();
 		expect(
-			followed(
+			resolvedByPullRequest(proposed, { state: "OPEN" }, NOW),
+		).toBeUndefined();
+		expect(
+			resolvedByPullRequest(
 				proposed,
 				{ state: "MERGED", mergedAt: "2026-11-04T00:00:00Z" },
 				NOW,
 			),
 		).toMatchObject({ status: "promoted", mergedAt: "2026-11-04T00:00:00Z" });
-		const rejected = followed(proposed, { state: "CLOSED" }, NOW);
+		const rejected = resolvedByPullRequest(proposed, { state: "CLOSED" }, NOW);
 		expect(rejected?.status).toBe("rejected");
 		expect(nextToImprove(rejected ? [rejected] : [])).toBeUndefined();
 	});

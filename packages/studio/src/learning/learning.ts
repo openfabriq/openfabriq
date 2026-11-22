@@ -5,17 +5,63 @@ import {
 	cameBack,
 	type Failure,
 	type Lesson,
+	type LessonFailure,
 	projectDir,
 	projectFailures,
 	type RunRecord,
 	readLessons,
 } from "@openfabriq/runner";
 import { type Period, runsInPeriod } from "../metrics/metrics.js";
-import { changedFiles } from "../runs/run-files.js";
+import { changedFiles, type ShownFiles } from "../runs/run-files.js";
 import { diffFiles } from "./pull-diff.js";
 
 /** A lesson as the Learning page lists it. */
-const lessonRow = (lesson: Lesson) => ({
+export interface LessonRow {
+	id: string;
+	cause: string;
+	rule: string;
+	target: string;
+	status: Lesson["status"];
+	/** How many failures the lesson holds. */
+	failures: number;
+	agents: string[];
+	/** How many of them came back after its improvement was merged. */
+	cameBack: number;
+	updatedAt: string;
+	improvement?: NonNullable<Lesson["improvement"]>;
+	resolvedAt?: string;
+}
+
+/** What GET /api/learning sends. */
+export interface LearningAnswer {
+	/** Learning's schedule and its sentence, when the factory turns it on. */
+	learning?: { schedule: string; text: string };
+	threshold: number;
+	unheard: (typeof FROM_GITHUB)[number][];
+	numbers: {
+		failures: number;
+		lessons: number;
+		toReview: number;
+		cameBack: number;
+	};
+	toReview: LessonRow[];
+	candidates: LessonRow[];
+	history: LessonRow[];
+	recent: Failure[];
+	byAgent: Record<string, { failures: number; toReview: number }>;
+}
+
+/** What GET /api/learning/:id sends. */
+export interface LessonAnswer extends Omit<LessonRow, "failures"> {
+	/** Each failure as the journal tells it, or as the lesson kept it when the journal no longer has it. */
+	failures: (Failure | LessonFailure)[];
+	cameBackIds: string[];
+	targetUrl: string;
+	diff?: ShownFiles;
+	diffFrom?: "pull request" | "run";
+}
+
+const lessonRow = (lesson: Lesson): LessonRow => ({
 	id: lesson.id,
 	cause: lesson.cause,
 	rule: lesson.rule,
@@ -59,7 +105,7 @@ export function learningOf(
 	runs: RunRecord[],
 	period: Period,
 	now: Date,
-) {
+): LearningAnswer {
 	const shown = new Set(runsInPeriod(runs, period, now).map((r) => r.id));
 	const failures = projectFailures(repository, runs, factory).filter((f) =>
 		shown.has(f.run),
@@ -119,14 +165,14 @@ export async function lessonOf(
 	runs: RunRecord[],
 	id: string,
 	pullDiff: (repository: string, number: number) => Promise<string | undefined>,
-) {
+): Promise<LessonAnswer | undefined> {
 	const lesson = readLessons(repository).find((l) => l.id === id);
 	if (!lesson) return undefined;
 	const all = new Map(
 		projectFailures(repository, runs, factory).map((f) => [f.id, f]),
 	);
 	const failures = lesson.failures.map(
-		(f): Failure | (typeof lesson.failures)[number] => all.get(f.id) ?? f,
+		(f): Failure | LessonFailure => all.get(f.id) ?? f,
 	);
 	const read =
 		lesson.improvement &&
