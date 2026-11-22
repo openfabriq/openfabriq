@@ -1,6 +1,7 @@
 import {
 	type ChatTool,
 	type RunRecord,
+	readAppliedFactory,
 	readChats,
 	readRuns,
 	readTool,
@@ -8,6 +9,7 @@ import {
 import { z } from "zod";
 import { agentOrderByProject } from "../board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "../board/board.js";
+import { learningOf } from "../learning/learning.js";
 import {
 	computeMetrics,
 	PERIODS,
@@ -37,17 +39,26 @@ export function appChatTools(
 	return [
 		readTool(
 			"metrics",
-			"The numbers of the Overview page over a period: runs by status, cost by agent and by day (chat included), runs that needed nobody, pull requests opened and merged, issues an agent opened a pull request for and those resolved by a merge, human interventions (handoffs, failed runs, refused outputs), the applied outputs by action, and the cost by what came of the work.",
+			"The numbers of the Overview page over a period: runs by status, cost by agent and by day (chat included), runs that needed nobody, pull requests opened and merged, issues an agent opened a pull request for and those resolved by a merge, human interventions (handoffs, failed runs, refused outputs), the applied outputs by action, the cost by what came of the work, and learning: failures over the period, unresolved lessons, improvements to review, and failures that came back after a merged improvement.",
 			{ period: z.enum(PERIODS).default("7d") },
 			async ({ period }) => {
 				const runs = readRuns(repository);
-				return computeMetrics(
-					runs,
-					period,
-					now(),
-					await subjectStates(pullRequestUrls(runs)),
-					readChats(repository),
-				);
+				const factory = readAppliedFactory(repository);
+				return {
+					...computeMetrics(
+						runs,
+						period,
+						now(),
+						await subjectStates(pullRequestUrls(runs)),
+						readChats(repository),
+					),
+					...(factory
+						? {
+								learning: learningOf(repository, factory, runs, period, now())
+									.numbers,
+							}
+						: {}),
+				};
 			},
 		),
 		readTool(

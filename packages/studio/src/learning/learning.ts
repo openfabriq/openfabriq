@@ -1,0 +1,129 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { type Factory, LESSON_THRESHOLD, learningText } from "@openfabriq/core";
+import {
+	cameBack,
+	type Failure,
+	type Lesson,
+	projectDir,
+	projectFailures,
+	type RunRecord,
+	readLessons,
+} from "@openfabriq/runner";
+import { type Period, runsInPeriod } from "../metrics/metrics.js";
+import { changedFiles } from "../runs/run-files.js";
+
+/** A lesson as the Learning page lists it. */
+const lessonRow = (lesson: Lesson) => ({
+	id: lesson.id,
+	cause: lesson.cause,
+	rule: lesson.rule,
+	target: lesson.target,
+	status: lesson.status,
+	failures: lesson.failures.length,
+	agents: [...new Set(lesson.failures.map((f) => f.agent))].sort(),
+	cameBack: cameBack(lesson).length,
+	updatedAt: lesson.updatedAt,
+	...(lesson.improvement ? { improvement: lesson.improvement } : {}),
+	...(lesson.resolvedAt ? { resolvedAt: lesson.resolvedAt } : {}),
+});
+
+/** At most this many recent failures on the page. */
+const RECENT = 20;
+
+/**
+ * What GET /api/learning sends: four numbers (failures over the period, unresolved lessons,
+ * improvements to review, failures that came back after a merged improvement), the improvements
+ * to review, the candidate lessons, the history, and each agent's share. Failures come from the
+ * journal even with learning off; the page then says how to turn it on.
+ */
+export function learningOf(
+	repository: string,
+	factory: Factory,
+	runs: RunRecord[],
+	period: Period,
+	now: Date,
+) {
+	const shown = new Set(runsInPeriod(runs, period, now).map((r) => r.id));
+	const failures = projectFailures(repository, runs, factory).filter((f) =>
+		shown.has(f.run),
+	);
+	const lessons = readLessons(repository);
+	const of = (status: Lesson["status"]) =>
+		lessons.filter((l) => l.status === status);
+	const latestFirst = (a: Lesson, b: Lesson) =>
+		b.updatedAt.localeCompare(a.updatedAt);
+	const toReview = of("proposed");
+	const byAgent: Record<string, { failures: number; toReview: number }> = {};
+	const share = (agent: string) => {
+		byAgent[agent] ??= { failures: 0, toReview: 0 };
+		return byAgent[agent];
+	};
+	for (const f of failures) share(f.agent).failures += 1;
+	for (const l of toReview)
+		for (const agent of new Set(l.failures.map((f) => f.agent)))
+			share(agent).toReview += 1;
+	return {
+		...(factory.learning
+			? {
+					learning: {
+						schedule: factory.learning.schedule,
+						text: learningText(factory.learning),
+					},
+				}
+			: {}),
+		threshold: LESSON_THRESHOLD,
+		numbers: {
+			failures: failures.length,
+			lessons: lessons.filter(
+				(l) => l.status === "candidate" || l.status === "proposed",
+			).length,
+			toReview: toReview.length,
+			cameBack: lessons.flatMap(cameBack).length,
+		},
+		toReview: toReview.sort(latestFirst).map(lessonRow),
+		candidates: of("candidate").sort(latestFirst).map(lessonRow),
+		history: [...of("promoted"), ...of("rejected")]
+			.sort(latestFirst)
+			.map(lessonRow),
+		recent: failures.slice(0, RECENT),
+		byAgent,
+	};
+}
+
+/** What GET /api/learning/:id sends: one lesson, its failures, and the diff its improvement proposed. */
+export function lessonOf(
+	repository: string,
+	factory: Factory,
+	runs: RunRecord[],
+	id: string,
+) {
+	const lesson = readLessons(repository).find((l) => l.id === id);
+	if (!lesson) return undefined;
+	const all = new Map(
+		projectFailures(repository, runs, factory).map((f) => [f.id, f]),
+	);
+	const failures = lesson.failures.map(
+		(f): Failure | (typeof lesson.failures)[number] => all.get(f.id) ?? f,
+	);
+	// The diff the learning run committed and opened the pull request with.
+	const file =
+		lesson.improvement &&
+		join(
+			projectDir(repository),
+			"runs",
+			lesson.improvement.run,
+			"changed-files.json",
+		);
+	const diff =
+		file && existsSync(file)
+			? changedFiles(readFileSync(file, "utf8"))
+			: undefined;
+	return {
+		...lessonRow(lesson),
+		failures,
+		cameBackIds: cameBack(lesson).map((f) => f.id),
+		targetUrl: `https://github.com/${repository}/blob/HEAD/${lesson.target}`,
+		...(diff ? { diff } : {}),
+	};
+}

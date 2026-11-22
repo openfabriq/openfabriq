@@ -1,16 +1,37 @@
 import { stageCount } from "../features/board/board-view.js";
-import type { Board, Stage } from "../lib/types.js";
+import { useApi } from "../hooks/use-api.js";
+import { query } from "../lib/api.js";
+import type { Board, LearningAnswer, Stage } from "../lib/types.js";
+
+/** Learning's improvements waiting for a person to review them on GitHub. */
+function ToReview({ project }: { project: string | undefined }) {
+	const count = useApi<LearningAnswer>(
+		`/api/learning${query({ project })}`,
+		60_000,
+	).data?.numbers.toReview;
+	return count ? (
+		<span
+			className="tnum ml-auto rounded-full bg-accent-soft px-1.5 py-px text-2xs font-medium text-accent-text"
+			title={`${count} improvement${count === 1 ? "" : "s"} to review`}
+		>
+			{count}
+		</span>
+	) : null;
+}
 
 /** What a page has going on right now, next to its name: work in progress, work for you. */
 export function LiveBadge({
 	page,
+	project,
 	board,
 	chatBusy,
 }: {
 	page: string;
+	project: string | undefined;
 	board: Board | undefined;
 	chatBusy: boolean;
 }) {
+	if (page === "learning") return <ToReview project={project} />;
 	const count = (stage: Stage) => (board ? stageCount(board, stage) : 0);
 	if (page === "chat")
 		return chatBusy ? (

@@ -16,6 +16,8 @@ import type { FactorySettings } from "../../../src/settings/settings.js";
 // What the local server answers, endpoint by endpoint.
 
 export type {
+	LearningAnswer,
+	LessonAnswer,
 	ProjectAgents,
 	ProjectMetrics,
 	RunDetail,

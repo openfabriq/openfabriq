@@ -17,6 +17,7 @@ import { agentOrderByProject } from "./board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "./board/board.js";
 import { listThreads, readThread, threadsDir } from "./chat/threads.js";
 import { matchPath } from "./http/match-path.js";
+import { learningOf, lessonOf } from "./learning/learning.js";
 import { PERIODS, pullRequestUrls, runsInPeriod } from "./metrics/metrics.js";
 import { projectsMetrics } from "./metrics/projects.js";
 import { runWithSubjectState } from "./runs/run-detail.js";
@@ -134,6 +135,22 @@ export function readRoutes(
 				pullRequestUrls(runsInPeriod(all, period, new Date())),
 			);
 			return ok(projectsMetrics(repositories, all, period, states));
+		},
+		"/api/learning": async (request) => {
+			const asked = request.url.searchParams.get("period") ?? "30d";
+			const period = PERIODS.find((p) => p === asked);
+			if (!period) return error(400, `period is one of ${PERIODS.join(", ")}.`);
+			return ofFactory((repository, { factory }) =>
+				learningOf(repository, factory, request.runs(), period, new Date()),
+			)(request);
+		},
+		"/api/learning/:id": async (request) => {
+			const found = await ofFactory((repository, { factory }) =>
+				lessonOf(repository, factory, request.runs(), request.params.id ?? ""),
+			)(request);
+			return found.status === 200 && found.body === undefined
+				? error(404, "No such lesson.")
+				: found;
 		},
 		"/api/settings": ofFactory((repository, { factory, files }) =>
 			settingsOf(repository, factory, files["factory.yaml"]),

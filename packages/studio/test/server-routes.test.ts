@@ -508,3 +508,66 @@ it("answers every route, method and odd path as it always did", async () => {
 		DELETE /api/chats/nothing?project=someone/else | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No project someone/else."}"
 	`);
 });
+
+it("serves learning: its numbers, its lessons and one lesson's improvement, read-only", async () => {
+	appendRun(
+		run({
+			id: "run-check",
+			number: 9,
+			url: ISSUE,
+			status: "failed",
+			reason: 'the check "test" failed (npm test)',
+			endedAt: "2026-11-02T10:05:00.000Z",
+		}),
+	);
+	const lesson = {
+		id: "L1",
+		cause: "tests are not run",
+		rule: "Run the tests before you finish.",
+		target: "openfabriq/agents/implementer/agent.md",
+		status: "proposed",
+		failures: [
+			{
+				id: "run-check:check",
+				agent: "implementer",
+				at: "2026-11-02T10:05:00.000Z",
+			},
+			{ id: "old:check", agent: "implementer", at: "2026-10-01T00:00:00.000Z" },
+		],
+		improvement: {
+			url: `${PR.slice(0, -1)}12`,
+			number: 12,
+			run: "run-l",
+			at: "2026-11-03T00:00:00.000Z",
+		},
+		createdAt: "2026-11-02T00:00:00.000Z",
+		updatedAt: "2026-11-03T00:00:00.000Z",
+	};
+	write(join(projectDir(REPO), "lessons.jsonl"), `${JSON.stringify(lesson)}\n`);
+	const p = `project=${encodeURIComponent(REPO)}`;
+	const { status, body } = await json(`/api/learning?${p}&period=all`);
+	expect(status).toBe(200);
+	expect(body.learning).toBeUndefined();
+	expect(body.numbers).toEqual({
+		failures: 1,
+		lessons: 1,
+		toReview: 1,
+		cameBack: 0,
+	});
+	expect(body.toReview.map((l: { id: string }) => l.id)).toEqual(["L1"]);
+	expect(body.byAgent).toEqual({ implementer: { failures: 1, toReview: 1 } });
+	const detail = await json(`/api/learning/L1?${p}`);
+	expect(detail.body).toMatchObject({
+		id: "L1",
+		targetUrl: `https://github.com/${REPO}/blob/HEAD/openfabriq/agents/implementer/agent.md`,
+		failures: [
+			{ id: "run-check:check", summary: 'the check "test" failed (npm test)' },
+			{ id: "old:check" },
+		],
+	});
+	expect(await json(`/api/learning/L9?${p}`)).toEqual({
+		status: 404,
+		body: { error: "No such lesson." },
+	});
+	expect((await json(`/api/learning?${p}&period=1y`)).status).toBe(400);
+});

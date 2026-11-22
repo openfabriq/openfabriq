@@ -1,4 +1,5 @@
 import type { agentsView } from "./agents/agents.js";
+import type { learningOf, lessonOf } from "./learning/learning.js";
 import type { projectsMetrics } from "./metrics/projects.js";
 import type { runWithSubjectState } from "./runs/run-detail.js";
 import type { wikiOf } from "./wiki/wiki.js";
@@ -17,3 +18,7 @@ export type ProjectMetrics = ReturnType<typeof projectsMetrics>[number];
 export type Workflow = ReturnType<typeof workflowOf>;
 /** GET /api/wiki */
 export type WikiAnswer = Awaited<ReturnType<typeof wikiOf>>;
+/** GET /api/learning */
+export type LearningAnswer = ReturnType<typeof learningOf>;
+/** GET /api/learning/:id */
+export type LessonAnswer = NonNullable<ReturnType<typeof lessonOf>>;

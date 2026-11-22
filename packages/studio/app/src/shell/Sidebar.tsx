@@ -60,7 +60,12 @@ export function Sidebar({
 							aria-hidden
 						/>
 						{label}
-						<LiveBadge page={id} board={board} chatBusy={chatBusy} />
+						<LiveBadge
+							page={id}
+							project={project}
+							board={board}
+							chatBusy={chatBusy}
+						/>
 					</a>
 				))}
 			</nav>

@@ -112,6 +112,7 @@ it("links every page of both menus to the project shown, the board with what wor
 		  "#/agents?project=acme%2Fa - Agents",
 		  "#/workflow?project=acme%2Fa - Workflow",
 		  "#/wiki?project=acme%2Fa - Wiki",
+		  "#/learning?project=acme%2Fa - Learning",
 		  "#/settings?project=acme%2Fa - Factory settings",
 		  "#/chat?project=acme%2Fa - Chat",
 		  "#/overview?project=acme%2Fa - Overview",
@@ -120,6 +121,7 @@ it("links every page of both menus to the project shown, the board with what wor
 		  "#/agents?project=acme%2Fa - Agents",
 		  "#/workflow?project=acme%2Fa - Workflow",
 		  "#/wiki?project=acme%2Fa - Wiki",
+		  "#/learning?project=acme%2Fa - Learning",
 		  "#/settings?project=acme%2Fa - Factory settings",
 		  "#/chat?project=acme%2Fa - Chat",
 		]

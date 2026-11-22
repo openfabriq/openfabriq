@@ -35,6 +35,19 @@ export * from "./github/gh.js";
 export * from "./github/github.js";
 export * from "./github/markers.js";
 export * from "./github/timeline.js";
+export {
+	diskEvidence,
+	lessonBlock,
+	projectFailures,
+} from "./learning/batch.js";
+export type { Failure, FailureKind } from "./learning/failures.js";
+export {
+	cameBack,
+	type Lesson,
+	type LessonFailure,
+	type LessonStatus,
+	readLessons,
+} from "./learning/lessons.js";
 export * from "./run/execute.js";
 export * from "./run/harness.js";
 export type {

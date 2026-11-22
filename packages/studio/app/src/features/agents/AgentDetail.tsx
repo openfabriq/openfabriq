@@ -5,8 +5,15 @@ import { FileDialog } from "../../components/file-dialog.js";
 import { MarkdownDoc } from "../../components/markdown.js";
 import { Tabs } from "../../components/tabs.js";
 import { useAgentHue } from "../../hooks/use-agent-hue.js";
-import { agentHref, pageHref } from "../../lib/route.js";
-import type { ProjectAgents, RunRecord } from "../../lib/types.js";
+import { useApi } from "../../hooks/use-api.js";
+import { query } from "../../lib/api.js";
+import { agentHref, learningHref, pageHref } from "../../lib/route.js";
+import type {
+	LearningAnswer,
+	ProjectAgents,
+	RunRecord,
+} from "../../lib/types.js";
+import { agentLearningLine } from "../learning/learning-view.js";
 import { Automations, Figures, RecentRuns } from "./AgentActivity.js";
 import { Harness, McpServers, Skills, Tools } from "./AgentResources.js";
 import { agentTab, agentTabs } from "./agent-facts.js";
@@ -37,6 +44,7 @@ export function AgentDetail({
 				repository={data.repository}
 			/>
 			<Figures data={data} agent={agent} runs={runs} />
+			<LearningLine agent={agent.name} project={project} />
 
 			<Tabs
 				label="Agent"
@@ -71,6 +79,23 @@ export function AgentDetail({
 			)}
 		</>
 	);
+}
+
+/** Learning's word on this agent, like "3 failures, 1 improvement to review", leading to the Learning page. */
+function LearningLine({ agent, project }: { agent: string; project: string }) {
+	const line = agentLearningLine(
+		useApi<LearningAnswer>(`/api/learning${query({ project })}`, 60_000).data
+			?.byAgent,
+		agent,
+	);
+	return line ? (
+		<p className="-mt-4 mb-8 text-sm text-fg-2">
+			Learning:{" "}
+			<a href={learningHref({ project })} className="text-fg">
+				{line}
+			</a>
+		</p>
+	) : null;
 }
 
 /** Its name, its color and what it is for, under a breadcrumb on a phone; its agent.md in a modal. */
