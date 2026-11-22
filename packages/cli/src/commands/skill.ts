@@ -120,7 +120,7 @@ function cloner(run: typeof exec, temp: string) {
 
 type Cloner = ReturnType<typeof cloner>;
 
-/** What importing a skill did: written, left as it was, or kept because it was changed by hand. */
+/** What importing a skill did: written, left as it was, or kept because it was edited since its import. */
 interface Imported {
 	status: "imported" | "updated" | "unchanged" | "edited";
 	name: string;
@@ -130,7 +130,7 @@ interface Imported {
 
 /**
  * Copies a skill of a repository into its folder of the factory and records it in `imported`, or
- * says why it cannot. A skill changed by hand is kept; one whose content did not change keeps its
+ * says why it cannot. A skill edited since its import is kept; one whose content did not change keeps its
  * entry, so a pull request shows only what changed.
  */
 async function importSkill(
@@ -169,7 +169,7 @@ async function importSkill(
 		key,
 		commit: status === "unchanged" && entry ? entry.commit : source.commit,
 	});
-	// A folder deleted since its import is imported again; one changed by hand is kept.
+	// A folder deleted since its import is imported again; one edited since is kept.
 	if (
 		entry &&
 		existsSync(target) &&
@@ -208,9 +208,28 @@ async function importSkill(
 	return done(entry ? "updated" : "imported");
 }
 
-const NEXT_STEP = `Read its files: it was written for a person at the keyboard, and the agent's own body says how the factory uses it. Then open a pull request, and run "openfabriq apply" once it is merged.`;
+const NEXT_STEP = `Read its files: it was written for a person at the keyboard. Say how the factory uses it in the agent.md of the agents that use it, not in the skill. Then open a pull request, and run "openfabriq apply" once it is merged.`;
 const EDITED = (key: string) =>
-	`openfabriq/${key} changed since it was imported, and updating it would lose that change: put it back as it was imported, or delete the folder, then run this again. Adapt an imported skill in the agent's own body instead.`;
+	[
+		`openfabriq/${key} was edited since its import, so it is not overwritten.`,
+		...editedSkillHelp(key),
+	].join("\n");
+
+/** What to do with an imported skill edited since its import, indented below its line: for add, update and doctor. */
+export function editedSkillHelp(key: string): string[] {
+	const skill = skillPlace(key);
+	const place = skill?.place ?? {};
+	const where =
+		"agent" in place
+			? `openfabriq/${key.slice(0, key.lastIndexOf("/skills/"))}/agent.md`
+			: "area" in place
+				? `the agent.md of the agents in openfabriq/${place.area}/`
+				: "the agent.md of the agents that use it";
+	return [
+		`  To undo the edit: delete openfabriq/${key}, then run "openfabriq skill update ${skill?.name ?? key}".`,
+		`  To adapt the skill, edit ${where} instead: the skill then keeps its updates.`,
+	];
+}
 
 async function addSkill(
 	args: SkillArgs,
@@ -290,7 +309,8 @@ async function updateSkills(
 			lines.push(`✗ ${name}: ${done}`);
 		} else if (done.status === "edited")
 			lines.push(
-				`! ${name}: changed by hand since it was imported, not updated: put openfabriq/${done.key} back as it was, then run this again`,
+				`! ${name}: edited since its import, so not updated.`,
+				...editedSkillHelp(done.key),
 			);
 		else if (done.status === "unchanged") lines.push(`✓ ${name}: up to date`);
 		else {

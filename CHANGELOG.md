@@ -6,7 +6,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ### Added
 
-- `openfabriq skill add`, `skill update` and `skill remove` import a public skill from GitHub into `openfabriq/` as plain files, declared in a new `skills` key of `factory.yaml` and pinned to its commit in `openfabriq/imported-skills.json`. `validate` refuses any gap between the three, and `doctor` says when an imported skill was changed by hand or has a newer version.
+- `openfabriq skill add`, `skill update` and `skill remove` import a public skill from GitHub into `openfabriq/` as plain files, declared in a new `skills` key of `factory.yaml` and pinned to its commit in `openfabriq/imported-skills.json`. `validate` refuses any gap between the three, and `doctor` says when an imported skill was edited since its import or has a newer version.
 
 ### Changed
 

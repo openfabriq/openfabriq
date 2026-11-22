@@ -19,6 +19,7 @@ import {
 import type { CommandResult } from "../result.js";
 import { secretWarnings } from "../secret-warnings.js";
 import { missingPrerequisites } from "./prerequisites.js";
+import { editedSkillHelp } from "./skill.js";
 import { checkFactoryFolder } from "./validate.js";
 
 // What this machine lacks for the factory: read only, it installs and runs nothing of the factory.
@@ -150,7 +151,7 @@ function networkLines(
 }
 
 /**
- * Each imported skill: changed by hand since it was imported, and with a newer version upstream.
+ * Each imported skill: edited since its import, and with a newer version upstream.
  * Said, not a failure: GitHub may be out of reach, and an update is a pull request of its own.
  */
 async function importedSkillLines(
@@ -169,7 +170,8 @@ async function importedSkillLines(
 			skillHash(skillFiles(join(folder, key))) !== entry.computedHash;
 		if (edited)
 			lines.push(
-				`! ${key}: changed since it was imported from ${source}: put it back as it was, and adapt it in the agent's own body instead; "openfabriq skill update" will not update it until then`,
+				`! ${key}: edited since its import from ${source}, so "openfabriq skill update" skips it.`,
+				...editedSkillHelp(key),
 			);
 		// The skill's folder in its repository; a skill at the root is the whole repository.
 		const path = skillPath.includes("/")

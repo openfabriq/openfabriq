@@ -170,7 +170,7 @@ it("as a GitHub App, says whether it is installed on the factory's repository", 
 	);
 });
 
-it("says an imported skill changed by hand, out of date, up to date, or out of reach", async () => {
+it("says an imported skill edited since its import, out of date, up to date, or out of reach", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "doctor-skills-"));
 	const skill = "---\nname: s\ndescription: S\n---\nDo.\n";
 	const files: Record<string, string> = {
@@ -217,7 +217,7 @@ it("says an imported skill changed by hand, out of date, up to date, or out of r
 	};
 	const result = await doctorCommand(dir, run, "darwin");
 	expect(result.output).toContain(
-		"! skills/edited: changed since it was imported from acme/edited",
+		'! skills/edited: edited since its import from acme/edited, so "openfabriq skill update" skips it.\n  To undo the edit: delete openfabriq/skills/edited, then run "openfabriq skill update edited".',
 	);
 	expect(result.output).toContain(
 		'! skills/stale: acme/stale has a newer version on main: run "openfabriq skill update stale" for a pull request that updates it',

@@ -15,7 +15,11 @@ import { dirname, join } from "node:path";
 import { loadFactory } from "@openfabriq/core";
 import { readFactoryFolder, skillFiles, skillHash } from "@openfabriq/runner";
 import { describe, expect, it } from "vitest";
-import { chooseSkill, skillCommand } from "../../src/commands/skill.js";
+import {
+	chooseSkill,
+	editedSkillHelp,
+	skillCommand,
+} from "../../src/commands/skill.js";
 
 const COMMIT = "c".repeat(40);
 const REVIEW =
@@ -268,7 +272,7 @@ describe("openfabriq skill add", () => {
 		expect((await add({ agent: "tester", area: "qa" })).code).toBe(1);
 	});
 
-	it("updates an imported skill left as it was, and refuses one changed by hand", async () => {
+	it("updates an imported skill left as it was, and refuses one edited since its import", async () => {
 		const repo = factory();
 		const add = (repository: Record<string, string>) =>
 			skillCommand(
@@ -296,7 +300,9 @@ describe("openfabriq skill add", () => {
 		);
 		const refused = await add(PUBLIC);
 		expect(refused.code).toBe(1);
-		expect(refused.output).toContain("changed since it was imported");
+		expect(refused.output).toContain(
+			"openfabriq/skills/code-review was edited since its import, so it is not overwritten.",
+		);
 		expect(
 			readFileSync(
 				join(repo, "openfabriq/skills/code-review/SKILL.md"),
@@ -398,7 +404,7 @@ describe("openfabriq skill update", () => {
 		expect(lockOf(repo).skills["skills/code-review"]).toEqual(before);
 	});
 
-	it("skips a skill changed by hand, and updates only the one named", async () => {
+	it("skips a skill edited since its import, and updates only the one named", async () => {
 		const repo = factory();
 		await add(repo, "code-review");
 		await add(repo, "tdd");
@@ -407,7 +413,11 @@ describe("openfabriq skill update", () => {
 		expect(named.output).toBe("✓ code-review: up to date");
 		const all = await update(repo, NEWER);
 		expect(all.output).toContain(
-			"! tdd: changed by hand since it was imported, not updated",
+			[
+				"! tdd: edited since its import, so not updated.",
+				'  To undo the edit: delete openfabriq/skills/tdd, then run "openfabriq skill update tdd".',
+				"  To adapt the skill, edit the agent.md of the agents that use it instead: the skill then keeps its updates.",
+			].join("\n"),
 		);
 		expect(
 			readFileSync(join(repo, "openfabriq/skills/tdd/SKILL.md"), "utf8"),
@@ -457,6 +467,15 @@ describe("openfabriq skill remove", () => {
 		expect(result.code).toBe(1);
 		expect(existsSync(join(repo, "openfabriq/constructor/notes.md"))).toBe(
 			true,
+		);
+	});
+
+	it("says where to adapt a skill edited since its import: its agent's agent.md, or the area's agents", () => {
+		expect(editedSkillHelp("qa/agents/tester/skills/tdd")[1]).toContain(
+			"edit openfabriq/qa/agents/tester/agent.md instead",
+		);
+		expect(editedSkillHelp("qa/skills/tdd")[1]).toContain(
+			"edit the agent.md of the agents in openfabriq/qa/ instead",
 		);
 	});
 
