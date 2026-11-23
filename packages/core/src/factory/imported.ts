@@ -169,7 +169,7 @@ export function skillAddCommand(name: string, skill: DeclaredSkill): string {
 		: skill.area
 			? ` --area ${skill.area}`
 			: "";
-	return `openfabriq skill add ${skill.from} ${name}${where}`;
+	return `openfabriq skill add ${skill.from} --skill ${name}${where}`;
 }
 
 /** Where an imported skill goes: an agent's own skills, an area's, or the shared ones. */

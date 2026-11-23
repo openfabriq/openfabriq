@@ -42,10 +42,12 @@ import type { CommandResult } from "../result.js";
 
 export interface SkillArgs {
 	action?: string | undefined;
-	/** add: owner/repo, or owner/repo@skill; remove: the skill's folder in openfabriq/. */
+	/** add: owner/repo, or its GitHub URL; update: the skill's name; remove: its folder in openfabriq/. */
 	target?: string | undefined;
-	/** add: the skill's name, when the repository has several. */
+	/** add: --skill, the skill's name, when the repository has several. */
 	name?: string | undefined;
+	/** A word after the target, which no action takes. */
+	extra?: string | undefined;
 	agent?: string | undefined;
 	area?: string | undefined;
 }
@@ -81,7 +83,7 @@ export async function skillCommand(
 		rmSync(temp, { recursive: true, force: true });
 	}
 	return fail(
-		"Usage: openfabriq skill add <owner/repo> [skill] [--agent name | --area name], openfabriq skill update [skill], or openfabriq skill remove <folder>",
+		"Usage: openfabriq skill add <owner/repo> [--skill name] [--agent name | --area name], openfabriq skill update [skill], or openfabriq skill remove <folder>",
 	);
 }
 
@@ -244,16 +246,19 @@ async function addSkill(
 	clone: Cloner,
 	confirm: Confirm,
 ): Promise<CommandResult> {
-	const [repository = "", afterAt] = (args.target ?? "").split("@");
-	if (!REPOSITORY.test(repository))
+	// A command copied from skills.sh names the repository by its URL.
+	const repository = (args.target ?? "")
+		.replace(/^https:\/\/github\.com\//, "")
+		.replace(/(\.git)?\/?$/, "");
+	if (!REPOSITORY.test(repository) || args.extra)
 		return fail(
-			"Name a GitHub repository and its skill: openfabriq skill add mattpocock/skills code-review",
+			"Name a GitHub repository, and its skill with --skill: openfabriq skill add mattpocock/skills --skill code-review",
 		);
 	const place = placeOf(args, folder);
 	if (typeof place === "string") return fail(place);
 	const imported = readImported(folder);
 	if (typeof imported === "string") return fail(imported);
-	const request = { repository, wanted: args.name ?? afterAt, place };
+	const request = { repository, wanted: args.name, place };
 	let done = await importSkill(folder, imported, request, clone);
 	if (typeof done === "string") return fail(done);
 	if (done.status === "edited") {
@@ -348,7 +353,7 @@ async function updateSkills(
 		);
 	if (names.length === 0)
 		return fail(
-			`factory.yaml declares no skills: import one with "openfabriq skill add <owner/repo> <skill>"`,
+			`factory.yaml declares no skills: import one with "openfabriq skill add <owner/repo> --skill <name>"`,
 		);
 	const layout = scanLayout(files);
 	for (const name of only ? [only] : names) {
@@ -511,7 +516,7 @@ export function chooseSkill(
 	if (!skill)
 		return wanted
 			? `This repository has no skill named ${wanted}: its skills are ${names}`
-			: `This repository has several skills, name one: ${names}`;
+			: `This repository has several skills, name one with --skill: ${names}`;
 	if (!SKILL_NAME.test(skill.name))
 		return `The skill's name, ${printable(skill.name)}, cannot be a folder of the factory: a skill's name is lowercase letters, digits and -`;
 	return skill;

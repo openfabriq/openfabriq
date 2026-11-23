@@ -106,10 +106,15 @@ describe("openfabriq skill add", () => {
 		).toEqual([]);
 	});
 
-	it("takes owner/repo@skill, and puts an agent's skill in its folder, in its area", async () => {
+	it("takes the repository's GitHub URL, as skills.sh shows it, and puts an agent's skill in its folder, in its area", async () => {
 		const repo = factory();
 		const result = await skillCommand(
-			{ action: "add", target: "mattpocock/skills@tdd", agent: "tester" },
+			{
+				action: "add",
+				target: "https://github.com/mattpocock/skills.git",
+				name: "tdd",
+				agent: "tester",
+			},
 			repo,
 			github(PUBLIC),
 		);
@@ -203,7 +208,9 @@ describe("openfabriq skill add", () => {
 					github(PUBLIC),
 				)
 			).output,
-		).toBe("This repository has several skills, name one: code-review and tdd");
+		).toBe(
+			"This repository has several skills, name one with --skill: code-review and tdd",
+		);
 		expect(
 			(
 				await skillCommand(
@@ -259,6 +266,24 @@ describe("openfabriq skill add", () => {
 		expect(refused.output).not.toContain("\u001b");
 		expect(existsSync(join(repo, "openfabriq/skills/tdd"))).toBe(false);
 		expect(Object.keys(lockOf(repo).skills)).toEqual(["skills/cpp"]);
+	});
+
+	it("names the skill with --skill only, the way the skills CLI does", async () => {
+		const calls: string[][] = [];
+		for (const args of [
+			{ target: "mattpocock/skills", extra: "tdd" },
+			{ target: "mattpocock/skills@tdd" },
+		]) {
+			const result = await skillCommand(
+				{ action: "add", ...args },
+				factory(),
+				github(PUBLIC, calls),
+			);
+			expect(result.output).toBe(
+				"Name a GitHub repository, and its skill with --skill: openfabriq skill add mattpocock/skills --skill code-review",
+			);
+		}
+		expect(calls).toEqual([]);
 	});
 
 	it("refuses a repository a command would read as an option, before cloning", async () => {
@@ -613,7 +638,9 @@ describe("the skill to import from a repository", () => {
 				[skill("a/x", "x\u001b]0;pwned\u0007"), skill("b/y", "y")],
 				undefined,
 			),
-		).toBe("This repository has several skills, name one: x]0;pwned and y");
+		).toBe(
+			"This repository has several skills, name one with --skill: x]0;pwned and y",
+		);
 		expect(chooseSkill([], undefined)).toBe(
 			"This repository has no skill: no SKILL.md in it",
 		);

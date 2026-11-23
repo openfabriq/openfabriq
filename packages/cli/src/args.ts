@@ -16,6 +16,7 @@ export function readCommandLine(args: string[]) {
 			url: { type: "string" },
 			remove: { type: "boolean", default: false },
 			org: { type: "string" },
+			skill: { type: "string" },
 			agent: { type: "string" },
 			area: { type: "string" },
 			workflows: { type: "boolean", default: false },
