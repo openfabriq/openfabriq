@@ -49,7 +49,7 @@ openfabriq skill add mattpocock/skills --skill code-review --agent reviewer  # â
 openfabriq skill add mattpocock/skills --skill code-review --area qa         # â†’ openfabriq/qa/skills/code-review/
 ```
 
-`--skill` names the skill as the [`skills` CLI](https://github.com/vercel-labs/skills) does, and the repository may be its GitHub URL: a command copied from skills.sh works once `npx skills` reads `openfabriq skill`. The repository is read with `gh`, so a private one works too. A repository with a single skill needs no `--skill`. With `--agent`, the skill goes into that agent's own folder, in its area if it has one.
+`--skill` names the skill as the [`skills` CLI](https://github.com/vercel-labs/skills) does, and the repository may be its GitHub URL. To use a command copied from skills.sh, replace `npx skills add` with `openfabriq skill add`. The repository is read with `gh`, so a private one works too. A repository with a single skill needs no `--skill`. With `--agent`, the skill goes into that agent's own folder, in its area if it has one.
 
 The command also declares the skill in `factory.yaml`, so anyone can read what the factory imports, as a `package.json` lists a project's dependencies:
 

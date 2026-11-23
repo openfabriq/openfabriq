@@ -540,6 +540,24 @@ describe("openfabriq skill update", () => {
 		expect(readFileSync(review, "utf8")).toBe(REVIEW);
 	});
 
+	it("refuses a skill its source renamed, and writes nothing", async () => {
+		const repo = factory();
+		await add(repo, "tdd");
+		const renamed = {
+			...PUBLIC,
+			"skills/tdd/SKILL.md":
+				"---\nname: test-first\ndescription: Tests first\n---\nRed.\n",
+		};
+		const result = await update(repo, renamed, "tdd");
+		expect(result).toEqual({
+			code: 1,
+			output:
+				'✗ tdd: mattpocock/skills renamed tdd to test-first: run "openfabriq skill remove skills/tdd", then "openfabriq skill add mattpocock/skills --skill test-first"',
+		});
+		expect(Object.keys(lockOf(repo).skills)).toEqual(["skills/tdd"]);
+		expect(existsSync(join(repo, "openfabriq/skills/test-first"))).toBe(false);
+	});
+
 	it("takes the skill named with --skill, as add does", async () => {
 		const repo = factory();
 		await add(repo, "code-review");

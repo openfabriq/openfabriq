@@ -153,6 +153,8 @@ async function importSkill(
 		wanted: string | undefined;
 		place: SkillPlace;
 		overwrite?: boolean;
+		/** update: `wanted` is the name factory.yaml declares, which the skill must still have. */
+		declared?: boolean;
 	},
 	clone: Cloner,
 ): Promise<Imported | string> {
@@ -160,6 +162,8 @@ async function importSkill(
 	const source = await clone(repository);
 	const found = chooseSkill(skillCandidates(source.dir), wanted);
 	if (typeof found === "string") return found;
+	if (request.declared && wanted && found.name !== wanted)
+		return `${repository} renamed ${wanted} to ${found.name}: run "openfabriq skill remove ${skillFolder(wanted, place)}", then "openfabriq skill add ${repository} --skill ${found.name}"`;
 	const from = join(source.dir, found.folder);
 	const files = skillFiles(from);
 	const skillMd = files.find((f) => f.path === "SKILL.md");
@@ -316,7 +320,7 @@ async function updateSkills(
 		const done = await importSkill(
 			folder,
 			imported,
-			{ repository, wanted: name, place, overwrite },
+			{ repository, wanted: name, place, overwrite, declared: true },
 			clone,
 		).catch((error: unknown) => `${errorText(error).split("\n")[0]}`);
 		if (typeof done === "string") {
