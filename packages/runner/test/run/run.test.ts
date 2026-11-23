@@ -1,4 +1,10 @@
-import { cpSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+	cpSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -2909,7 +2915,16 @@ describe("a learning run", () => {
 	};
 	const on = () =>
 		withLearning({ ...factory, learning: { schedule: "0 8 * * 1" } });
-	const waiting = () =>
+	// The run's worktree holds the agent.md the lesson goes into: a target must exist.
+	const waiting = () => {
+		const agentDir = join(
+			projectDir(REPO),
+			"worktrees",
+			learningRun.id,
+			"openfabriq/agents/coder",
+		);
+		mkdirSync(agentDir, { recursive: true });
+		writeFileSync(join(agentDir, "agent.md"), "---\ndescription: Codes\n---\n");
 		saveLessons(REPO, [
 			{
 				id: "L1",
@@ -2925,6 +2940,7 @@ describe("a learning run", () => {
 				updatedAt: "2026-11-02T00:00:00Z",
 			},
 		]);
+	};
 	const opening = (launched: string[]): RunDeps => ({
 		...deps(async (step) => {
 			launched.push(step.prompt);

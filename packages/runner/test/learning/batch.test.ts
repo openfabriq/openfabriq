@@ -54,6 +54,9 @@ let worktree: string;
 beforeEach(() => {
 	process.env.OPENFABRIQ_HOME = mkdtempSync(join(tmpdir(), "of-learning-"));
 	worktree = mkdtempSync(join(tmpdir(), "of-worktree-"));
+	// The agent.md the lessons go into: a target must exist.
+	mkdirSync(join(worktree, "openfabriq/agents/coder"), { recursive: true });
+	writeFileSync(join(worktree, "openfabriq/agents/coder/agent.md"), "");
 });
 
 const batch = (runs: RunRecord[], gh = github()) =>

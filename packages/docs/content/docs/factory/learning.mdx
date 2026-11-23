@@ -61,7 +61,8 @@ Nothing to learn, no new failure and no lesson waiting: the batch stops before t
 The engine checks every improvement before it leaves the machine, instead of trusting the agent:
 
 - **only the factory's text**: a Markdown file of a [skill](/factory/skills/) of the factory, or an `agent.md`;
-- **only the body of an `agent.md`**: its front matter (description, tools, network, model) stays byte for byte, so an agent never proposes more rights for itself;
+- **only the body of an `agent.md` or a `SKILL.md`**: their front matter (description, tools, network, model, a skill's needs) stays byte for byte, so an agent never proposes more rights for itself;
+- never a skill [imported from a public repository](/factory/skills/#import-a-public-skill): it stays as its source has it, so `openfabriq skill update` keeps working. The rule goes into the `agent.md` of the agent that uses it;
 - never `factory.yaml`, an `automation.md`, a script, nor anything outside `openfabriq/`;
 - never a file removed: an improvement adds to the factory's text.
 

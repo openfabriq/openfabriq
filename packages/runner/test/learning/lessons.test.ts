@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { outsideLearning } from "../../src/learning/guard.js";
 import {
 	cameBack,
 	groupIntoLessons,
+	importedFolders,
 	isImprovable,
 	type Lesson,
 	newFailures,
@@ -14,7 +15,22 @@ import {
 	readLessons,
 	resolvedByPullRequest,
 	saveLessons,
+	targetProblemIn,
 } from "../../src/learning/lessons.js";
+
+const LOCK = JSON.stringify({
+	version: 1,
+	skills: {
+		"skills/code-review": {
+			source: "mattpocock/skills",
+			sourceType: "github",
+			ref: "main",
+			commit: "a".repeat(40),
+			skillPath: "code-review/SKILL.md",
+			computedHash: "b".repeat(64),
+		},
+	},
+});
 
 const NOW = new Date("2026-11-23T08:00:00Z");
 const failure = (id: string, agent = "coder"): Failure => ({
@@ -182,6 +198,33 @@ describe("lessons", () => {
 		expect(cameBack(older).map((f) => f.id)).toEqual(["c"]);
 	});
 
+	it("never aim at a skill imported from a public repository, nor at an agent.md or SKILL.md that is not there", () => {
+		const worktree = mkdtempSync(join(tmpdir(), "of-target-"));
+		mkdirSync(join(worktree, "openfabriq/agents/coder"), { recursive: true });
+		writeFileSync(join(worktree, "openfabriq/agents/coder/agent.md"), "");
+		const whyNot = targetProblemIn(worktree, importedFolders(LOCK));
+		expect(whyNot("openfabriq/agents/coder/agent.md")).toBeUndefined();
+		expect(whyNot("openfabriq/skills/dates/reference.md")).toBeUndefined();
+		expect(whyNot("openfabriq/skills/code-review/SKILL.md")).toContain(
+			"skills/code-review, a skill imported from a public repository",
+		);
+		expect(whyNot("openfabriq/skills/dates/SKILL.md")).toContain(
+			"does not exist",
+		);
+		// A lesson whose target became an imported skill waits, instead of being refused each batch.
+		const waiting = lesson({
+			id: "L1",
+			target: "openfabriq/skills/code-review/SKILL.md",
+			failures: [
+				{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+				{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
+			],
+		});
+		expect(nextToImprove([waiting])?.id).toBe("L1");
+		expect(nextToImprove([waiting], whyNot)).toBeUndefined();
+		expect(importedFolders("not json")).toEqual([]);
+	});
+
 	it.each([
 		["openfabriq/skills/testing/SKILL.md", true],
 		["openfabriq/skills/testing/reference/dates.md", true],
@@ -214,6 +257,29 @@ describe("the guard of learning's pull requests", () => {
 				["openfabriq/agents/coder/agent.md", "openfabriq/skills/x/SKILL.md"],
 				versions(md, `${md}\nValidate dates.\n`),
 			),
+		).toBeUndefined();
+	});
+
+	it("keeps a SKILL.md's front matter, and a skill imported from a public repository, as they are", async () => {
+		const skill = (header: string) => `---\n${header}\n---\n# Review\n`;
+		expect(
+			await outsideLearning(
+				["openfabriq/skills/x/SKILL.md"],
+				versions(skill("name: x"), skill("name: x\nallowed-tools: Bash")),
+			),
+		).toContain("front matter of openfabriq/skills/x/SKILL.md");
+		const withLock = async (path: string) =>
+			path === "openfabriq/imported-skills.json"
+				? { start: LOCK, head: LOCK }
+				: { start: "# A\n", head: "# A, and more\n" };
+		expect(
+			await outsideLearning(
+				["openfabriq/skills/code-review/reference.md"],
+				withLock,
+			),
+		).toContain("a skill imported from a public repository");
+		expect(
+			await outsideLearning(["openfabriq/skills/dates/reference.md"], withLock),
 		).toBeUndefined();
 	});
 

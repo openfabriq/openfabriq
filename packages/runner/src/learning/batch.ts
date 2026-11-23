@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import {
 	type Factory,
+	IMPORTED_SKILLS,
 	LEARNING,
 	LEARNING_FOLDER,
 	LESSON_THRESHOLD,
@@ -23,12 +24,14 @@ import { type Failure, findFailures, type RunEvidence } from "./failures.js";
 import {
 	type Grouping,
 	groupIntoLessons,
+	importedFolders,
 	type Lesson,
 	newFailures,
 	nextToImprove,
 	readLessons,
 	resolvedByPullRequest,
 	saveLessons,
+	targetProblemIn,
 } from "./lessons.js";
 
 // One batch of learning: the engine stages the new failures in the worktree, the agent groups them
@@ -271,7 +274,11 @@ export async function prepareBatch(step: {
 	const failures = projectFailures(repository, step.runs, factory);
 	// shortcut: the newest failures first; an older one waits for a quieter batch.
 	const fresh = newFailures(failures, lessons).slice(0, BATCH);
-	let improving = nextToImprove(lessons);
+	const whyNot = targetProblemIn(
+		step.worktree,
+		importedFolders(readIn(join(step.worktree, "openfabriq"), IMPORTED_SKILLS)),
+	);
+	let improving = nextToImprove(lessons, whyNot);
 	if (fresh.length === 0 && !improving) return undefined;
 
 	const dir = join(step.worktree, LEARNING_FOLDER);
@@ -295,7 +302,7 @@ export async function prepareBatch(step: {
 	const record = (groupings: Grouping[]): string | Error => {
 		if (recorded)
 			return new Error("Already recorded: record_lessons is called once.");
-		const result = groupIntoLessons(lessons, fresh, groupings, now());
+		const result = groupIntoLessons(lessons, fresh, groupings, now(), whyNot);
 		if ("problems" in result)
 			return new Error(
 				`Nothing recorded: ${result.problems.join("; ")}. Call record_lessons again.`,
@@ -303,7 +310,7 @@ export async function prepareBatch(step: {
 		recorded = true;
 		lessons = result.lessons;
 		saveLessons(repository, result.changed);
-		improving ??= nextToImprove(lessons);
+		improving ??= nextToImprove(lessons, whyNot);
 		return `Recorded ${result.changed.length} lesson${result.changed.length === 1 ? "" : "s"}. ${
 			improving
 				? improveText(improving)
@@ -355,7 +362,7 @@ export async function prepareBatch(step: {
 			saveLessons(repository, [proposed]);
 			lessons = lessons.map((l) => (l.id === proposed.id ? proposed : l));
 			// Another lesson waits: the next batch takes it now, not next week.
-			if (nextToImprove(lessons))
+			if (nextToImprove(lessons, whyNot))
 				requestRun(repository, {
 					id: `learning-${runId}`,
 					automation: LEARNING,

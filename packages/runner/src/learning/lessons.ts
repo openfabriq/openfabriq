@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LESSON_THRESHOLD } from "@openfabriq/core";
+import { LESSON_THRESHOLD, readImportedSkills } from "@openfabriq/core";
 import { jsonLines } from "../files.js";
 import { projectDir } from "../state/projects.js";
 import type { Failure } from "./failures.js";
@@ -88,9 +88,14 @@ export const awaitsImprovement = (lesson: Lesson) =>
 	!lesson.improvement &&
 	failedRuns(lesson) >= LESSON_THRESHOLD;
 
-/** The next lesson to improve: the oldest that awaits one. */
-export const nextToImprove = (lessons: Lesson[]) =>
-	lessons.find(awaitsImprovement);
+/**
+ * The next lesson to improve: the oldest that awaits one, and whose target can take it. A target
+ * that can no longer (a skill imported since, a file removed) would be refused at each batch.
+ */
+export const nextToImprove = (
+	lessons: Lesson[],
+	whyNot: (target: string) => string | undefined = targetProblem,
+) => lessons.find((l) => awaitsImprovement(l) && !whyNot(l.target));
 
 /** Why a file cannot take a lesson, or undefined: a skill's Markdown or an agent.md of the factory. */
 export function targetProblem(target: string): string | undefined {
@@ -98,6 +103,42 @@ export function targetProblem(target: string): string | undefined {
 		? undefined
 		: `"${target}" is neither a Markdown file of a skill of the factory nor an agent.md: name one, like openfabriq/skills/<skill>/SKILL.md or openfabriq/agents/<agent>/agent.md`;
 }
+
+/** The folders of the skills imported from public repositories, as `openfabriq/<folder>/`, from imported-skills.json: none when it is missing or broken, which validate refuses. */
+export function importedFolders(lock: string | undefined): string[] {
+	const read = lock === undefined ? [] : readImportedSkills(lock);
+	return Array.isArray(read)
+		? []
+		: Object.keys(read.skills).map((folder) => `openfabriq/${folder}/`);
+}
+
+/** Why a file of an imported skill cannot change, or undefined: it stays as its source has it, so `openfabriq skill update` keeps working. */
+export function importedProblem(
+	path: string,
+	imported: string[],
+): string | undefined {
+	const folder = imported.find((f) => path.startsWith(f));
+	return folder
+		? `${path} is in ${folder.slice(0, -1)}, a skill imported from a public repository: it stays as its source has it. Write the rule into the agent.md of the agent that uses it`
+		: undefined;
+}
+
+/** A file whose front matter an improvement keeps: an agent.md, or a skill's SKILL.md. */
+export const keepsFrontMatter = (path: string) =>
+	path.endsWith("/agent.md") || path.endsWith("/SKILL.md");
+
+/**
+ * Why a file of this worktree cannot take a lesson, or undefined: improvable, in no imported skill,
+ * and, for an agent.md or a SKILL.md, already there, since an improvement only changes their body.
+ */
+export const targetProblemIn =
+	(worktree: string, imported: string[]) =>
+	(target: string): string | undefined =>
+		targetProblem(target) ??
+		importedProblem(target, imported) ??
+		(keepsFrontMatter(target) && !existsSync(join(worktree, target))
+			? `${target} does not exist: an improvement changes the body of an existing agent.md or SKILL.md. Name one, or another Markdown file of a skill`
+			: undefined);
 
 /** A file an improvement may change, from the repository's root: a skill's Markdown, or an agent.md (its body: the guard checks the front matter). */
 export function isImprovable(path: string): boolean {
@@ -121,6 +162,7 @@ export function groupIntoLessons(
 	staged: Failure[],
 	groupings: Grouping[],
 	now: Date,
+	whyNot: (target: string) => string | undefined = targetProblem,
 ): { lessons: Lesson[]; changed: Lesson[] } | { problems: string[] } {
 	const problems: string[] = [];
 	const byId = new Map(staged.map((f) => [f.id, f]));
@@ -139,7 +181,7 @@ export function groupIntoLessons(
 			if (!lessons.some((l) => l.id === g.lesson))
 				problems.push(`${g.lesson} is not a lesson`);
 		} else {
-			const why = targetProblem(g.target);
+			const why = whyNot(g.target);
 			if (why) problems.push(why);
 		}
 	}
