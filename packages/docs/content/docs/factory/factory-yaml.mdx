@@ -74,6 +74,7 @@ learning: true                  # optional: the engine learns from failed work, 
 | `integrations` | [Slack](/integrations/slack/), [Linear](/integrations/linear/), [Sentry](/integrations/sentry/) | |
 | `webhooks` | [Webhooks](/integrations/webhooks/) received by the relay | |
 | `mcp` | [MCP servers](/integrations/mcp/) | |
+| `skills` | The [public skills](/factory/skills/#import-a-public-skill) the factory imports, by name: `code-review: mattpocock/skills`, or `tdd: { from: mattpocock/skills, agent: implementer }` for an agent's (or `area:` for an area's). `openfabriq skill add` writes it | |
 | `wiki` | The [wiki](/factory/wiki/): `true` turns it on, in `wiki/`, on demand; or set its `folder` and `refresh` (`manual` or `after_merge`); `false` or no key keeps it off | Off |
 | `learning` | [Learning](/factory/learning/): `true` turns it on, each Monday at 08:00; or set its `schedule`, a cron; `false` or no key keeps it off | Off |
 | `answer_mentions` | `false` turns off the [answer to mentions](/factory/native-automations/#the-answer-to-mentions): the agent that opened a pull request or an issue no longer answers a maintainer's `@openfabriq` on it | `true` |

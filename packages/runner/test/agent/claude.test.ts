@@ -3,10 +3,11 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
+	realpathSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import type { Network, Tool } from "@openfabriq/core";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -353,6 +354,28 @@ it("clears its time limit and removes its temp folder when a run cannot be prepa
 		vi.useRealTimers();
 	}
 	expect(calls).toEqual([]);
+});
+
+it("lets Read open the files beside a skill, in the factory's plugin folder", async () => {
+	await claudeAgent({
+		prompt: "p",
+		instructions: "i",
+		cwd: dir,
+		model: "haiku",
+		tools: ["read"],
+		network: "any",
+		outputs: { server: {} as never, names: [], propose: () => undefined },
+		plugin: dir,
+		budgetUsd: 1,
+		timeoutMs: 60_000,
+		env: {},
+		transcript: join(dir, "transcript.jsonl"),
+	});
+	// Exempt from blockReadsOutsideWorkingDirectories, but under dontAsk only an allow rule lets Read
+	// there; by the path Claude Code names the skill's folder with, and by its real one (/var is a link on macOS).
+	const rules = calls[0]?.allowedTools ?? [];
+	expect(rules).toContain(`Read(/${realpathSync(dir)}/**)`);
+	expect(rules).toContain(`Read(/${resolve(dir)}/**)`);
 });
 
 it("fails a run whose Claude Code stops with an error, or ends without a result", async () => {

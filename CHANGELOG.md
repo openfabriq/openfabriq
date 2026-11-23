@@ -4,6 +4,17 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
+### Added
+
+- `openfabriq skill add`, `skill update` and `skill remove` import a public skill from GitHub into `openfabriq/` as plain files, declared in a new `skills` key of `factory.yaml` and pinned to its commit in `openfabriq/imported-skills.json`. `validate` refuses any gap between the three, and `doctor` says when an imported skill was edited since its import or has a newer version.
+
+### Changed
+
+- `validate`, and so `apply`, refuse a skill of the factory whose `SKILL.md` has `allowed-tools`: a skill would grant itself tools, while the agent's `tools` say what it may use. Remove the field, and add what the agent needs to its `tools`, before you upgrade.
+- Agents may read the files beside a skill's `SKILL.md`, such as its references and scripts. They were refused them until now.
+
 ### Fixed
 
 - The studio's chat message box now has a stable name, "Message", so a screen reader announces it the same way whatever suggestion the placeholder shows.

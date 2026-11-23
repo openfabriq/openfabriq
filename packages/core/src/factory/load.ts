@@ -8,6 +8,7 @@ import { LEARNING, reservedNameClashes, WIKI } from "./engine-names.js";
 import { factoryProblems } from "./factory-rules.js";
 import {
 	duplicateNames,
+	grantingSkills,
 	type Layout,
 	misnamedFolders,
 	misplacedAreas,
@@ -18,6 +19,7 @@ import {
 	splitArea,
 	splitFrontMatter,
 } from "./files.js";
+import { importedSkillsProblems } from "./imported.js";
 import { readLearning } from "./learning.js";
 import {
 	AgentShape,
@@ -66,6 +68,8 @@ export function loadFactory(files: FactoryFiles): {
 		...misnamedFolders(layout),
 		...misplacedAreas(files, layout),
 		...duplicateNames(layout),
+		...grantingSkills(files, layout),
+		...importedSkillsProblems(files, layout, fields.skills),
 	);
 	const { wiki, problems: wikiProblems } = readWiki(
 		fields.wiki,

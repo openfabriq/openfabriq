@@ -77,5 +77,6 @@ export * from "./workspace/diff.js";
 export * from "./workspace/git.js";
 export { cloneGit, parseHeads } from "./workspace/hardened-git.js";
 export { tail, withoutSandboxNoise } from "./workspace/sandboxed-commands.js";
+export * from "./workspace/skill-hash.js";
 export * from "./workspace/wiki.js";
 export * from "./workspace/workspace.js";
