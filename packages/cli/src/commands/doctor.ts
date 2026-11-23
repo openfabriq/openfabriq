@@ -1,10 +1,20 @@
-import { machineNeeds, sentenceList, unlistedSites } from "@openfabriq/core";
+import { join } from "node:path";
+import {
+	IMPORTED_SKILLS,
+	machineNeeds,
+	readImportedSkills,
+	sentenceList,
+	skillPlace,
+	unlistedSites,
+} from "@openfabriq/core";
 import {
 	errorText,
 	exec,
 	type GitHubApp,
 	githubApp,
 	recentRefusals,
+	skillFiles,
+	skillHash,
 } from "@openfabriq/runner";
 import type { CommandResult } from "../result.js";
 import { secretWarnings } from "../secret-warnings.js";
@@ -87,11 +97,12 @@ export async function doctorCommand(
 				"The skills say what they need (doctor looks up the programs they install; check the rest yourself):",
 				...unsure.map(([skill, text]) => `! ${skill}: ${text}`),
 			);
+		lines.push(...(await importedSkillLines(folder, files, run)));
 		lines.push(
 			"",
 			lacking.length || notInstalled.length
-				? `This machine lacks what is marked ✗ for ${folder}. Install it, then run "openfabriq doctor" again.`
-				: `This machine has the programs ${folder} runs.`,
+				? `Install what is marked ✗, then run "openfabriq doctor" again.`
+				: "Everything this factory needs is installed on this machine.",
 		);
 	}
 	return {
@@ -136,4 +147,57 @@ function networkLines(
 		: [
 				"✓ network reaches every site the factory names, and no site was refused in its last runs",
 			];
+}
+
+/**
+ * Each imported skill: edited since its import, and with a newer version upstream.
+ * Said, not a failure: GitHub may be out of reach, and an update is a pull request of its own.
+ */
+async function importedSkillLines(
+	folder: string,
+	files: Record<string, string>,
+	run: typeof exec,
+): Promise<string[]> {
+	const text = files[IMPORTED_SKILLS];
+	const read = text === undefined ? undefined : readImportedSkills(text);
+	// validate has said what is wrong with the file.
+	if (!read || Array.isArray(read)) return [];
+	const lines: string[] = [];
+	for (const [key, entry] of Object.entries(read.skills).sort()) {
+		const { source, ref, commit, skillPath } = entry;
+		const edited =
+			skillHash(skillFiles(join(folder, key))) !== entry.computedHash;
+		if (edited)
+			lines.push(
+				`! ${key}: edited since its import; "openfabriq skill update" asks before overwriting it`,
+			);
+		// The skill's folder in its repository; a skill at the root is the whole repository.
+		const path = skillPath.includes("/")
+			? skillPath.slice(0, skillPath.lastIndexOf("/"))
+			: "";
+		const lastCommitOnSkill = (at: string) =>
+			run("gh", [
+				"api",
+				`repos/${source}/commits?sha=${encodeURIComponent(at)}&per_page=1${path ? `&path=${encodeURIComponent(path)}` : ""}`,
+				"-q",
+				'.[0].sha // ""',
+			]).then((out) => out.trim());
+		try {
+			const latest = await lastCommitOnSkill(ref);
+			const pinned = await lastCommitOnSkill(commit);
+			if (!latest)
+				lines.push(`! ${key}: ${source} no longer has ${skillPath} on ${ref}`);
+			else if (latest !== pinned)
+				lines.push(
+					`! ${key}: ${source} has a newer version on ${ref}: run "openfabriq skill update ${skillPlace(key)?.name ?? key}" for a pull request that updates it`,
+				);
+			else if (!edited)
+				lines.push(`✓ ${key}: as imported from ${source}, and up to date`);
+		} catch (error) {
+			lines.push(
+				`! ${key}: could not ask ${source} for a newer version (${errorText(error).split("\n")[0]})`,
+			);
+		}
+	}
+	return lines;
 }

@@ -10,9 +10,26 @@ export {
 export { isEngineVariable, looksSecret, secretNames } from "./factory/env.js";
 export {
 	areasOf,
+	frontMatterField,
+	grantsTools,
 	resourceFolder,
+	scanLayout,
 	splitArea,
 } from "./factory/files.js";
+export {
+	declaredPlace,
+	IMPORTED_SKILLS,
+	type ImportedSkill,
+	type ImportedSkills,
+	importedSkillsText,
+	REPOSITORY,
+	readImportedSkills,
+	type SkillPlace,
+	skillAddCommand,
+	skillFolder,
+	skillPlace,
+	withDeclaredSkill,
+} from "./factory/imported.js";
 export { loadFactory } from "./factory/load.js";
 export { machineNeeds } from "./factory/needs.js";
 export {
@@ -29,6 +46,7 @@ export { isScript, scriptOf } from "./factory/scripts.js";
 export type {
 	Agent,
 	Automation,
+	DeclaredSkill,
 	Factory,
 	FactoryFiles,
 	Limits,

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 import {
 	type HookCallback,
 	type HookCallbackMatcher,
@@ -223,6 +224,14 @@ export function queryOptions(
 	// The run's temp folder, where the shell leaves its screenshots: blockReadsExemptPaths lets Read
 	// there but allows nothing, and under dontAsk only an allow rule does ("//" is the filesystem's root).
 	if (builtIn.includes("Read")) preApproved.push(`Read(/${temp}/**)`);
+	// So are the files beside a skill's SKILL.md (its references, its examples), by the path Claude
+	// Code names the skill's folder with and by its real one: /var is a link to /private/var on macOS.
+	if (builtIn.includes("Read"))
+		for (const folder of new Set([
+			...plugin,
+			...(run.plugin ? [resolve(run.plugin)] : []),
+		]))
+			preApproved.push(`Read(/${folder}/**)`);
 	// The repo's hooks never run, even for a read-only agent: they come from the pull request's branch.
 	return lockedDownOptions(
 		{

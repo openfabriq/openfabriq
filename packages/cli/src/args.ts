@@ -16,6 +16,9 @@ export function readCommandLine(args: string[]) {
 			url: { type: "string" },
 			remove: { type: "boolean", default: false },
 			org: { type: "string" },
+			skill: { type: "string" },
+			agent: { type: "string" },
+			area: { type: "string" },
 			workflows: { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
 			version: { type: "boolean", short: "v", default: false },
@@ -30,7 +33,15 @@ export function readCommandLine(args: string[]) {
 export type CommandLine = ReturnType<typeof readCommandLine>;
 
 /** Commands whose output says how they went: in a terminal, it is led by ✓ (or ✗ on failure). */
-const REPORTS = ["init", "apply", "connect", "deploy", "secret", "update"];
+const REPORTS = [
+	"init",
+	"apply",
+	"connect",
+	"deploy",
+	"secret",
+	"skill",
+	"update",
+];
 
 export const reportsHowItWent = (command: string | undefined) =>
 	REPORTS.includes(command ?? "");

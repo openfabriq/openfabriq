@@ -35,7 +35,78 @@ What holds for any work on the code, such as the stack, the commands and the com
 
 Keep skills short and prescriptive. What varies from one automation to another goes in that automation's task.
 
+A skill never grants tools: the agent's `tools` say what it may use. `openfabriq validate` refuses a `SKILL.md` whose header has `allowed-tools`.
+
 The engine loads only the factory's skills and the repository's project settings, never those of the machine (`~/.claude/`).
+
+## Import a public skill
+
+Good skills already exist in public repositories, listed on [skills.sh](https://skills.sh). `openfabriq skill add` copies one into the factory as plain files, pinned to the commit it came from:
+
+```bash
+openfabriq skill add mattpocock/skills --skill code-review                   # → openfabriq/skills/code-review/
+openfabriq skill add mattpocock/skills --skill code-review --agent reviewer  # → openfabriq/agents/reviewer/skills/code-review/
+openfabriq skill add mattpocock/skills --skill code-review --area qa         # → openfabriq/qa/skills/code-review/
+```
+
+`--skill` names the skill as the [`skills` CLI](https://github.com/vercel-labs/skills) does, and the repository may be its GitHub URL. To use a command copied from skills.sh, replace `npx skills add` with `openfabriq skill add`. The repository is read with `gh`, so a private one works too. A repository with a single skill needs no `--skill`. With `--agent`, the skill goes into that agent's own folder, in its area if it has one.
+
+The command also declares the skill in `factory.yaml`, so anyone can read what the factory imports, as a `package.json` lists a project's dependencies:
+
+```yaml title="openfabriq/factory.yaml (extract)"
+skills:
+  code-review: mattpocock/skills                              # shared by every agent
+  tdd: { from: mattpocock/skills, agent: implementer }        # that agent only
+  web-design-guidelines: { from: vercel-labs/agent-skills, area: qa }
+```
+
+The skill is never fetched while a run goes on: its folder is reviewed in a pull request, and `plan` shows its changes like any other file. Read it before you merge: a public skill is written for a person at the keyboard ("ask the user", "run `gh pr comment`"), while an agent of the factory has no one to ask and goes through the outputs its automation allows. Keep the imported skill as it is, and say in the agent's body how the factory uses it.
+
+### Update the imported skills
+
+```bash
+openfabriq skill update          # every skill factory.yaml declares
+openfabriq skill update tdd      # that one only
+```
+
+`skill update` takes each declared skill from the last commit of its repository's default branch. A skill whose content did not change keeps its entry, so the pull request shows only what changed. Before overwriting a skill edited since its import, `skill update` asks once, no by default; with no one at a terminal to answer, it keeps the edits. To adapt an imported skill, edit the `agent.md` of the agents that use it rather than the skill, so updates never touch your changes. `openfabriq doctor` says when an imported skill has a newer version, or was edited since its import; neither fails `doctor`, and an unreachable repository is a line of its own. After an update, read the skills that changed before you run `openfabriq apply`: its plan lists their files, not what they say.
+
+### What openfabriq keeps
+
+`openfabriq/imported-skills.json` is the lock: for each imported skill's folder, its repository, branch, commit and content hash. The hash is the `computedHash` of the [`skills` CLI](https://github.com/vercel-labs/skills)'s `skills-lock.json`, so both tools agree on a skill's content. The commands write this file; never edit it by hand.
+
+```json title="openfabriq/imported-skills.json"
+{
+  "version": 1,
+  "skills": {
+    "skills/code-review": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "ref": "main",
+      "commit": "4f2a…",
+      "skillPath": "skills/code-review/SKILL.md",
+      "computedHash": "93c3…"
+    }
+  }
+}
+```
+
+- `validate` refuses any gap between `factory.yaml`'s `skills`, this file and the folders: a skill declared but not imported, imported but not declared, or whose folder is gone. Its message gives the command that closes the gap.
+- `skill add` refuses to overwrite a skill of your own with the same name, or to import a skill a second time, in another place or from another repository: remove it first.
+- `openfabriq skill remove skills/code-review` removes the folder, its entry and its line in `factory.yaml`.
+- Like any skill of the factory, an imported skill whose header has `allowed-tools` is refused.
+
+### What a public skill needs from the task
+
+A public skill asks the person for what it lacks: which files to review, which commit to start from, which interfaces to test. An agent of the factory has no one to ask, so the automation's task gives it instead. Three public skills were tried on real runs, with an agent body of one line and no change to the skill:
+
+| Skill | What the task gave it | How it went |
+| --- | --- | --- |
+| `vercel-labs/agent-skills` `web-design-guidelines` | the page to review | Read the rules bundled beside its `SKILL.md`, and reported each finding as `file:line` in the issue. Nothing to adapt |
+| `mattpocock/skills` `tdd` | the function to write, and its test file | Took the function the task named as the interface to test, instead of asking which one, and wrote the tests first. It sometimes wrote several tests at once, which the skill advises against |
+| `mattpocock/skills` `code-review` | the range to review (`HEAD~1...HEAD`) | Reviewed both of its axes in one go, since the agent cannot start sub-agents. It skipped the spec, for lack of one, and said so. It ignored the setup the skill asks for (`/setup-matt-pocock-skills`) |
+
+None of them asked anyone, posted on GitHub itself, or went past the outputs its automation allows. When a skill relies on something the factory does not give, such as its own tracker or a sub-agent, say in the agent's body what to do without it.
 
 ## Skills for command-line tools
 

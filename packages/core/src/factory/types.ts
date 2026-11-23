@@ -119,6 +119,8 @@ export interface Factory {
 	commands?: Record<string, string>;
 	/** Names of commands the engine runs before applying code an agent changed. */
 	checks?: string[];
+	/** factory.yaml's `skills`: public skills the factory imports, by name, with their repository and place. */
+	importedSkills?: Record<string, DeclaredSkill>;
 	/** Values for setup, commands and agents, written in the factory. */
 	env?: Record<string, string>;
 	/** Names of secrets taken from the engine's environment, for setup and commands only. */
@@ -148,4 +150,11 @@ export interface Factory {
 	areaSkills?: Record<string, string[]>;
 	agents: Record<string, Agent>;
 	automations: Record<string, Automation>;
+}
+
+/** A public skill factory.yaml declares: its GitHub repository, and the agent or area that has it. */
+export interface DeclaredSkill {
+	from: string;
+	agent?: string;
+	area?: string;
 }

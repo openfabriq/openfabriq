@@ -28,6 +28,7 @@ export function toFactory(
 		...(fields.setup ? { setup: fields.setup } : {}),
 		...(fields.commands ? { commands: fields.commands } : {}),
 		...(fields.checks ? { checks: fields.checks } : {}),
+		...(fields.skills ? { importedSkills: fields.skills } : {}),
 		...(fields.env ? { env: fields.env } : {}),
 		...(fields.secrets ? { secrets: fields.secrets } : {}),
 		...(fields.network ? { network: fields.network } : {}),
