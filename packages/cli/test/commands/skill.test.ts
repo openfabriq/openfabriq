@@ -416,6 +416,39 @@ describe("openfabriq skill add", () => {
 		expect(readFileSync(copy, "utf8")).toBe(REVIEW);
 	});
 
+	it("never takes a skill from another repository in place of the one imported", async () => {
+		const repo = factory();
+		const add = (target: string) =>
+			skillCommand(
+				{ action: "add", target, name: "code-review" },
+				repo,
+				github({
+					...PUBLIC,
+					"skills/code-review/SKILL.md": `${REVIEW}Fork.\n`,
+				}),
+			);
+		await skillCommand(
+			{ action: "add", target: "mattpocock/skills", name: "code-review" },
+			repo,
+			github(PUBLIC),
+		);
+		const refused = await add("acme/fork");
+		expect(refused).toEqual({
+			code: 1,
+			output:
+				'code-review is already imported from mattpocock/skills: run "openfabriq skill remove skills/code-review" first, then import it again',
+		});
+		expect(lockOf(repo).skills["skills/code-review"].source).toBe(
+			"mattpocock/skills",
+		);
+		expect(
+			readFileSync(
+				join(repo, "openfabriq/skills/code-review/SKILL.md"),
+				"utf8",
+			),
+		).toBe(REVIEW);
+	});
+
 	it("never overwrites a skill of the factory's own", async () => {
 		const repo = factory({ "skills/code-review/SKILL.md": REVIEW });
 		const result = await skillCommand(
@@ -505,6 +538,33 @@ describe("openfabriq skill update", () => {
 		]);
 		expect(readFileSync(tdd, "utf8")).toContain("Red, then green.");
 		expect(readFileSync(review, "utf8")).toBe(REVIEW);
+	});
+
+	it("takes the skill named with --skill, as add does", async () => {
+		const repo = factory();
+		await add(repo, "code-review");
+		await add(repo, "tdd");
+		const result = await skillCommand(
+			{ action: "update", name: "tdd" },
+			repo,
+			github(NEWER),
+		);
+		expect(result.output.split("\n")[0]).toBe(
+			"✓ tdd: updated to mattpocock/skills at ccccccc",
+		);
+		expect(result.output).not.toContain("code-review");
+	});
+
+	it("never brings back, unnamed, a skill whose folder was deleted", async () => {
+		const repo = factory();
+		await add(repo, "code-review");
+		await add(repo, "tdd");
+		const folder = join(repo, "openfabriq/skills/tdd");
+		rmSync(folder, { recursive: true });
+		const result = await update(repo, NEWER);
+		expect(result.code).toBe(1);
+		expect(result.output).toContain('run "openfabriq validate"');
+		expect(existsSync(folder)).toBe(false);
 	});
 
 	it("imports again a skill whose folder was deleted to undo an edit, as its message says", async () => {

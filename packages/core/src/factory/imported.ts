@@ -128,7 +128,7 @@ export function importedSkillsProblems(
 			);
 		else if (entry.source !== skill.from)
 			inFactory(
-				`skills.${name}: declared from ${skill.from}, but imported from ${entry.source}: run "${skillAddCommand(name, skill)}"`,
+				`skills.${name}: declared from ${skill.from}, but imported from ${entry.source}: run "openfabriq skill remove ${folder}", then "${skillAddCommand(name, skill)}"`,
 			);
 	}
 	for (const folder of Object.keys(read.skills).sort())

@@ -185,7 +185,7 @@ describe("factory.yaml's skills", () => {
 				},
 			),
 		).toEqual([
-			'factory.yaml: skills.code-review: declared from acme/fork, but imported from mattpocock/skills: run "openfabriq skill add acme/fork --skill code-review"',
+			'factory.yaml: skills.code-review: declared from acme/fork, but imported from mattpocock/skills: run "openfabriq skill remove skills/code-review", then "openfabriq skill add acme/fork --skill code-review"',
 			'factory.yaml: skills.tdd: declared, but not imported: run "openfabriq skill add mattpocock/skills --skill tdd --agent tester"',
 		]);
 	});

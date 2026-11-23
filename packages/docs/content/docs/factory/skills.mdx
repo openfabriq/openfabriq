@@ -92,7 +92,7 @@ openfabriq skill update tdd      # that one only
 ```
 
 - `validate` refuses any gap between `factory.yaml`'s `skills`, this file and the folders: a skill declared but not imported, imported but not declared, or whose folder is gone. Its message gives the command that closes the gap.
-- `skill add` refuses to overwrite a skill of your own with the same name, or to import a skill a second time in another place: to give it to an agent instead, remove it first.
+- `skill add` refuses to overwrite a skill of your own with the same name, or to import a skill a second time, in another place or from another repository: remove it first.
 - `openfabriq skill remove skills/code-review` removes the folder, its entry and its line in `factory.yaml`.
 - Like any skill of the factory, an imported skill whose header has `allowed-tools` is refused.
 

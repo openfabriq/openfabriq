@@ -77,7 +77,12 @@ export async function skillCommand(
 		if (args.action === "add")
 			return await addSkill(args, folder, clone, confirm);
 		if (args.action === "update")
-			return await updateSkills(args.target, folder, clone, confirm);
+			return await updateSkills(
+				args.target ?? args.name,
+				folder,
+				clone,
+				confirm,
+			);
 		if (args.action === "remove") return removeSkill(args.target, folder);
 	} finally {
 		rmSync(temp, { recursive: true, force: true });
@@ -171,6 +176,9 @@ async function importSkill(
 	const entry = Object.hasOwn(imported.skills, key)
 		? imported.skills[key]
 		: undefined;
+	// Changing a skill's source is a choice of its own: its text then comes from someone else.
+	if (entry && entry.source !== repository)
+		return `${found.name} is already imported from ${entry.source}: run "openfabriq skill remove ${key}" first, then import it again`;
 	const done = (status: Imported["status"]) => ({
 		status,
 		name: found.name,
@@ -216,13 +224,11 @@ async function importSkill(
 	return done(entry ? "updated" : "imported");
 }
 
-const APPLY = `  - Run "openfabriq apply" to use it.`;
-const UPDATED_STEPS = [`Next: run "openfabriq apply" to use the new version.`];
 const importedSteps = (key: string) => [
 	"Next:",
 	`  - Read openfabriq/${key}/ before an agent uses it: it was written for a person who answers its questions, and an agent has no one to ask.`,
 	`  - To adapt it, edit ${agentFiles(key)}, never the skill itself.`,
-	APPLY,
+	`  - Run "openfabriq apply" to use it.`,
 ];
 /** The question for skills edited since their import, by name. */
 const OVERWRITE = (names: string[]) =>
@@ -330,7 +336,8 @@ async function updateSkills(
 	const restored = new Set<string>();
 	for (const [key, entry] of Object.entries(imported.skills).sort()) {
 		const skill = skillPlace(key);
-		if (!skill || (only && skill.name !== only)) continue;
+		// Only the one named: a folder deleted by hand may be a skill someone meant to remove.
+		if (!skill || skill.name !== only) continue;
 		if (existsSync(join(folder, key))) continue;
 		restored.add(skill.name);
 		await update(skill.name, entry.source, skill.place);
@@ -375,7 +382,8 @@ async function updateSkills(
 				confirm ? `! ${name}: kept as you edited it` : KEPT_UNASKED(name),
 			);
 	writeImported(folder, imported.skills);
-	if (changed) lines.push("", ...UPDATED_STEPS);
+	if (changed)
+		lines.push("", `Next: run "openfabriq apply" to use the new version.`);
 	return { code: failed ? 1 : 0, output: lines.join("\n") };
 }
 
