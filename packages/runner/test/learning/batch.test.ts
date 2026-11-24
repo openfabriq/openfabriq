@@ -252,6 +252,7 @@ describe("a batch of learning", () => {
 			event: "pull_request.changes_requested",
 			isPullRequest: true,
 			number: 7,
+			requestedBy: "mia",
 			status: "succeeded",
 			reason: undefined,
 		} as unknown as RunRecord;

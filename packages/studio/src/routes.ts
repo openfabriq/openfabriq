@@ -169,9 +169,10 @@ export function readRoutes(
 			)(request);
 		},
 		"/api/learning/:id": async (request) => {
-			const found = await ofFactory(async (repository) =>
+			const found = await ofFactory(async (repository, { factory }) =>
 				lessonOf(
 					repository,
+					factory.maintainers,
 					request.runs(),
 					request.params.id ?? "",
 					pullDiff,

@@ -43,7 +43,7 @@ Only signals about the quality of the work:
 - failed checks on GitHub (`pull_request.checks_failed`) on a pull request the factory opened;
 - requested changes (`pull_request.changes_requested`) on a pull request the factory opened, by a maintainer.
 
-The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs. Requested changes count when a [maintainer](/factory/factory-yaml/) asked for them, even when the automation runs for anyone. The Learning page says so when none does. Each run on these events is a failure of its own: when two automations run on the same red checks, one pull request counts twice.
+The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs. Requested changes count when a [maintainer](/factory/factory-yaml/) asked for them, even when the automation runs for anyone; never when an agent of your factory requested them in its review, since its account is the engine's. The Learning page says so when none does. Each run on these events is a failure of its own: when two automations run on the same red checks, one pull request counts twice.
 
 Not a failure: a run that hit `usd_per_run` or `minutes_per_run`, an error of Claude Code, a broken `setup`, a service not connected, a site the network refused, an output the factory does not allow. Those are settled in `factory.yaml`, not taught to an agent. The runs of learning and of the [wiki](/factory/wiki/) never count, so learning never learns from itself.
 

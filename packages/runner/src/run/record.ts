@@ -50,6 +50,9 @@ export function baseRecord(
 			: run.event.event === "schedule"
 				? { scheduledFor: run.event.at }
 				: {}),
+		...(run.event.event === "pull_request.changes_requested" && run.event.actor
+			? { requestedBy: run.event.actor }
+			: {}),
 		...(run.untrusted ? { untrusted: true } : {}),
 		status: "queued",
 		queuedAt: run.queuedAt ?? fallbackQueuedAt,

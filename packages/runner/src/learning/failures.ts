@@ -1,4 +1,4 @@
-import { isEngineName } from "@openfabriq/core";
+import { includesName, isEngineName } from "@openfabriq/core";
 import type { CommandRun } from "../run/harness.js";
 import type { Finding, ReviewRound } from "../run/internal-review.js";
 import { openingRun, type RunRecord } from "../state/journal.js";
@@ -51,6 +51,7 @@ function runFailures(
 	run: RunRecord,
 	runs: RunRecord[],
 	evidence: RunEvidence,
+	maintainers: string[],
 ): Failure[] {
 	// The engine's own runs never count: learning would learn from itself.
 	if (
@@ -101,10 +102,13 @@ function runFailures(
 		run.event === "pull_request.changes_requested";
 	if (pullRequestFailure && run.isPullRequest && run.number !== undefined) {
 		const opened = openingRun(runs, run.number);
-		// Requested changes count when a maintainer asked for them: whoever the automation runs for, a run
-		// is untrusted when no maintainer started it.
+		// Requested changes count when a maintainer asked for them, whoever the automation runs for: never
+		// the engine's own reviewer, whose account starts runs too, nor a run older than requestedBy.
 		const byMaintainer =
-			run.event !== "pull_request.changes_requested" || !run.untrusted;
+			run.event !== "pull_request.changes_requested" ||
+			(!run.untrusted &&
+				run.requestedBy !== undefined &&
+				includesName(maintainers, run.requestedBy));
 		if (opened && !isEngineName(opened.agent) && byMaintainer) {
 			const kind =
 				run.event === "pull_request.checks_failed"
@@ -130,6 +134,9 @@ function runFailures(
 export function findFailures(
 	runs: RunRecord[],
 	evidenceOf: (run: RunRecord) => RunEvidence,
+	maintainers: string[],
 ): Failure[] {
-	return runs.flatMap((run) => runFailures(run, runs, evidenceOf(run)));
+	return runs.flatMap((run) =>
+		runFailures(run, runs, evidenceOf(run), maintainers),
+	);
 }

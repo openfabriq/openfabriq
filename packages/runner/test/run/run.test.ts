@@ -664,6 +664,8 @@ it("hands over to a human when changes were requested and the run pushed none", 
 	expect(record).toMatchObject({
 		status: "succeeded",
 		reason: "the review requested changes and the run pushed none",
+		// Who asked: learning counts only a maintainer's requested changes.
+		requestedBy: "ada",
 	});
 	expect(writes.slice(-2)).toEqual([
 		"labels #9: needs-human",

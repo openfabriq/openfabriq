@@ -4,6 +4,8 @@ import type { CommandRun } from "../../src/run/harness.js";
 import type { ReviewRound } from "../../src/run/internal-review.js";
 import type { RunRecord } from "../../src/state/journal.js";
 
+const MAINTAINERS = ["mia"];
+
 const run = (fields: Partial<RunRecord> & { id: string }): RunRecord => ({
 	repository: "acme/app",
 	automation: "implement",
@@ -75,6 +77,7 @@ describe("failures", () => {
 				evidence({
 					r2: { commands: [check(false), check(false, "2 tests failed")] },
 				}),
+				MAINTAINERS,
 			),
 		).toEqual([
 			expect.objectContaining({
@@ -99,6 +102,7 @@ describe("failures", () => {
 					],
 				},
 			}),
+			MAINTAINERS,
 		);
 		expect(failures).toEqual([
 			expect.objectContaining({
@@ -126,28 +130,44 @@ describe("failures", () => {
 			event: "pull_request.changes_requested",
 			isPullRequest: true,
 			number: 7,
+			requestedBy: "mia",
 		});
-		const failures = findFailures([changes, checks, opened], evidence({}));
+		const failures = findFailures(
+			[changes, checks, opened],
+			evidence({}),
+			MAINTAINERS,
+		);
 		expect(failures.map((f) => [f.id, f.agent, f.openedIn])).toEqual([
 			["r3:changes_requested", "coder", "r1"],
 			["r2:checks_failed", "coder", "r1"],
 		]);
 	});
 
-	it("not on a pull request no run opened, nor from an untrusted run: a maintainer's word counts whoever the automation runs for", () => {
+	it("not on a pull request no run opened, nor from an untrusted run, nor from the engine's own reviewer: a maintainer's word counts whoever the automation runs for", () => {
 		const other = run({
 			id: "r2",
 			automation: "rework",
 			event: "pull_request.changes_requested",
 			isPullRequest: true,
 			number: 8,
+			requestedBy: "mia",
 		});
 		const anyone = { ...other, id: "r3", number: 7, automation: "open" };
 		const untrusted = { ...other, id: "r4", number: 7, untrusted: true };
+		// The engine's account requests changes for its reviewer agent: a trusted run, not a maintainer's word.
+		const bot = {
+			...other,
+			id: "r5",
+			number: 7,
+			requestedBy: "openfabriq[bot]",
+		};
+		const { requestedBy: _, ...older } = { ...other, id: "r6", number: 7 };
 		expect(
-			findFailures([other, anyone, untrusted, opened], evidence({})).map(
-				(f) => f.id,
-			),
+			findFailures(
+				[other, anyone, untrusted, bot, older, opened],
+				evidence({}),
+				MAINTAINERS,
+			).map((f) => f.id),
 		).toEqual(["r3:changes_requested"]);
 	});
 
@@ -178,6 +198,7 @@ describe("failures", () => {
 						],
 					},
 				}),
+				MAINTAINERS,
 			),
 		).toEqual([]);
 	});
@@ -198,6 +219,8 @@ describe("failures", () => {
 			isPullRequest: true,
 			number: 7,
 		});
-		expect(findFailures([checks, learning], evidence({}))).toEqual([]);
+		expect(findFailures([checks, learning], evidence({}), MAINTAINERS)).toEqual(
+			[],
+		);
 	});
 });

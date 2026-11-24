@@ -73,7 +73,8 @@ export const diskEvidence =
 export const projectFailures = (
 	repository: string,
 	runs: RunRecord[],
-): Failure[] => findFailures(runs, diskEvidence(repository));
+	maintainers: string[],
+): Failure[] => findFailures(runs, diskEvidence(repository), maintainers);
 
 /** The changed files of a run, with their patches cut short. */
 function changedFilesOf(repository: string, run: string) {
@@ -266,7 +267,7 @@ export async function prepareBatch(step: {
 	saveLessons(repository, resolved);
 	lessons = lessons.map((l) => resolved.find((s) => s.id === l.id) ?? l);
 
-	const failures = projectFailures(repository, step.runs);
+	const failures = projectFailures(repository, step.runs, factory.maintainers);
 	// shortcut: the newest failures first; an older one waits for a quieter batch.
 	const fresh = newFailures(failures, lessons).slice(0, BATCH);
 	const lock = join(step.worktree, "openfabriq", IMPORTED_SKILLS);

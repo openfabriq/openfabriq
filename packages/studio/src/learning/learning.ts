@@ -155,9 +155,11 @@ export function learningOf(
 	states: SubjectStates,
 ): LearningAnswer {
 	const shown = new Set(runsInPeriod(runs, period, now).map((r) => r.id));
-	const failures = projectFailures(repository, runs).filter((f) =>
-		shown.has(f.run),
-	);
+	const failures = projectFailures(
+		repository,
+		runs,
+		factory.maintainers,
+	).filter((f) => shown.has(f.run));
 	const lessons = lessonsNow(repository, states, now);
 	const applies = readApplies(repository);
 	const row = (lesson: Lesson) => lessonRow(lesson, applies);
@@ -210,6 +212,7 @@ export function learningOf(
  */
 export async function lessonOf(
 	repository: string,
+	maintainers: string[],
 	runs: RunRecord[],
 	id: string,
 	pullDiff: (repository: string, number: number) => Promise<string | undefined>,
@@ -220,7 +223,7 @@ export async function lessonOf(
 	if (!lesson) return undefined;
 	const applies = readApplies(repository);
 	const journalFailures = new Map(
-		projectFailures(repository, runs).map((f) => [f.id, f]),
+		projectFailures(repository, runs, maintainers).map((f) => [f.id, f]),
 	);
 	const failures = lesson.failures.map(
 		(f): Failure | LessonFailure => journalFailures.get(f.id) ?? f,

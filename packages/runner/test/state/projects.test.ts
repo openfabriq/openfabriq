@@ -6,6 +6,7 @@ import {
 	closeHome,
 	home,
 	projectDir,
+	readApplies,
 	writeApplied,
 } from "../../src/state/projects.js";
 
@@ -17,6 +18,25 @@ it("closes the engine's folder to other users, even one created open (VULN-014)"
 	mkdirSync(home(), { mode: 0o755 });
 	closeHome();
 	expect(statSync(home()).mode & 0o777).toBe(0o700);
+});
+
+it("keeps every apply, oldest first: learning counts from it what came back once an improvement ran", () => {
+	process.env.OPENFABRIQ_HOME = mkdtempSync(join(tmpdir(), "openfabriq-home-"));
+	expect(readApplies("acme/app")).toEqual([]);
+	writeApplied(
+		"acme/app",
+		{ "factory.yaml": "name: F\n" },
+		new Date("2026-11-20T08:00:00Z"),
+	);
+	writeApplied(
+		"acme/app",
+		{ "factory.yaml": "name: G\n" },
+		new Date("2026-11-21T08:00:00Z"),
+	);
+	expect(readApplies("acme/app")).toEqual([
+		"2026-11-20T08:00:00.000Z",
+		"2026-11-21T08:00:00.000Z",
+	]);
 });
 
 it("writes the factory's scripts executable, not their tests", () => {

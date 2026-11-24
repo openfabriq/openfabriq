@@ -34,6 +34,8 @@ export interface RunRecord {
 	scheduledFor?: string;
 	/** Who asked for a manual run, with `openfabriq run`. */
 	manual?: string;
+	/** Who requested the changes a run on pull_request.changes_requested answers: learning counts only a maintainer's. */
+	requestedBy?: string;
 	title?: string;
 	url?: string;
 	status: RunStatus;
