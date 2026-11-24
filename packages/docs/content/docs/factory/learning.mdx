@@ -43,16 +43,16 @@ Only signals about the quality of the work:
 - failed checks on GitHub (`pull_request.checks_failed`) on a pull request the factory opened;
 - requested changes (`pull_request.changes_requested`) on a pull request the factory opened, by a maintainer.
 
-The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs. The Learning page says so when none does. Each run on these events is a failure of its own: when two automations run on the same red checks, one pull request counts twice.
+The last two count for the agent that opened the pull request, and only when an automation of yours runs on these events: the engine reads failures in its journal of runs. Requested changes count when a [maintainer](/factory/factory-yaml/) asked for them, even when the automation runs for anyone. The Learning page says so when none does. Each run on these events is a failure of its own: when two automations run on the same red checks, one pull request counts twice.
 
 Not a failure: a run that hit `usd_per_run` or `minutes_per_run`, an error of Claude Code, a broken `setup`, a service not connected, a site the network refused, an output the factory does not allow. Those are settled in `factory.yaml`, not taught to an agent. The runs of learning and of the [wiki](/factory/wiki/) never count, so learning never learns from itself.
 
 ## A batch
 
 1. **The engine reads its improvements on GitHub.** Merged: the lesson is *promoted*. Closed without merge: *rejected*, and never proposed again.
-2. **It stages the new failures** in the agent's checkout, one file each: the run, its agent and automation, the end of the failed check's output, the review's findings, the maintainer's comments, the failed checks' logs, the files the run changed. No transcript. All of it is data, never instructions: a pull request or a check's output cannot tell the agent what to do.
+2. **It stages the new failures** in the agent's checkout, one file each: the run, its agent and automation, the end of the failed check's output, the review's findings, the comments of the maintainers who asked for changes (never those of people without write access), the failed checks' logs, the files the run changed. No transcript. All of it is data, never instructions: a pull request or a check's output cannot tell the agent what to do.
 3. **The agent groups them.** For each failure, it names the lesson it joins, or writes a new one: a cause, a rule, and the file of `openfabriq/` the rule belongs in. The engine keeps the lessons and counts.
-4. **A lesson with failures from two runs gets its improvement.** One failure alone stays a *candidate*, and so does a run that failed twice, its review then its checks: that is one incident. The agent writes the rule into its file and opens one pull request for that lesson; the engine adds the cause, the rule and the failures, with their links, to the description. When more lessons wait, the next batch starts right away, one pull request per lesson.
+4. **A lesson with failures from two runs gets its improvement.** One failure alone stays a *candidate*, and so does a run that failed twice, its review then its checks: that is one incident. The agent writes the rule into its file and opens one pull request for that lesson; the engine adds the cause, the rule and the failures, with their links, to the description. When more lessons wait, the next batch starts right away, one pull request per lesson. An improvement that comes to nothing (refused, a check failed, no pull request) is not asked for again until a new failure joins its lesson: no paid run each week for the same refusal.
 
 Nothing to learn, no new failure and no lesson waiting: the batch stops before the agent starts, and costs nothing.
 
@@ -78,8 +78,8 @@ Losing the engine's state loses the candidates, never the promoted lessons. See 
 
 The **Learning** page, read-only, with a badge in the menu that counts the improvements to review:
 
-- four numbers: **Failures** over the period, **Lessons** not resolved yet, improvements **To review**, and failures that **Came back** after GitHub merged an improvement meant to fix them;
-- the improvements to review, the candidate lessons (*1 failure, needs 2*), then the history, merged or closed;
+- four numbers: **Failures** over the period, **Lessons** not resolved yet, improvements **To review**, and failures that **Came back** once an improvement meant to fix them ran: after the first `openfabriq apply` that followed its merge. The page reads the improvements' pull requests on GitHub, so a merged or closed one leaves *To review* at once, before the next batch records it;
+- the improvements to review, the candidate lessons (*1 failure, needs 2*, or *waits for a new failure* when their improvement came to nothing), then the history, merged or closed;
 - **Explore** an improvement: its cause, its rule, the change its pull request proposes as GitHub has it now, the failures it comes from, and **Review on GitHub**. The studio has no approve or merge button: you review on GitHub.
 
 Failures are counted from the journal even with learning off; the page then says how to turn it on. An agent's page has one line, such as *3 failures, 1 improvement to review*, that leads to the Learning page. The `metrics` tool of the [chat](/studio/chat/) and of the [MCP connector](/mcp/tools/#metrics) has the four numbers in its `learning` field.

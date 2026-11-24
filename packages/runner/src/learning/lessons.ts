@@ -19,6 +19,8 @@ export interface LessonFailure {
 	id: string;
 	agent: string;
 	at: string;
+	/** The run's subject, an issue or a pull request: the improvement links it even once the journal no longer has the run. */
+	url?: string;
 }
 
 export interface Lesson {
@@ -36,9 +38,14 @@ export interface Lesson {
 	updatedAt: string;
 	/** When the engine saw its improvement merged or closed. */
 	resolvedAt?: string;
-	/** When GitHub merged its improvement: failures after it came back. */
+	/** When GitHub merged its improvement. */
 	mergedAt?: string;
+	/** When the engine last asked for its improvement: one that came to nothing waits for a new failure. */
+	triedAt?: string;
 }
+
+/** Why a file cannot take a lesson, or undefined. */
+export type TargetRefusal = (target: string) => string | undefined;
 
 /** What the learning agent says of a lesson: an existing one the failures join, or a new one. */
 export type Grouping =
@@ -82,20 +89,28 @@ export const failedRuns = (lesson: Lesson) =>
 	new Set(lesson.failures.map((f) => f.id.slice(0, f.id.lastIndexOf(":"))))
 		.size;
 
-/** A lesson whose failures come from enough runs, and no improvement yet: the engine proposes one. */
+/** The agents whose work a lesson's failures judged. */
+export const lessonAgents = (lesson: Lesson) => [
+	...new Set(lesson.failures.map((f) => f.agent)),
+];
+
+/**
+ * A lesson whose failures come from enough runs, and no improvement yet: the engine proposes one.
+ * One the engine asked for that came to nothing (refused, a check failed, no pull request) waits
+ * until a new failure joins it, instead of a paid run at each batch.
+ */
 export const awaitsImprovement = (lesson: Lesson) =>
 	lesson.status === "candidate" &&
 	!lesson.improvement &&
-	failedRuns(lesson) >= LESSON_THRESHOLD;
+	failedRuns(lesson) >= LESSON_THRESHOLD &&
+	(lesson.triedAt === undefined || lesson.updatedAt > lesson.triedAt);
 
 /**
  * The next lesson to improve: the oldest that awaits one, and whose target can take it. A target
  * that can no longer (a skill imported since, a file removed) would be refused at each batch.
  */
-export const nextToImprove = (
-	lessons: Lesson[],
-	whyNot: (target: string) => string | undefined = targetProblem,
-) => lessons.find((l) => awaitsImprovement(l) && !whyNot(l.target));
+export const nextToImprove = (lessons: Lesson[], refusal: TargetRefusal) =>
+	lessons.find((l) => awaitsImprovement(l) && !refusal(l.target));
 
 /** Why a file cannot take a lesson, or undefined: a skill's Markdown or an agent.md of the factory. */
 export function targetProblem(target: string): string | undefined {
@@ -127,18 +142,29 @@ export function importedProblem(
 export const keepsFrontMatter = (path: string) =>
 	path.endsWith("/agent.md") || path.endsWith("/SKILL.md");
 
+/** Why an agent.md or a SKILL.md that is not in the worktree cannot take a lesson: an improvement only changes their body. */
+function missingFileProblem(
+	target: string,
+	worktree: string,
+): string | undefined {
+	if (!keepsFrontMatter(target) || existsSync(join(worktree, target)))
+		return undefined;
+	return `${target} does not exist: an improvement changes the body of an existing agent.md or SKILL.md. Name one, or another Markdown file of a skill`;
+}
+
 /**
- * Why a file of this worktree cannot take a lesson, or undefined: improvable, in no imported skill,
- * and, for an agent.md or a SKILL.md, already there, since an improvement only changes their body.
+ * Why a file of this worktree cannot take a lesson: not improvable, in an imported skill, or an
+ * agent.md or SKILL.md that is not there.
  */
-export const targetProblemIn =
-	(worktree: string, imported: string[]) =>
-	(target: string): string | undefined =>
+export function targetRefusalIn(
+	worktree: string,
+	imported: string[],
+): TargetRefusal {
+	return (target) =>
 		targetProblem(target) ??
 		importedProblem(target, imported) ??
-		(keepsFrontMatter(target) && !existsSync(join(worktree, target))
-			? `${target} does not exist: an improvement changes the body of an existing agent.md or SKILL.md. Name one, or another Markdown file of a skill`
-			: undefined);
+		missingFileProblem(target, worktree);
+}
 
 /** A file an improvement may change, from the repository's root: a skill's Markdown, or an agent.md (its body: the guard checks the front matter). */
 export function isImprovable(path: string): boolean {
@@ -162,7 +188,7 @@ export function groupIntoLessons(
 	staged: Failure[],
 	groupings: Grouping[],
 	now: Date,
-	whyNot: (target: string) => string | undefined = targetProblem,
+	refusal: TargetRefusal,
 ): { lessons: Lesson[]; changed: Lesson[] } | { problems: string[] } {
 	const problems: string[] = [];
 	const byId = new Map(staged.map((f) => [f.id, f]));
@@ -181,19 +207,31 @@ export function groupIntoLessons(
 			if (!lessons.some((l) => l.id === g.lesson))
 				problems.push(`${g.lesson} is not a lesson`);
 		} else {
-			const why = whyNot(g.target);
+			const why = refusal(g.target);
 			if (why) problems.push(why);
 		}
 	}
 	if (problems.length) return { problems };
 
 	const at = now.toISOString();
-	const held = (ids: string[]): LessonFailure[] =>
+	const kept = (ids: string[]): LessonFailure[] =>
 		ids.flatMap((id) => {
 			const f = byId.get(id);
-			return f ? [{ id: f.id, agent: f.agent, at: f.at }] : [];
+			return f
+				? [
+						{
+							id: f.id,
+							agent: f.agent,
+							at: f.at,
+							...(f.url ? { url: f.url } : {}),
+						},
+					]
+				: [];
 		});
-	let next = Math.max(0, ...lessons.map((l) => Number(l.id.slice(1)) || 0));
+	let lastNumber = Math.max(
+		0,
+		...lessons.map((l) => Number(l.id.slice(1)) || 0),
+	);
 	const all = [...lessons];
 	const changed: Lesson[] = [];
 	for (const g of groupings) {
@@ -204,19 +242,19 @@ export function groupIntoLessons(
 			if (!lesson) continue;
 			const grown = {
 				...lesson,
-				failures: [...lesson.failures, ...held(g.failures)],
+				failures: [...lesson.failures, ...kept(g.failures)],
 				updatedAt: at,
 			};
 			all[index] = grown;
 			changed.push(grown);
 		} else {
-			next += 1;
+			lastNumber += 1;
 			const lesson: Lesson = {
-				id: `L${next}`,
+				id: `L${lastNumber}`,
 				cause: g.cause,
 				rule: g.rule,
 				target: g.target,
-				failures: held(g.failures),
+				failures: kept(g.failures),
 				status: "candidate",
 				createdAt: at,
 				updatedAt: at,
@@ -253,11 +291,16 @@ export function resolvedByPullRequest(
 	};
 }
 
-/** The failures of a lesson that happened after its improvement was merged: the cause came back. */
-export function cameBack(lesson: Lesson): LessonFailure[] {
+/**
+ * The failures of a lesson that happened once its improvement ran: after the first apply of the
+ * factory that followed GitHub's merge. Merged and not applied yet, nothing came back.
+ */
+export function cameBack(lesson: Lesson, applies: string[]): LessonFailure[] {
 	// GitHub's merge time; an older lesson has only the batch that saw it.
 	const merged = lesson.mergedAt ?? lesson.resolvedAt;
-	return lesson.status === "promoted" && merged
-		? lesson.failures.filter((f) => f.at > merged)
-		: [];
+	const applied =
+		lesson.status === "promoted" && merged
+			? applies.filter((at) => at >= merged).sort()[0]
+			: undefined;
+	return applied ? lesson.failures.filter((f) => f.at > applied) : [];
 }

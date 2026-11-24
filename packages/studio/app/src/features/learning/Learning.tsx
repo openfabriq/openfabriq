@@ -171,7 +171,7 @@ function LearningPage({
 						<LessonList
 							rows={data.candidates}
 							project={project}
-							aside={(r) => candidateNote(r.failures, r.runs, data.threshold)}
+							aside={(r) => candidateNote(r, data.threshold)}
 						/>
 					</Section>
 				)}
@@ -206,7 +206,7 @@ function LearningPage({
 										</span>
 										<span className="min-w-0 flex-1">
 											<span className="block truncate">
-												{FAILURE_WORDS[f.kind] ?? f.kind}
+												{FAILURE_WORDS[f.kind]}
 											</span>
 											<span className="block truncate text-xs text-fg-2">
 												{f.summary}

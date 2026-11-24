@@ -1,17 +1,8 @@
-import type { Factory } from "@openfabriq/core";
 import { describe, expect, it } from "vitest";
 import { findFailures, type RunEvidence } from "../../src/learning/failures.js";
 import type { CommandRun } from "../../src/run/harness.js";
 import type { ReviewRound } from "../../src/run/internal-review.js";
 import type { RunRecord } from "../../src/state/journal.js";
-
-const factory = {
-	automations: {
-		implement: { from: "maintainers" },
-		rework: { from: "maintainers" },
-		open: { from: "anyone" },
-	},
-} as unknown as Factory;
 
 const run = (fields: Partial<RunRecord> & { id: string }): RunRecord => ({
 	repository: "acme/app",
@@ -84,7 +75,6 @@ describe("failures", () => {
 				evidence({
 					r2: { commands: [check(false), check(false, "2 tests failed")] },
 				}),
-				factory,
 			),
 		).toEqual([
 			expect.objectContaining({
@@ -109,7 +99,6 @@ describe("failures", () => {
 					],
 				},
 			}),
-			factory,
 		);
 		expect(failures).toEqual([
 			expect.objectContaining({
@@ -138,18 +127,14 @@ describe("failures", () => {
 			isPullRequest: true,
 			number: 7,
 		});
-		const failures = findFailures(
-			[changes, checks, opened],
-			evidence({}),
-			factory,
-		);
+		const failures = findFailures([changes, checks, opened], evidence({}));
 		expect(failures.map((f) => [f.id, f.agent, f.openedIn])).toEqual([
 			["r3:changes_requested", "coder", "r1"],
 			["r2:checks_failed", "coder", "r1"],
 		]);
 	});
 
-	it("not on a pull request no run opened, nor from an automation anyone starts, nor from an untrusted run", () => {
+	it("not on a pull request no run opened, nor from an untrusted run: a maintainer's word counts whoever the automation runs for", () => {
 		const other = run({
 			id: "r2",
 			automation: "rework",
@@ -160,8 +145,10 @@ describe("failures", () => {
 		const anyone = { ...other, id: "r3", number: 7, automation: "open" };
 		const untrusted = { ...other, id: "r4", number: 7, untrusted: true };
 		expect(
-			findFailures([other, anyone, untrusted, opened], evidence({}), factory),
-		).toEqual([]);
+			findFailures([other, anyone, untrusted, opened], evidence({})).map(
+				(f) => f.id,
+			),
+		).toEqual(["r3:changes_requested"]);
 	});
 
 	it("not budgets, timeouts, setups, refused outputs, nor the engine's own verdicts", () => {
@@ -191,7 +178,6 @@ describe("failures", () => {
 						],
 					},
 				}),
-				factory,
 			),
 		).toEqual([]);
 	});
@@ -212,6 +198,6 @@ describe("failures", () => {
 			isPullRequest: true,
 			number: 7,
 		});
-		expect(findFailures([checks, learning], evidence({}), factory)).toEqual([]);
+		expect(findFailures([checks, learning], evidence({}))).toEqual([]);
 	});
 });

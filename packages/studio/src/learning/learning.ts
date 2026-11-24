@@ -1,19 +1,23 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { type Factory, LESSON_THRESHOLD, learningText } from "@openfabriq/core";
 import {
+	awaitsImprovement,
 	cameBack,
 	type Failure,
 	failedRuns,
 	type Lesson,
 	type LessonFailure,
-	projectDir,
+	type LessonStatus,
+	lessonAgents,
 	projectFailures,
 	type RunRecord,
+	readApplies,
 	readLessons,
+	readRunFile,
+	resolvedByPullRequest,
 } from "@openfabriq/runner";
 import { type Period, runsInPeriod } from "../metrics/metrics.js";
 import { changedFiles, type ShownFiles } from "../runs/run-files.js";
+import type { SubjectStates } from "../subjects/subject-state.js";
 import { diffFiles } from "./pull-diff.js";
 
 /** A lesson as the Learning page lists it. */
@@ -33,6 +37,8 @@ export interface LessonRow {
 	updatedAt: string;
 	improvement?: NonNullable<Lesson["improvement"]>;
 	resolvedAt?: string;
+	/** Its improvement was asked for and came to nothing: it waits for a new failure. */
+	waits?: true;
 }
 
 /** What GET /api/learning sends. */
@@ -40,7 +46,7 @@ export interface LearningAnswer {
 	/** Learning's schedule and its sentence, when the factory turns it on. */
 	learning?: { schedule: string; text: string };
 	threshold: number;
-	unheard: (typeof FROM_GITHUB)[number][];
+	unheard: GitHubFailureEvent[];
 	numbers: {
 		failures: number;
 		lessons: number;
@@ -64,7 +70,7 @@ export interface LessonAnswer extends Omit<LessonRow, "failures"> {
 	diffFrom?: "pull request" | "run";
 }
 
-const lessonRow = (lesson: Lesson): LessonRow => ({
+const lessonRow = (lesson: Lesson, applies: string[]): LessonRow => ({
 	id: lesson.id,
 	cause: lesson.cause,
 	rule: lesson.rule,
@@ -72,11 +78,17 @@ const lessonRow = (lesson: Lesson): LessonRow => ({
 	status: lesson.status,
 	failures: lesson.failures.length,
 	runs: failedRuns(lesson),
-	agents: [...new Set(lesson.failures.map((f) => f.agent))].sort(),
-	cameBack: cameBack(lesson).length,
+	agents: lessonAgents(lesson).sort(),
+	cameBack: cameBack(lesson, applies).length,
 	updatedAt: lesson.updatedAt,
 	...(lesson.improvement ? { improvement: lesson.improvement } : {}),
 	...(lesson.resolvedAt ? { resolvedAt: lesson.resolvedAt } : {}),
+	...(lesson.status === "candidate" &&
+	lesson.triedAt !== undefined &&
+	failedRuns(lesson) >= LESSON_THRESHOLD &&
+	!awaitsImprovement(lesson)
+		? { waits: true as const }
+		: {}),
 });
 
 /** The failures that come from GitHub: the journal holds them only when an automation of the factory ran on them. */
@@ -84,9 +96,10 @@ const FROM_GITHUB = [
 	"pull_request.checks_failed",
 	"pull_request.changes_requested",
 ] as const;
+type GitHubFailureEvent = (typeof FROM_GITHUB)[number];
 
 /** The GitHub events of failures no automation of the factory runs on: learning never sees those failures. */
-export const unheard = (factory: Factory) =>
+export const unheardEvents = (factory: Factory): GitHubFailureEvent[] =>
 	FROM_GITHUB.filter(
 		(event) =>
 			!Object.values(factory.automations).some(
@@ -96,6 +109,35 @@ export const unheard = (factory: Factory) =>
 
 /** At most this many recent failures on the page. */
 const RECENT = 20;
+
+/** The pull requests of the improvements open for review: the studio asks GitHub how they stand. */
+export const improvementUrls = (repository: string) =>
+	readLessons(repository).flatMap((l) =>
+		l.status === "proposed" && l.improvement ? [l.improvement.url] : [],
+	);
+
+/**
+ * The lessons of a project, with the improvements GitHub merged or closed since the last batch
+ * shown as they are now: the engine records it at its next batch, the studio tells it at once.
+ */
+function lessonsNow(
+	repository: string,
+	states: SubjectStates,
+	now: Date,
+): Lesson[] {
+	return readLessons(repository).map((lesson) => {
+		const pull = lesson.improvement && states[lesson.improvement.url];
+		if (!pull) return lesson;
+		const state = pull.merged ? "MERGED" : pull.open ? "OPEN" : "CLOSED";
+		return (
+			resolvedByPullRequest(
+				lesson,
+				{ state, ...(pull.mergedAt ? { mergedAt: pull.mergedAt } : {}) },
+				now,
+			) ?? lesson
+		);
+	});
+}
 
 /**
  * What GET /api/learning sends: four numbers (failures over the period, unresolved lessons,
@@ -109,26 +151,29 @@ export function learningOf(
 	runs: RunRecord[],
 	period: Period,
 	now: Date,
+	/** How the improvements' pull requests stand on GitHub, by URL. */
+	states: SubjectStates,
 ): LearningAnswer {
 	const shown = new Set(runsInPeriod(runs, period, now).map((r) => r.id));
-	const failures = projectFailures(repository, runs, factory).filter((f) =>
+	const failures = projectFailures(repository, runs).filter((f) =>
 		shown.has(f.run),
 	);
-	const lessons = readLessons(repository);
-	const of = (status: Lesson["status"]) =>
+	const lessons = lessonsNow(repository, states, now);
+	const applies = readApplies(repository);
+	const row = (lesson: Lesson) => lessonRow(lesson, applies);
+	const withStatus = (status: LessonStatus) =>
 		lessons.filter((l) => l.status === status);
 	const latestFirst = (a: Lesson, b: Lesson) =>
 		b.updatedAt.localeCompare(a.updatedAt);
-	const toReview = of("proposed");
+	const toReview = withStatus("proposed");
 	const byAgent: Record<string, { failures: number; toReview: number }> = {};
-	const share = (agent: string) => {
+	const agentShare = (agent: string) => {
 		byAgent[agent] ??= { failures: 0, toReview: 0 };
 		return byAgent[agent];
 	};
-	for (const f of failures) share(f.agent).failures += 1;
+	for (const f of failures) agentShare(f.agent).failures += 1;
 	for (const l of toReview)
-		for (const agent of new Set(l.failures.map((f) => f.agent)))
-			share(agent).toReview += 1;
+		for (const agent of lessonAgents(l)) agentShare(agent).toReview += 1;
 	return {
 		...(factory.learning
 			? {
@@ -139,20 +184,20 @@ export function learningOf(
 				}
 			: {}),
 		threshold: LESSON_THRESHOLD,
-		unheard: unheard(factory),
+		unheard: unheardEvents(factory),
 		numbers: {
 			failures: failures.length,
 			lessons: lessons.filter(
 				(l) => l.status === "candidate" || l.status === "proposed",
 			).length,
 			toReview: toReview.length,
-			cameBack: lessons.flatMap(cameBack).length,
+			cameBack: lessons.flatMap((l) => cameBack(l, applies)).length,
 		},
-		toReview: toReview.sort(latestFirst).map(lessonRow),
-		candidates: of("candidate").sort(latestFirst).map(lessonRow),
-		history: [...of("promoted"), ...of("rejected")]
+		toReview: toReview.sort(latestFirst).map(row),
+		candidates: withStatus("candidate").sort(latestFirst).map(row),
+		history: [...withStatus("promoted"), ...withStatus("rejected")]
 			.sort(latestFirst)
-			.map(lessonRow),
+			.map(row),
 		recent: failures.slice(0, RECENT),
 		byAgent,
 	};
@@ -165,41 +210,36 @@ export function learningOf(
  */
 export async function lessonOf(
 	repository: string,
-	factory: Factory,
 	runs: RunRecord[],
 	id: string,
 	pullDiff: (repository: string, number: number) => Promise<string | undefined>,
+	states: SubjectStates,
+	now: Date,
 ): Promise<LessonAnswer | undefined> {
-	const lesson = readLessons(repository).find((l) => l.id === id);
+	const lesson = lessonsNow(repository, states, now).find((l) => l.id === id);
 	if (!lesson) return undefined;
-	const all = new Map(
-		projectFailures(repository, runs, factory).map((f) => [f.id, f]),
+	const applies = readApplies(repository);
+	const journalFailures = new Map(
+		projectFailures(repository, runs).map((f) => [f.id, f]),
 	);
 	const failures = lesson.failures.map(
-		(f): Failure | LessonFailure => all.get(f.id) ?? f,
+		(f): Failure | LessonFailure => journalFailures.get(f.id) ?? f,
 	);
-	const read =
+	const pullText =
 		lesson.improvement &&
 		(await pullDiff(repository, lesson.improvement.number));
-	const onPull = read ? diffFiles(read) : [];
+	const onPull = pullText ? diffFiles(pullText) : [];
 	// Otherwise the diff the learning run committed and opened the pull request with.
-	const file =
-		lesson.improvement &&
-		join(
-			projectDir(repository),
-			"runs",
-			lesson.improvement.run,
-			"changed-files.json",
-		);
 	const diff = onPull.length
 		? { total: onPull.length, files: onPull }
-		: file && existsSync(file)
-			? changedFiles(readFileSync(file, "utf8"))
-			: undefined;
+		: lesson.improvement &&
+			changedFiles(
+				readRunFile(repository, lesson.improvement.run, "changed-files.json"),
+			);
 	return {
-		...lessonRow(lesson),
+		...lessonRow(lesson, applies),
 		failures,
-		cameBackIds: cameBack(lesson).map((f) => f.id),
+		cameBackIds: cameBack(lesson, applies).map((f) => f.id),
 		targetUrl: `https://github.com/${repository}/blob/HEAD/${lesson.target}`,
 		...(diff ? { diff, diffFrom: onPull.length ? "pull request" : "run" } : {}),
 	};

@@ -554,17 +554,22 @@ it("serves learning: its numbers, its lessons and one lesson's improvement, read
 	expect(body.learning).toBeUndefined();
 	// 02-sdlc's fixture reworks a pull request on requested changes, not on failed checks.
 	expect(body.unheard).toEqual(["pull_request.checks_failed"]);
+	// GitHub says the improvement is merged: the page shows it so before the next batch records it.
 	expect(body.numbers).toEqual({
 		failures: 1,
-		lessons: 1,
-		toReview: 1,
+		lessons: 0,
+		toReview: 0,
 		cameBack: 0,
 	});
-	expect(body.toReview.map((l: { id: string }) => l.id)).toEqual(["L1"]);
-	expect(body.byAgent).toEqual({ implementer: { failures: 1, toReview: 1 } });
+	expect(
+		body.history.map((l: { id: string; status: string }) => [l.id, l.status]),
+	).toEqual([["L1", "promoted"]]);
+	expect(body.byAgent).toEqual({ implementer: { failures: 1, toReview: 0 } });
+	expect(asked).toContain(`${PR.slice(0, -1)}12`);
 	const detail = await json(`/api/learning/L1?${p}`);
 	expect(detail.body).toMatchObject({
 		id: "L1",
+		status: "promoted",
 		targetUrl: `https://github.com/${REPO}/blob/HEAD/openfabriq/agents/implementer/agent.md`,
 		diffFrom: "pull request",
 		diff: { total: 1, files: [{ path: "x.md", add: 1, del: 0 }] },

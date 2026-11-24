@@ -15,7 +15,8 @@ import {
 	readLessons,
 	resolvedByPullRequest,
 	saveLessons,
-	targetProblemIn,
+	targetProblem,
+	targetRefusalIn,
 } from "../../src/learning/lessons.js";
 
 const LOCK = JSON.stringify({
@@ -87,6 +88,7 @@ describe("lessons", () => {
 				},
 			],
 			NOW,
+			targetProblem,
 		);
 		expect(grouped).toMatchObject({
 			changed: [
@@ -102,7 +104,7 @@ describe("lessons", () => {
 		});
 		// Two failures: the engine proposes an improvement for L1, not for L2.
 		if ("lessons" in grouped)
-			expect(nextToImprove(grouped.lessons)?.id).toBe("L1");
+			expect(nextToImprove(grouped.lessons, targetProblem)?.id).toBe("L1");
 	});
 
 	it("refuse groupings that leave out a failure, take one twice, or aim beyond skills and agent.md", () => {
@@ -120,6 +122,7 @@ describe("lessons", () => {
 					{ lesson: "L7", failures: [] },
 				],
 				NOW,
+				targetProblem,
 			),
 		).toEqual({
 			problems: [
@@ -140,7 +143,7 @@ describe("lessons", () => {
 				{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
 			],
 		});
-		expect(nextToImprove([once])).toBeUndefined();
+		expect(nextToImprove([once], targetProblem)).toBeUndefined();
 		const twice = {
 			...once,
 			failures: [
@@ -148,7 +151,7 @@ describe("lessons", () => {
 				{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
 			],
 		};
-		expect(nextToImprove([twice])?.id).toBe("L1");
+		expect(nextToImprove([twice], targetProblem)?.id).toBe("L1");
 	});
 
 	it("follow their improvement: merged is promoted, closed unmerged is rejected, and never proposed again", () => {
@@ -178,10 +181,12 @@ describe("lessons", () => {
 		).toMatchObject({ status: "promoted", mergedAt: "2026-11-04T00:00:00Z" });
 		const rejected = resolvedByPullRequest(proposed, { state: "CLOSED" }, NOW);
 		expect(rejected?.status).toBe("rejected");
-		expect(nextToImprove(rejected ? [rejected] : [])).toBeUndefined();
+		expect(
+			nextToImprove(rejected ? [rejected] : [], targetProblem),
+		).toBeUndefined();
 	});
 
-	it("count the failures that came back after GitHub merged their improvement, even before a batch saw it", () => {
+	it("count the failures that came back once their improvement ran: after the first apply that followed GitHub's merge", () => {
 		const promoted = lesson({
 			id: "L1",
 			status: "promoted",
@@ -193,16 +198,52 @@ describe("lessons", () => {
 				{ id: "c", agent: "coder", at: "2026-11-12T00:00:00Z" },
 			],
 		});
-		expect(cameBack(promoted).map((f) => f.id)).toEqual(["b", "c"]);
+		// Merged, not applied yet: nothing came back.
+		expect(cameBack(promoted, ["2026-11-04T00:00:00Z"])).toEqual([]);
+		const applies = [
+			"2026-11-04T00:00:00Z",
+			"2026-11-06T00:00:00Z",
+			"2026-11-11T00:00:00Z",
+		];
+		expect(cameBack(promoted, applies).map((f) => f.id)).toEqual(["b", "c"]);
+		// An older lesson has only the batch that saw it merged.
 		const { mergedAt: _, ...older } = promoted;
-		expect(cameBack(older).map((f) => f.id)).toEqual(["c"]);
+		expect(cameBack(older, applies).map((f) => f.id)).toEqual(["c"]);
+	});
+
+	it("wait for a new failure once their improvement was asked for and came to nothing", () => {
+		const failures = [
+			{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+			{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
+		];
+		const tried = lesson({
+			id: "L1",
+			failures,
+			updatedAt: "2026-11-02T00:00:00Z",
+			triedAt: "2026-11-03T00:00:00Z",
+		});
+		expect(nextToImprove([tried], targetProblem)).toBeUndefined();
+		const grouped = groupIntoLessons(
+			[tried],
+			[{ ...failure("r3:check"), url: "https://github.com/acme/app/issues/4" }],
+			[{ lesson: "L1", failures: ["r3:check"] }],
+			NOW,
+			targetProblem,
+		);
+		if (!("lessons" in grouped)) throw new Error(grouped.problems.join());
+		expect(nextToImprove(grouped.lessons, targetProblem)?.id).toBe("L1");
+		// The failure keeps its subject, so the improvement links it once the journal drops the run.
+		expect(grouped.lessons[0]?.failures.at(-1)).toMatchObject({
+			id: "r3:check",
+			url: "https://github.com/acme/app/issues/4",
+		});
 	});
 
 	it("never aim at a skill imported from a public repository, nor at an agent.md or SKILL.md that is not there", () => {
 		const worktree = mkdtempSync(join(tmpdir(), "of-target-"));
 		mkdirSync(join(worktree, "openfabriq/agents/coder"), { recursive: true });
 		writeFileSync(join(worktree, "openfabriq/agents/coder/agent.md"), "");
-		const whyNot = targetProblemIn(worktree, importedFolders(LOCK));
+		const whyNot = targetRefusalIn(worktree, importedFolders(LOCK));
 		expect(whyNot("openfabriq/agents/coder/agent.md")).toBeUndefined();
 		expect(whyNot("openfabriq/skills/dates/reference.md")).toBeUndefined();
 		expect(whyNot("openfabriq/skills/code-review/SKILL.md")).toContain(
@@ -220,7 +261,7 @@ describe("lessons", () => {
 				{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
 			],
 		});
-		expect(nextToImprove([waiting])?.id).toBe("L1");
+		expect(nextToImprove([waiting], targetProblem)?.id).toBe("L1");
 		expect(nextToImprove([waiting], whyNot)).toBeUndefined();
 		expect(importedFolders("not json")).toEqual([]);
 	});

@@ -7,12 +7,18 @@ export {
 	answerMentionsName,
 	withAnswerMentions,
 } from "./factory/answer-mentions.js";
-export { LEARNING, WIKI } from "./factory/engine-names.js";
+export {
+	isEngineAgent,
+	isEngineName,
+	LEARNING,
+	WIKI,
+} from "./factory/engine-names.js";
 export { isEngineVariable, looksSecret, secretNames } from "./factory/env.js";
 export {
 	areasOf,
 	frontMatterField,
 	grantsTools,
+	rawFrontMatter,
 	resourceFolder,
 	scanLayout,
 	splitArea,

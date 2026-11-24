@@ -1,14 +1,10 @@
-import { IMPORTED_SKILLS } from "@openfabriq/core";
+import { IMPORTED_SKILLS, rawFrontMatter } from "@openfabriq/core";
 import {
 	importedFolders,
 	importedProblem,
 	isImprovable,
 	keepsFrontMatter,
 } from "./lessons.js";
-
-/** The header of an agent.md or a SKILL.md as written, between its two --- lines; undefined without one. */
-const frontMatter = (text: string) =>
-	/^﻿?---\r?\n([\s\S]*?)\r?\n?---(?:\r?\n|$)/.exec(text)?.[1];
 
 /**
  * Why the engine will not publish learning's commits, or undefined: they change the text of the
@@ -35,8 +31,8 @@ export async function outsideLearning(
 		if (head === undefined)
 			return `learning's commits remove ${path}: an improvement adds to the factory's text, it never removes a file`;
 		if (!keepsFrontMatter(path)) continue;
-		const before = start === undefined ? undefined : frontMatter(start);
-		const after = frontMatter(head);
+		const before = start === undefined ? undefined : rawFrontMatter(start);
+		const after = rawFrontMatter(head);
 		if (before === undefined || after === undefined || before !== after)
 			return `learning's commits change the front matter of ${path}, or add it: an improvement changes the body of an existing agent.md or SKILL.md only`;
 	}

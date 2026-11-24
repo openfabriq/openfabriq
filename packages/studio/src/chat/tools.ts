@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { agentOrderByProject } from "../board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "../board/board.js";
-import { learningOf } from "../learning/learning.js";
+import { improvementUrls, learningOf } from "../learning/learning.js";
 import {
 	computeMetrics,
 	PERIODS,
@@ -54,8 +54,14 @@ export function appChatTools(
 					),
 					...(factory
 						? {
-								learning: learningOf(repository, factory, runs, period, now())
-									.numbers,
+								learning: learningOf(
+									repository,
+									factory,
+									runs,
+									period,
+									now(),
+									await subjectStates(improvementUrls(repository)),
+								).numbers,
 							}
 						: {}),
 				};

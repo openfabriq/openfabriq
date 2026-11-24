@@ -4,6 +4,7 @@ import { tool } from "@anthropic-ai/claude-agent-sdk";
 import {
 	type Factory,
 	IMPORTED_SKILLS,
+	includesName,
 	LEARNING,
 	LEARNING_FOLDER,
 	LESSON_THRESHOLD,
@@ -18,7 +19,7 @@ import type { ReviewRound } from "../run/internal-review.js";
 import type { Outcome } from "../run/outputs/review.js";
 import type { Proposal } from "../run/outputs/tools.js";
 import type { RunRecord } from "../state/journal.js";
-import { projectDir } from "../state/projects.js";
+import { readRunFile } from "../state/projects.js";
 import type { ChangedFiles } from "../workspace/workspace.js";
 import { type Failure, findFailures, type RunEvidence } from "./failures.js";
 import {
@@ -26,12 +27,14 @@ import {
 	groupIntoLessons,
 	importedFolders,
 	type Lesson,
+	type LessonFailure,
+	lessonAgents,
 	newFailures,
 	nextToImprove,
 	readLessons,
 	resolvedByPullRequest,
 	saveLessons,
-	targetProblemIn,
+	targetRefusalIn,
 } from "./lessons.js";
 
 // One batch of learning: the engine stages the new failures in the worktree, the agent groups them
@@ -42,14 +45,6 @@ import {
 const BATCH = 30;
 /** What a staged patch keeps of each file, so a batch stays readable. */
 const PATCH_CHARS = 4000;
-
-const runDir = (repository: string, id: string) =>
-	join(projectDir(repository), "runs", id);
-
-const readIn = (dir: string, name: string) => {
-	const path = join(dir, name);
-	return existsSync(path) ? readFileSync(path, "utf8") : undefined;
-};
 
 function parsed<T>(text: string | undefined): T | undefined {
 	if (text === undefined) return undefined;
@@ -64,12 +59,11 @@ function parsed<T>(text: string | undefined): T | undefined {
 export const diskEvidence =
 	(repository: string) =>
 	(run: RunRecord): RunEvidence => {
-		const dir = runDir(repository, run.id);
+		const read = (name: string) => readRunFile(repository, run.id, name);
 		return {
-			commands: () =>
-				jsonLines<CommandRun>(readIn(dir, "commands.jsonl") ?? ""),
+			commands: () => jsonLines<CommandRun>(read("commands.jsonl") ?? ""),
 			reviews: () => {
-				const rounds = parsed<unknown>(readIn(dir, "reviews.json"));
+				const rounds = parsed<unknown>(read("reviews.json"));
 				return Array.isArray(rounds) ? (rounds as ReviewRound[]) : undefined;
 			},
 		};
@@ -79,13 +73,12 @@ export const diskEvidence =
 export const projectFailures = (
 	repository: string,
 	runs: RunRecord[],
-	factory: Factory,
-): Failure[] => findFailures(runs, diskEvidence(repository), factory);
+): Failure[] => findFailures(runs, diskEvidence(repository));
 
 /** The changed files of a run, with their patches cut short. */
 function changedFilesOf(repository: string, run: string) {
 	const kept = parsed<ChangedFiles>(
-		readIn(runDir(repository, run), "changed-files.json"),
+		readRunFile(repository, run, "changed-files.json"),
 	);
 	return kept?.files.map((f) => ({
 		path: f.path,
@@ -100,14 +93,15 @@ async function stagedFailure(
 	failure: Failure,
 	repository: string,
 	github: GitHub,
+	maintainers: string[],
 ): Promise<Record<string, unknown>> {
 	const failedChecks =
 		failure.kind === "checks_failed"
 			? parsed<unknown>(
-					readIn(runDir(repository, failure.run), "failed-checks.json"),
+					readRunFile(repository, failure.run, "failed-checks.json"),
 				)
 			: undefined;
-	// The people's reviews that asked for changes, never the engine's: the run itself only started for a maintainer.
+	// The maintainers' reviews that asked for changes: never the engine's, nor those of people without write access.
 	const comments =
 		failure.kind === "changes_requested" && failure.number !== undefined
 			? await github
@@ -118,7 +112,8 @@ async function stagedFailure(
 								(r) =>
 									r.state === "CHANGES_REQUESTED" &&
 									r.body &&
-									!isFromEngine(r.body),
+									!isFromEngine(r.body) &&
+									includesName(maintainers, r.user?.login ?? ""),
 							)
 							.map((r) => ({ by: r.user?.login ?? "", body: r.body })),
 					)
@@ -140,7 +135,7 @@ const lessonView = (l: Lesson) => ({
 	rule: l.rule,
 	target: l.target,
 	failures: l.failures.length,
-	agents: [...new Set(l.failures.map((f) => f.agent))],
+	agents: lessonAgents(l),
 });
 
 const improveText = (lesson: Lesson) =>
@@ -215,10 +210,10 @@ function lessonsTool(record: (groupings: Grouping[]) => string | Error) {
 	);
 }
 
-const failureLine = (f: { id: string; agent: string }, staged?: Failure) =>
+const failureLine = (f: LessonFailure, staged?: Failure) =>
 	staged
 		? `- ${staged.number !== undefined ? `#${staged.number}` : `run ${staged.run}`} (${staged.automation}, ${staged.agent}): ${staged.summary}${staged.url ? ` ${staged.url}` : ""}`
-		: `- ${f.id} (${f.agent})`;
+		: `- ${f.id} (${f.agent})${f.url ? ` ${f.url}` : ""}`;
 
 /** The engine's part of the improvement's description: the lesson and the failures it comes from. */
 export function lessonBlock(lesson: Lesson, failures: Failure[]): string {
@@ -265,21 +260,31 @@ export async function prepareBatch(step: {
 				);
 				return { state: "" };
 			});
-		const next = resolvedByPullRequest(lesson, pull, now());
-		if (next) resolved.push(next);
+		const settled = resolvedByPullRequest(lesson, pull, now());
+		if (settled) resolved.push(settled);
 	}
 	saveLessons(repository, resolved);
 	lessons = lessons.map((l) => resolved.find((s) => s.id === l.id) ?? l);
 
-	const failures = projectFailures(repository, step.runs, factory);
+	const failures = projectFailures(repository, step.runs);
 	// shortcut: the newest failures first; an older one waits for a quieter batch.
 	const fresh = newFailures(failures, lessons).slice(0, BATCH);
-	const whyNot = targetProblemIn(
+	const lock = join(step.worktree, "openfabriq", IMPORTED_SKILLS);
+	const refusal = targetRefusalIn(
 		step.worktree,
-		importedFolders(readIn(join(step.worktree, "openfabriq"), IMPORTED_SKILLS)),
+		importedFolders(existsSync(lock) ? readFileSync(lock, "utf8") : undefined),
 	);
-	let improving = nextToImprove(lessons, whyNot);
-	if (fresh.length === 0 && !improving) return undefined;
+	const waiting = nextToImprove(lessons, refusal);
+	if (fresh.length === 0 && !waiting) return undefined;
+	// Asked for once: if nothing comes of it, the lesson waits for a new failure.
+	const ask = (lesson: Lesson | undefined) => {
+		if (!lesson) return undefined;
+		const tried = { ...lesson, triedAt: now().toISOString() };
+		saveLessons(repository, [tried]);
+		lessons = lessons.map((l) => (l.id === tried.id ? tried : l));
+		return tried;
+	};
+	let improving = ask(waiting);
 
 	const dir = join(step.worktree, LEARNING_FOLDER);
 	mkdirSync(join(dir, "failures"), { recursive: true });
@@ -295,14 +300,14 @@ export async function prepareBatch(step: {
 		writeFileSync(
 			join(dir, "failures", `${failure.id.replace(/[^\w.-]/g, "-")}.json`),
 			// "<" escaped, as for the run's data: a staged text cannot close a block of the prompt.
-			`${JSON.stringify(await stagedFailure(failure, repository, github), null, 2).replaceAll("<", "\\u003c")}\n`,
+			`${JSON.stringify(await stagedFailure(failure, repository, github, factory.maintainers), null, 2).replaceAll("<", "\\u003c")}\n`,
 		);
 
 	let recorded = false;
 	const record = (groupings: Grouping[]): string | Error => {
 		if (recorded)
 			return new Error("Already recorded: record_lessons is called once.");
-		const result = groupIntoLessons(lessons, fresh, groupings, now(), whyNot);
+		const result = groupIntoLessons(lessons, fresh, groupings, now(), refusal);
 		if ("problems" in result)
 			return new Error(
 				`Nothing recorded: ${result.problems.join("; ")}. Call record_lessons again.`,
@@ -310,7 +315,7 @@ export async function prepareBatch(step: {
 		recorded = true;
 		lessons = result.lessons;
 		saveLessons(repository, result.changed);
-		improving ??= nextToImprove(lessons, whyNot);
+		improving ??= ask(nextToImprove(lessons, refusal));
 		return `Recorded ${result.changed.length} lesson${result.changed.length === 1 ? "" : "s"}. ${
 			improving
 				? improveText(improving)
@@ -362,7 +367,7 @@ export async function prepareBatch(step: {
 			saveLessons(repository, [proposed]);
 			lessons = lessons.map((l) => (l.id === proposed.id ? proposed : l));
 			// Another lesson waits: the next batch takes it now, not next week.
-			if (nextToImprove(lessons, whyNot))
+			if (nextToImprove(lessons, refusal))
 				requestRun(repository, {
 					id: `learning-${runId}`,
 					automation: LEARNING,

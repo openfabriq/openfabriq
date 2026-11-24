@@ -1,7 +1,7 @@
-import { type Factory, LEARNING, WIKI } from "@openfabriq/core";
+import { isEngineName } from "@openfabriq/core";
 import type { CommandRun } from "../run/harness.js";
 import type { Finding, ReviewRound } from "../run/internal-review.js";
-import type { RunRecord } from "../state/journal.js";
+import { openingRun, type RunRecord } from "../state/journal.js";
 
 // Failures: runs whose work was judged bad, read from the journal. Only quality signals count:
 // a budget, a timeout, a broken setup or a refused output are settled in factory.yaml, not lessons.
@@ -44,31 +44,20 @@ export interface RunEvidence {
 	reviews(): ReviewRound[] | undefined;
 }
 
-/** The engine's own runs never count: learning would learn from itself. */
-const engines = (name: string) => name === LEARNING || name === WIKI;
-
 const CHECK_FAILED = 'the check "';
-
-/** The run that opened this pull request: its create_pull_request was applied there. */
-function openingRun(runs: RunRecord[], number: number): RunRecord | undefined {
-	return runs.find((run) =>
-		run.outputs.some(
-			(o) =>
-				o.action === "create_pull_request" &&
-				o.status === "applied" &&
-				o.url?.endsWith(`/pull/${number}`) === true,
-		),
-	);
-}
 
 /** The failures of one run, from its record and what it kept. */
 function runFailures(
 	run: RunRecord,
 	runs: RunRecord[],
 	evidence: RunEvidence,
-	factory: Factory,
 ): Failure[] {
-	if (run.status === "queued" || engines(run.automation) || engines(run.agent))
+	// The engine's own runs never count: learning would learn from itself.
+	if (
+		run.status === "queued" ||
+		isEngineName(run.automation) ||
+		isEngineName(run.agent)
+	)
 		return [];
 	const base = {
 		run: run.id,
@@ -112,12 +101,11 @@ function runFailures(
 		run.event === "pull_request.changes_requested";
 	if (pullRequestFailure && run.isPullRequest && run.number !== undefined) {
 		const opened = openingRun(runs, run.number);
-		// A maintainer's word, when the automation only starts for people with write access.
+		// Requested changes count when a maintainer asked for them: whoever the automation runs for, a run
+		// is untrusted when no maintainer started it.
 		const byMaintainer =
-			run.event !== "pull_request.changes_requested" ||
-			(factory.automations[run.automation]?.from === "maintainers" &&
-				!run.untrusted);
-		if (opened && !engines(opened.agent) && byMaintainer) {
+			run.event !== "pull_request.changes_requested" || !run.untrusted;
+		if (opened && !isEngineName(opened.agent) && byMaintainer) {
 			const kind =
 				run.event === "pull_request.checks_failed"
 					? "checks_failed"
@@ -142,9 +130,6 @@ function runFailures(
 export function findFailures(
 	runs: RunRecord[],
 	evidenceOf: (run: RunRecord) => RunEvidence,
-	factory: Factory,
 ): Failure[] {
-	return runs.flatMap((run) =>
-		runFailures(run, runs, evidenceOf(run), factory),
-	);
+	return runs.flatMap((run) => runFailures(run, runs, evidenceOf(run)));
 }

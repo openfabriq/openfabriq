@@ -80,12 +80,12 @@ export const untrustedPushTo = (runs: RunRecord[], number: number): boolean =>
 			),
 	);
 
-/** The agent whose run opened this pull request, or this issue: the run that created it, by its address. */
-export const openerOf = (
+/** The run that opened this pull request, or this issue: the one that created it, by its address. */
+export const openingRun = (
 	runs: RunRecord[],
 	number: number,
 	isPullRequest = true,
-): string | undefined => {
+): RunRecord | undefined => {
 	const [action, path] = isPullRequest
 		? (["create_pull_request", "pull"] as const)
 		: (["create_issue", "issues"] as const);
@@ -96,8 +96,15 @@ export const openerOf = (
 				o.status === "applied" &&
 				o.url?.endsWith(`/${path}/${number}`),
 		),
-	)?.agent;
+	);
 };
+
+/** The agent whose run opened this pull request, or this issue. */
+export const openerOf = (
+	runs: RunRecord[],
+	number: number,
+	isPullRequest = true,
+): string | undefined => openingRun(runs, number, isPullRequest)?.agent;
 
 /** What was read of a journal: up to its last whole line, and its runs by id, in the order of their first line. */
 interface JournalRead {

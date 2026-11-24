@@ -1,0 +1,8 @@
+name: A factory that learns
+repository: acme/app
+maintainers: [alice]
+checks: [test]
+commands:
+  test: npm test
+learning:
+  schedule: "0 2 * * *"

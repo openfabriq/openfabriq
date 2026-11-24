@@ -2,11 +2,19 @@ import { parse as parseYaml } from "yaml";
 import { NAME } from "./factory-rules.js";
 import type { FactoryFiles, Problem } from "./types.js";
 
+const FRONT_MATTER =
+	/^\uFEFF?---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)([\s\S]*)$/;
+
+/** The header of a file as written, between its two --- lines, unparsed; undefined without one. */
+export function rawFrontMatter(text: string): string | undefined {
+	const match = FRONT_MATTER.exec(text);
+	return match ? (match[1] ?? "") : undefined;
+}
+
 export function splitFrontMatter(
 	text: string,
 ): { header: unknown; body: string } | string {
-	const match =
-		/^\uFEFF?---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)([\s\S]*)$/.exec(text);
+	const match = FRONT_MATTER.exec(text);
 	if (!match) return "must start with a header between two --- lines";
 	const header = readYaml(match[1] ?? "");
 	if (typeof header === "string") return header;

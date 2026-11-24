@@ -5,8 +5,13 @@ import {
 } from "../../../app/src/features/learning/learning-view.js";
 
 it("says how far a candidate lesson is from its improvement", () => {
-	expect(candidateNote(1, 1, 2)).toBe("1 failure, needs 2");
-	expect(candidateNote(2, 1, 2)).toBe("2 failures in 1 run, needs 2 runs");
+	expect(candidateNote({ failures: 1, runs: 1 }, 2)).toBe("1 failure, needs 2");
+	expect(candidateNote({ failures: 2, runs: 1 }, 2)).toBe(
+		"2 failures in 1 run, needs 2 runs",
+	);
+	expect(candidateNote({ failures: 2, runs: 2, waits: true }, 2)).toBe(
+		"2 failures, improvement not opened: waits for a new failure",
+	);
 });
 
 it("gives an agent's page one line, only when learning has something about it", () => {

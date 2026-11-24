@@ -1,4 +1,10 @@
-import { type Agent, type Factory, LEARNING, WIKI } from "@openfabriq/core";
+import {
+	type Agent,
+	type Factory,
+	isEngineAgent,
+	LEARNING,
+	WIKI,
+} from "@openfabriq/core";
 import type { QueuedRun } from "../engine/queue.js";
 import { outsideLearning } from "../learning/guard.js";
 import type { Workspace } from "../workspace/workspace.js";
@@ -55,10 +61,10 @@ export async function judgeCode(
 	);
 	return (
 		workflowChange(touchedFiles) ??
-		(agent.builtIn && agent.name === WIKI && factory.wiki
+		(isEngineAgent(agent, WIKI) && factory.wiki
 			? outsideWiki(touchedFiles, factory.wiki.folder)
 			: undefined) ??
-		(agent.builtIn && agent.name === LEARNING
+		(isEngineAgent(agent, LEARNING)
 			? await outsideLearning(touchedFiles, (path) =>
 					workspace.versions(clone, worktree, ref, path),
 				)

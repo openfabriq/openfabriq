@@ -17,9 +17,14 @@ import { agentOrderByProject } from "./board/agent-order.js";
 import { boardColumns, subjectsToAsk } from "./board/board.js";
 import { listThreads, readThread, threadsDir } from "./chat/threads.js";
 import { matchPath } from "./http/match-path.js";
-import { learningOf, lessonOf } from "./learning/learning.js";
+import { improvementUrls, learningOf, lessonOf } from "./learning/learning.js";
 import { githubPullDiff } from "./learning/pull-diff.js";
-import { PERIODS, pullRequestUrls, runsInPeriod } from "./metrics/metrics.js";
+import {
+	PERIODS,
+	type Period,
+	pullRequestUrls,
+	runsInPeriod,
+} from "./metrics/metrics.js";
 import { projectsMetrics } from "./metrics/projects.js";
 import { runWithSubjectState } from "./runs/run-detail.js";
 import { settingsOf } from "./settings/settings.js";
@@ -62,6 +67,14 @@ type AskSubjects = (
 	urls: string[],
 	maxAgeMs?: number,
 ) => Promise<SubjectStates>;
+
+/** The period a page asks for, or its default; undefined when it asks for no period. */
+const periodOf = (url: URL, fallback: Period): Period | undefined => {
+	const asked = url.searchParams.get("period") ?? fallback;
+	return PERIODS.find((p) => p === asked);
+};
+
+const noPeriod = () => error(400, `period is one of ${PERIODS.join(", ")}.`);
 
 /** A page of one project: the one asked, or the only one. */
 const forProject =
@@ -132,9 +145,8 @@ export function readRoutes(
 			agentsView(repository, files, factory, new Date()),
 		),
 		"/api/metrics": async ({ url, projects, project, runs }) => {
-			const asked = url.searchParams.get("period") ?? "7d";
-			const period = PERIODS.find((p) => p === asked);
-			if (!period) return error(400, `period is one of ${PERIODS.join(", ")}.`);
+			const period = periodOf(url, "7d");
+			if (!period) return noPeriod();
 			const repositories = project ? [project] : projects;
 			const all = runs();
 			const states = await subjectStates(
@@ -143,21 +155,28 @@ export function readRoutes(
 			return ok(projectsMetrics(repositories, all, period, states));
 		},
 		"/api/learning": async (request) => {
-			const asked = request.url.searchParams.get("period") ?? "30d";
-			const period = PERIODS.find((p) => p === asked);
-			if (!period) return error(400, `period is one of ${PERIODS.join(", ")}.`);
-			return ofFactory((repository, { factory }) =>
-				learningOf(repository, factory, request.runs(), period, new Date()),
-			)(request);
-		},
-		"/api/learning/:id": async (request) => {
-			const found = await ofFactory((repository, { factory }) =>
-				lessonOf(
+			const period = periodOf(request.url, "30d");
+			if (!period) return noPeriod();
+			return ofFactory(async (repository, { factory }) =>
+				learningOf(
 					repository,
 					factory,
 					request.runs(),
+					period,
+					new Date(),
+					await subjectStates(improvementUrls(repository)),
+				),
+			)(request);
+		},
+		"/api/learning/:id": async (request) => {
+			const found = await ofFactory(async (repository) =>
+				lessonOf(
+					repository,
+					request.runs(),
 					request.params.id ?? "",
 					pullDiff,
+					await subjectStates(improvementUrls(repository)),
+					new Date(),
 				),
 			)(request);
 			return found.status === 200 && found.body === undefined

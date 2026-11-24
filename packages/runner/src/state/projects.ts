@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+	appendFileSync,
 	chmodSync,
 	existsSync,
 	mkdirSync,
 	readdirSync,
+	readFileSync,
 	renameSync,
 	rmSync,
 	writeFileSync,
@@ -21,6 +23,7 @@ import {
 	withWiki,
 } from "@openfabriq/core";
 import {
+	jsonLines,
 	readFactoryFolder,
 	readJsonIfExists,
 	writeFileAtomic,
@@ -50,6 +53,20 @@ export const studioTokenPath = () => join(home(), "viewer-token");
 
 export function projectDir(repository: string): string {
 	return join(home(), "projects", ...repository.split("/"));
+}
+
+/** The folder of what a run kept: its transcript, commands, reviews, changed files. */
+export const runDir = (repository: string, id: string) =>
+	join(projectDir(repository), "runs", id);
+
+/** A file a run kept, or undefined when it kept none. */
+export function readRunFile(
+	repository: string,
+	id: string,
+	name: string,
+): string | undefined {
+	const path = join(runDir(repository, id), name);
+	return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 }
 
 function readState(repository: string): ProjectState | undefined {
@@ -132,7 +149,20 @@ export function writeApplied(
 		join(dir, "state.json"),
 		`${JSON.stringify(state, null, 2)}\n`,
 	);
+	// Every apply, kept: learning tells from it when a merged improvement started to run.
+	appendFileSync(
+		join(dir, "applies.jsonl"),
+		`${JSON.stringify({ at: state.appliedAt, fingerprint: state.fingerprint })}\n`,
+	);
 	return state;
+}
+
+/** When the factory of a project was applied, oldest first: since the engine keeps them. */
+export function readApplies(repository: string): string[] {
+	const file = join(projectDir(repository), "applies.jsonl");
+	return existsSync(file)
+		? jsonLines<{ at: string }>(readFileSync(file, "utf8")).map((a) => a.at)
+		: [];
 }
 
 export function listProjects(): ProjectState[] {

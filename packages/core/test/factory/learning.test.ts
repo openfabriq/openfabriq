@@ -1,9 +1,10 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { withLearning } from "../../src/factory/learning.js";
 import { loadFactory } from "../../src/factory/load.js";
 import type { FactoryFiles } from "../../src/factory/types.js";
 import { planChanges } from "../../src/plan/plan.js";
-import { load, NO_FILES } from "../helpers.js";
+import { load, NO_FILES, ROOT, readFolder } from "../helpers.js";
 
 const FACTORY = "name: F\nrepository: acme/app\nmaintainers: [alice]\n";
 const files = (yaml = "", extra: FactoryFiles = {}): FactoryFiles => ({
@@ -18,6 +19,14 @@ const messages = (f: FactoryFiles) =>
 	loadFactory(f).problems.map((p) => `${p.file}: ${p.message}`);
 
 describe("learning", () => {
+	it("loads a factory that learns on its own schedule, with no problem", () => {
+		const fixture = loadFactory(
+			readFolder(join(ROOT, "fixtures/valid/learning/openfabriq")),
+		);
+		expect(fixture.problems).toEqual([]);
+		expect(fixture.factory?.learning).toEqual({ schedule: "0 2 * * *" });
+	});
+
 	it("is off by default; true turns it on, each Monday at 08:00", () => {
 		expect(load(files()).learning).toBeUndefined();
 		expect(load(files(ON)).learning).toEqual({ schedule: "0 8 * * 1" });

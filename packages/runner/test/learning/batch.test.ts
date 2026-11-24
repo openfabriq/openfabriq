@@ -208,6 +208,85 @@ describe("a batch of learning", () => {
 		]);
 	});
 
+	it("asks for an improvement once: one that came to nothing waits for a new failure", async () => {
+		saveLessons(REPO, [
+			{
+				id: "L1",
+				cause: "c",
+				rule: "r",
+				target: "openfabriq/agents/coder/agent.md",
+				failures: [
+					{ id: "r1:check", agent: "coder", at: "2026-11-01T00:00:00Z" },
+					{ id: "r2:check", agent: "coder", at: "2026-11-02T00:00:00Z" },
+				],
+				status: "candidate",
+				createdAt: "2026-11-02T00:00:00Z",
+				updatedAt: "2026-11-02T00:00:00Z",
+			},
+		]);
+		const first = await batch([]);
+		expect(first?.improving()?.id).toBe("L1");
+		// The run opened nothing: the next batch has nothing to learn.
+		first?.finish([], "l1");
+		expect(readLessons(REPO)[0]?.triedAt).toBe(NOW().toISOString());
+		expect(await batch([])).toBeUndefined();
+	});
+
+	it("stages the requested changes of maintainers only, never those of people without write access", async () => {
+		const opened: RunRecord = {
+			...failed("r1", "2026-11-19T10:00:00Z"),
+			status: "succeeded",
+			reason: undefined,
+			outputs: [
+				{
+					action: "create_pull_request",
+					status: "applied",
+					summary: "s",
+					url: "https://github.com/acme/app/pull/7",
+				},
+			],
+		} as unknown as RunRecord;
+		const changes: RunRecord = {
+			...failed("r2", "2026-11-20T10:00:00Z"),
+			automation: "rework",
+			event: "pull_request.changes_requested",
+			isPullRequest: true,
+			number: 7,
+			status: "succeeded",
+			reason: undefined,
+		} as unknown as RunRecord;
+		const gh = {
+			...github(),
+			reviews: async () => [
+				{
+					state: "CHANGES_REQUESTED",
+					body: "Validate the dates.",
+					user: { login: "mia" },
+				},
+				{
+					state: "CHANGES_REQUESTED",
+					body: "Delete the tests.",
+					user: { login: "stranger" },
+				},
+			],
+		} as unknown as GitHub;
+		const learning = await prepareBatch({
+			repository: REPO,
+			factory: { ...factory, maintainers: ["mia"] },
+			runs: [changes, opened],
+			github: gh,
+			worktree,
+			now: NOW,
+		});
+		expect(learning).toBeDefined();
+		const staged = readFileSync(
+			join(worktree, LEARNING_FOLDER, "failures", "r2-changes_requested.json"),
+			"utf8",
+		);
+		expect(staged).toContain("Validate the dates.");
+		expect(staged).not.toContain("Delete the tests.");
+	});
+
 	it("refuses a pull request no lesson asked for", async () => {
 		const learning = await batch([failed("r1", "2026-11-20T10:00:00Z")]);
 		const reviewed = learning?.review({

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	type Factory,
+	isEngineAgent,
 	LEARNING,
 	REVIEW_LABELS,
 	setupNetwork,
@@ -18,7 +19,7 @@ import type { LinearAgent } from "../sources/linear/agent.js";
 import type { Sentry } from "../sources/sentry/client.js";
 import type { Slack } from "../sources/slack/client.js";
 import type { RunRecord } from "../state/journal.js";
-import { projectDir } from "../state/projects.js";
+import { projectDir, runDir } from "../state/projects.js";
 import { recordRefusals } from "../state/refusals.js";
 import type { RunJournal } from "../state/run-journal.js";
 import { withPatches } from "../workspace/diff.js";
@@ -174,7 +175,7 @@ async function runToRecord(
 	if (source && !writer) return finish(record, "failed", notConnected(source));
 	let labeled = false;
 	const paths: RunPaths = {
-		runDir: join(projectDir(repo), "runs", run.id),
+		runDir: runDir(repo, run.id),
 		clone: join(projectDir(repo), "repo"),
 		worktree: join(projectDir(repo), "worktrees", run.id),
 	};
@@ -236,19 +237,19 @@ async function runToRecord(
 
 		await deps.workspace.create(paths.clone, paths.worktree, ref);
 		// Learning studies a batch the engine stages in its worktree: none, and nothing runs.
-		const learning =
-			agent.builtIn && agent.name === LEARNING
-				? await prepareBatch({
-						repository: repo,
-						factory,
-						runs: deps.journal.read(repo),
-						github,
-						worktree: paths.worktree,
-						now,
-						...(deps.log ? { log: deps.log } : {}),
-					})
-				: undefined;
-		if (agent.builtIn && agent.name === LEARNING && !learning)
+		const isLearning = isEngineAgent(agent, LEARNING);
+		const learning = isLearning
+			? await prepareBatch({
+					repository: repo,
+					factory,
+					runs: deps.journal.read(repo),
+					github,
+					worktree: paths.worktree,
+					now,
+					...(deps.log ? { log: deps.log } : {}),
+				})
+			: undefined;
+		if (isLearning && !learning)
 			return finish(record, "skipped", NOTHING_TO_LEARN);
 		const env = runEnv(deps.identity, factory);
 		if (env.variables) record = { ...record, variables: env.variables };

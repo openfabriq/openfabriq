@@ -42,12 +42,15 @@ export {
 } from "./learning/batch.js";
 export type { Failure, FailureKind } from "./learning/failures.js";
 export {
+	awaitsImprovement,
 	cameBack,
 	failedRuns,
 	type Lesson,
 	type LessonFailure,
 	type LessonStatus,
+	lessonAgents,
 	readLessons,
+	resolvedByPullRequest,
 } from "./learning/lessons.js";
 export * from "./run/execute.js";
 export * from "./run/harness.js";
