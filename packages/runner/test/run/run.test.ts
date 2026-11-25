@@ -9,11 +9,7 @@ import {
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-	claudeHooks,
-	claudeTools,
-	queryOptions,
-} from "../../src/agent/claude.js";
+import { claudeTools, queryOptions } from "../../src/agent/claude.js";
 import type { AgentLauncher } from "../../src/agent/port.js";
 import { rememberMerge } from "../../src/engine/cursors.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
@@ -30,16 +26,9 @@ import {
 } from "../../src/state/journal.js";
 import { diskJournal } from "../../src/state/run-journal.js";
 import type { Workspace } from "../../src/workspace/workspace.js";
+import { type ServedTool, servedTools, stopHook } from "../agent/served.js";
 
-/** The tools as the MCP server registered them: what Claude Code calls. */
-type Registered = Record<
-	string,
-	{
-		description?: string;
-		inputSchema?: z.ZodType;
-		handler: (args: unknown, extra: unknown) => Promise<unknown>;
-	}
->;
+type Registered = Record<string, ServedTool>;
 
 const ROOT = join(import.meta.dirname, "../../../..");
 const REPO = "acme/task-app";
@@ -199,20 +188,13 @@ function agentProposing(
 ): AgentLauncher {
 	return async (run) => {
 		// What the MCP tools would record: the tools exposed are only those that `can` allows.
+		const offered = claudeTools(run.outputs.tools).names;
 		for (const p of proposals)
-			if (
-				claudeTools(run.outputs.tools).names.includes(
-					`mcp__openfabriq__${p.action}`,
-				)
-			)
+			if (offered.includes(`mcp__openfabriq__${p.action}`))
 				run.outputs.propose(p);
 		// A forbidden proposal that slipped through anyway must still be refused by the engine.
 		for (const p of proposals)
-			if (
-				!claudeTools(run.outputs.tools).names.includes(
-					`mcp__openfabriq__${p.action}`,
-				)
-			)
+			if (!offered.includes(`mcp__openfabriq__${p.action}`))
 				run.outputs.propose(p);
 		return {
 			status,
@@ -1148,12 +1130,7 @@ it("serves run_command to an agent with commands, and trusts checks passed at it
 				"mcp__openfabriq__run_command",
 			);
 			expect(r.prompt).toContain("test: npm test");
-			const signal = new AbortController().signal;
-			await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
-				{ hook_event_name: "Stop", stop_hook_active: false } as never,
-				undefined,
-				{ signal },
-			);
+			await stopHook(r.stop);
 			return agentProposing([
 				{ action: "create_pull_request", title: "Add a counter", body: "x" },
 			])(r);
@@ -1184,11 +1161,7 @@ it("gives setup the package registries at least, and the agent's network to its 
 			...deps(async (r) => {
 				seen.agent = r.network;
 				r.onRefused?.(["web.example"]);
-				await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
-					{ hook_event_name: "Stop", stop_hook_active: false } as never,
-					undefined,
-					{ signal: new AbortController().signal },
-				);
+				await stopHook(r.stop);
 				return agentProposing([])(r);
 			}),
 			workspace: {
@@ -1262,11 +1235,7 @@ it("gives secrets to setup and commands only, and journals the names", async () 
 			{
 				...deps(async (r) => {
 					seen.agent = r.env;
-					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 					return agentProposing([])(r);
 				}),
 				workspace: {
@@ -1317,11 +1286,7 @@ it("runs the checks and commands of a run no maintainer started without the secr
 			},
 			{
 				...deps(async (r) => {
-					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 					return agentProposing([])(r);
 				}),
 				workspace: {
@@ -1403,13 +1368,7 @@ it("hides the secrets' values in a command's output: in the run's detail, and in
 			{ ...factory, ...HARNESS, secrets: ["PROBE_TOKEN"] },
 			{
 				...deps(async (r) => {
-					const stop = await (
-						r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0]
-					)?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					const stop = await stopHook(r.stop);
 					reason = (stop as { reason?: string } | undefined)?.reason ?? "";
 					return agentProposing([])(r);
 				}),
@@ -2463,13 +2422,7 @@ describe("the internal review (reviewed_by)", () => {
 					title: "Add a counter",
 					body: `Counter, version ${round}.`,
 				});
-				const stop = await (
-					r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0]
-				)?.(
-					{ hook_event_name: "Stop", stop_hook_active: false } as never,
-					undefined,
-					{ signal: new AbortController().signal },
-				);
+				const stop = await stopHook(r.stop);
 				if (!stop || !("decision" in stop) || stop.decision !== "block") break;
 				seen.blocks.push(String(stop.reason));
 			}
@@ -3152,11 +3105,7 @@ describe("the internal review (reviewed_by)", () => {
 				if (r.outputs.review) r.outputs.review(given);
 				else {
 					r.outputs.propose({ action: "push_to_pull_request", summary: "Fix" });
-					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 				}
 				return {
 					status: "succeeded",
@@ -3295,13 +3244,9 @@ describe("the internal review (reviewed_by)", () => {
 
 	it("refuses a verdict that approves without a risk, so the reviewer gives one", async () => {
 		const recorded: Verdict[] = [];
-		const handler = (
-			claudeTools([verdictTool((v) => recorded.push(v))]).server
-				.instance as unknown as { _registeredTools: Registered }
-		)._registeredTools.submit_review?.handler as (
-			args: unknown,
-			extra: unknown,
-		) => Promise<{ isError?: boolean; content: unknown }>;
+		const handler = servedTools([verdictTool((v) => recorded.push(v))])
+			.submit_review?.handler;
+		if (!handler) throw new Error("no submit_review");
 		const refused = await handler(
 			{ verdict: "approved", risk: undefined, summary: "Fine.", findings: [] },
 			undefined,

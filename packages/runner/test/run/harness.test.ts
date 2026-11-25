@@ -1,8 +1,7 @@
-import type { SyncHookJSONOutput } from "@anthropic-ai/claude-agent-sdk";
 import { describe, expect, it } from "vitest";
-import { claudeHooks, claudeTools } from "../../src/agent/claude.js";
 import type { EngineTool } from "../../src/agent/port.js";
 import { type CommandRun, harness } from "../../src/run/harness.js";
+import { afterToolHook, servedTools, stopHook } from "../agent/served.js";
 
 const COMMANDS = {
 	test: "npm test",
@@ -40,46 +39,16 @@ function setup(
 		log: (r) => log.push(r),
 		now: () => new Date("2026-11-03T02:00:00Z"),
 	});
-	const signal = new AbortController().signal;
-	const stop = async () =>
-		(await claudeHooks(h.stop).Stop?.[0]?.hooks[0]?.(
-			{ hook_event_name: "Stop", stop_hook_active: false } as never,
-			undefined,
-			{ signal },
-		)) as SyncHookJSONOutput | undefined;
-	const anyTool = async () =>
-		(await claudeHooks(h.stop).PostToolUse?.[0]?.hooks[0]?.(
-			{
-				hook_event_name: "PostToolUse",
-				tool_name: "Bash",
-				tool_input: { command: "sed -i '' s/a/b/ lib/tasks.ts" },
-			} as never,
-			"tool-1",
-			{ signal },
-		)) as SyncHookJSONOutput | undefined;
+	const stop = () => stopHook(h.stop);
+	const anyTool = () => afterToolHook(h.stop);
 	return { h, executed, log, stop, anyTool };
 }
 
 /** A tool as Claude Code calls it: through the adapter's MCP server. */
 const served = (tool: EngineTool | undefined) => ({
 	...tool,
-	handler: async (args: never, extra: unknown) =>
-		(
-			claudeTools(tool ? [tool] : []).server.instance as unknown as {
-				_registeredTools: Record<
-					string,
-					{
-						handler: (
-							args: never,
-							extra: unknown,
-						) => Promise<{
-							content: { type: string; text: string }[];
-							isError?: boolean;
-						}>;
-					}
-				>;
-			}
-		)._registeredTools[tool?.name ?? ""]?.handler(args, extra),
+	handler: (args: never, extra: unknown) =>
+		(tool && servedTools([tool])[tool.name])?.handler(args, extra),
 });
 
 describe("harness", () => {
