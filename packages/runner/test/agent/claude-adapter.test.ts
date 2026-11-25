@@ -68,7 +68,9 @@ describe("claudeHooks", () => {
 	});
 
 	it("gives the Stop hook a timeout only when the stop has one", () => {
-		expect(claudeHooks(stop(undefined).value).Stop?.[0]?.timeout).toBeUndefined();
+		expect(
+			claudeHooks(stop(undefined).value).Stop?.[0]?.timeout,
+		).toBeUndefined();
 		expect(claudeHooks(stop(undefined, 90).value).Stop?.[0]?.timeout).toBe(90);
 	});
 });

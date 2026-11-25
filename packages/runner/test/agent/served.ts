@@ -19,7 +19,10 @@ export interface ServedTool {
 	}>;
 }
 
-/** The engine's tools as Claude Code calls them, by name. */
+/**
+ * The engine's tools as Claude Code calls them, by name. `_registeredTools` is a private field of the
+ * MCP SDK's McpServer: an update of that SDK can break this helper without any change in behavior.
+ */
 export const servedTools = (tools: EngineTool[]): Record<string, ServedTool> =>
 	(
 		claudeTools(tools).server.instance as unknown as {
