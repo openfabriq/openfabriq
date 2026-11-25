@@ -8,7 +8,7 @@ import {
 	WORKING_LABEL,
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AgentLauncher } from "../../src/agent/claude.js";
+import { type AgentLauncher, queryOptions } from "../../src/agent/claude.js";
 import { rememberMerge } from "../../src/engine/cursors.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub, Review } from "../../src/github/github.js";
@@ -24,6 +24,12 @@ import {
 } from "../../src/state/journal.js";
 import { diskJournal } from "../../src/state/run-journal.js";
 import type { Workspace } from "../../src/workspace/workspace.js";
+
+/** The tools as the MCP server registered them: what Claude Code calls. */
+type Registered = Record<
+	string,
+	{ handler: (args: unknown, extra: unknown) => Promise<unknown> }
+>;
 
 const ROOT = join(import.meta.dirname, "../../../..");
 const REPO = "acme/task-app";
@@ -2445,6 +2451,248 @@ describe("the internal review (reviewed_by)", () => {
 		};
 		return { launch, seen };
 	}
+
+	/**
+	 * What Claude Code receives for each launch of a reviewed run, through the engine's port and the
+	 * Claude adapter: its tools, servers and hooks, and what the output tools and the stop answer.
+	 */
+	it("gives Claude Code the same tools, servers and hooks for the author and the reviewer", async () => {
+		const seen: unknown[] = [];
+		const signal = new AbortController().signal;
+		const launch: AgentLauncher = async (r) => {
+			const options = queryOptions(r, {
+				executable: "claude",
+				auth: { env: {} },
+				repoEnv: {},
+				temp: "/tmp/openfabriq-run",
+				plugin: [],
+				guard: async () => ({}),
+				abort: new AbortController(),
+			});
+			const server = options.mcpServers?.openfabriq as unknown as {
+				instance: { _registeredTools: Registered };
+			};
+			const registered = server.instance._registeredTools;
+			const hooks = Object.fromEntries(
+				Object.entries(options.hooks ?? {}).map(([event, matchers]) => [
+					event,
+					matchers.map((m) => ({
+						hooks: m.hooks.length,
+						...(m.timeout ? { timeout: m.timeout } : {}),
+					})),
+				]),
+			);
+			const answers: Record<string, unknown> = {};
+			if (registered.submit_review)
+				answers.submit_review = [
+					await registered.submit_review.handler(
+						{ verdict: "approved", summary: "One counter.", findings: [] },
+						{},
+					),
+					await registered.submit_review.handler(
+						{
+							verdict: "approved",
+							risk: "low",
+							summary: "One counter.",
+							findings: [],
+						},
+						{},
+					),
+				];
+			if (registered.run_command)
+				answers.run_command = await registered.run_command.handler(
+					{ name: "lint" },
+					{},
+				);
+			if (registered.create_pull_request)
+				answers.create_pull_request =
+					await registered.create_pull_request.handler(
+						{ title: "Add a counter", body: "Counter." },
+						{},
+					);
+			const stop = options.hooks?.Stop?.[0]?.hooks[0];
+			const postTool = options.hooks?.PostToolUse?.[0]?.hooks[0];
+			const stopInput = {
+				hook_event_name: "Stop",
+				stop_hook_active: false,
+			} as never;
+			if (stop) {
+				commandFails = ["npm test"];
+				answers.stopFailing = await stop(stopInput, undefined, { signal });
+				commandFails = [];
+				answers.stopPassing = await stop(stopInput, undefined, { signal });
+			}
+			if (postTool)
+				answers.postTool = await postTool(
+					{ hook_event_name: "PostToolUse" } as never,
+					"tool-1",
+					{ signal },
+				);
+			seen.push({
+				reviewer: r.outputs.review !== undefined,
+				tools: options.tools,
+				allowedTools: options.allowedTools,
+				mcpServers: Object.keys(options.mcpServers ?? {}),
+				openfabriqTools: Object.keys(registered),
+				hooks,
+				answers,
+			});
+			return {
+				status: "succeeded",
+				costUsd: 0.1,
+				turns: 1,
+				tokens: { input: 1, output: 1 },
+			};
+		};
+		const implement = reviewed();
+		const implementer = implement.agents.implementer;
+		if (!implementer) throw new Error("no implementer");
+		await executeRun(
+			run("implement-ready-issues", READY),
+			{
+				...implement,
+				agents: {
+					...implement.agents,
+					implementer: {
+						...implementer,
+						tools: [...implementer.tools, "commands"],
+					},
+				},
+			},
+			deps(launch),
+			"main",
+		);
+		expect(seen).toMatchInlineSnapshot(`
+			[
+			  {
+			    "allowedTools": [
+			      "Bash",
+			      "Read(//tmp/openfabriq-run/**)",
+			      "mcp__openfabriq__submit_review",
+			    ],
+			    "answers": {
+			      "submit_review": [
+			        {
+			          "content": [
+			            {
+			              "text": "Not recorded: an approved change needs a risk, low, medium or high. Call submit_review again with it.",
+			              "type": "text",
+			            },
+			          ],
+			          "isError": true,
+			        },
+			        {
+			          "content": [
+			            {
+			              "text": "Recorded. The engine decides what happens next.",
+			              "type": "text",
+			            },
+			          ],
+			        },
+			      ],
+			    },
+			    "hooks": {
+			      "PreToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			    },
+			    "mcpServers": [
+			      "openfabriq",
+			    ],
+			    "openfabriqTools": [
+			      "submit_review",
+			    ],
+			    "reviewer": true,
+			    "tools": [
+			      "Read",
+			      "Grep",
+			      "Glob",
+			      "Bash",
+			    ],
+			  },
+			  {
+			    "allowedTools": [
+			      "Edit",
+			      "Write",
+			      "Bash",
+			      "Read(//tmp/openfabriq-run/**)",
+			      "mcp__openfabriq__add_comment",
+			      "mcp__openfabriq__add_labels",
+			      "mcp__openfabriq__remove_labels",
+			      "mcp__openfabriq__create_pull_request",
+			      "mcp__openfabriq__run_command",
+			    ],
+			    "answers": {
+			      "create_pull_request": {
+			        "content": [
+			          {
+			            "text": "Recorded. The engine applies it after the run, if the factory allows it.",
+			            "type": "text",
+			          },
+			        ],
+			      },
+			      "postTool": {},
+			      "run_command": {
+			        "content": [
+			          {
+			            "text": "lint passed.
+			ok",
+			            "type": "text",
+			          },
+			        ],
+			      },
+			      "stopFailing": {
+			        "decision": "block",
+			        "reason": "The check "test" failed (npm test). Fix it, then finish.
+
+			exited with code 1
+			1 test failed",
+			      },
+			      "stopPassing": {},
+			    },
+			    "hooks": {
+			      "PostToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			      "PreToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			      "Stop": [
+			        {
+			          "hooks": 1,
+			          "timeout": 2700,
+			        },
+			      ],
+			    },
+			    "mcpServers": [
+			      "openfabriq",
+			    ],
+			    "openfabriqTools": [
+			      "add_comment",
+			      "add_labels",
+			      "remove_labels",
+			      "create_pull_request",
+			      "run_command",
+			    ],
+			    "reviewer": false,
+			    "tools": [
+			      "Read",
+			      "Grep",
+			      "Glob",
+			      "Edit",
+			      "Write",
+			      "Bash",
+			    ],
+			  },
+			]
+		`);
+	});
 
 	const reviewsJson = () =>
 		JSON.parse(
