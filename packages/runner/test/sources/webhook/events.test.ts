@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, expect, it } from "vitest";
-import type { AgentLauncher } from "../../../src/agent/claude.js";
+import type { AgentLauncher } from "../../../src/agent/port.js";
 import { startEngine } from "../../../src/engine/engine.js";
 import type { GitHub } from "../../../src/github/github.js";
 import { projectDir, readRuns, writeApplied } from "../../../src/index.js";

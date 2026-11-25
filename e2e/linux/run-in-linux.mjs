@@ -37,7 +37,6 @@ import {
 	workspace,
 	writeApplied,
 } from "/repo/packages/runner/dist/index.js";
-import { createSdkMcpServer } from "/repo/packages/runner/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs";
 
 const scenario = process.argv[2];
 const home = process.env.HOME;
@@ -362,8 +361,7 @@ net.createServer((c) => c.end("ok")).listen(own, () => net.connect(own).on("data
 		tools: ["read", "shell"],
 		network: ["packages"],
 		outputs: {
-			server: createSdkMcpServer({ name: "openfabriq", tools: [] }),
-			names: [],
+			tools: [],
 			propose: () => {},
 		},
 		budgetUsd: 0.5,
@@ -479,8 +477,7 @@ const result = await claudeAgent({
 	tools: scenario === "read" ? ["read"] : ["read", "shell"],
 	network: scenario === "network" ? ["allowed.invalid"] : ["packages"],
 	outputs: {
-		server: createSdkMcpServer({ name: "openfabriq", tools: [] }),
-		names: [],
+		tools: [],
 		propose: () => {},
 	},
 	mcp: {
@@ -491,7 +488,7 @@ const result = await claudeAgent({
 				headers: { Authorization: `Bearer ${TOKEN}` },
 			},
 		},
-		tools: ["mcp__remote__echo"],
+		tools: { remote: ["echo"] },
 	},
 	budgetUsd: 0.5,
 	timeoutMs: 180_000,

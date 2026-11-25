@@ -1,18 +1,16 @@
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import {
 	type Agent,
 	type Automation,
 	agentNetwork,
 	type Factory,
 	type Network,
-	OUTPUT_TOOL_PREFIX,
 	setupNetwork,
 } from "@openfabriq/core";
-import type { AgentResult } from "../agent/claude.js";
 import type { runEnv } from "../agent/env.js";
 import { agentMcp } from "../agent/mcp.js";
+import type { AgentResult } from "../agent/port.js";
 import type { QueuedRun } from "../engine/queue.js";
 import { errorText } from "../files.js";
 import { projectDir } from "../state/projects.js";
@@ -251,8 +249,7 @@ export async function launchAgent(step: AgentLaunch): Promise<{
 					network: reach,
 					onRefused: (sites) => recordRefusals(paths.runDir, "web", sites),
 					outputs: {
-						server: createSdkMcpServer({ name: "openfabriq", tools }),
-						names: tools.map((t) => `${OUTPUT_TOOL_PREFIX}${t.name}`),
+						tools,
 						propose: () => {},
 						review: round.record,
 					},
@@ -336,7 +333,7 @@ export async function launchAgent(step: AgentLaunch): Promise<{
 		outputs,
 		...(plugin ? { plugin } : {}),
 		...(mcp ? { mcp } : {}),
-		hooks: checks.hooks,
+		stop: checks.stop,
 		budgetUsd: factory.limits.usd_per_run,
 		timeoutMs: time.limitMs - (now().getTime() - time.started),
 		env: env.agent,
