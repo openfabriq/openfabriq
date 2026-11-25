@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type FactoryFiles, WORKING_LABEL } from "@openfabriq/core";
 import { beforeEach, expect, it } from "vitest";
-import type { AgentLauncher, AgentResult } from "../../src/agent/claude.js";
+import type { AgentLauncher, AgentResult } from "../../src/agent/port.js";
 import { type EngineDeps, startEngine } from "../../src/engine/engine.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub } from "../../src/github/github.js";

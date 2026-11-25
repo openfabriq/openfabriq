@@ -7,8 +7,8 @@ import {
 	subjectOf,
 	WORKING_LABEL,
 } from "@openfabriq/core";
-import type { AgentLauncher } from "../agent/claude.js";
 import { hideSecrets, runEnv } from "../agent/env.js";
+import type { AgentLauncher } from "../agent/port.js";
 import type { QueuedRun } from "../engine/queue.js";
 import { errorText } from "../files.js";
 import type { GitHub } from "../github/github.js";

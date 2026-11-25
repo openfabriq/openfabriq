@@ -1,6 +1,5 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tool } from "@anthropic-ai/claude-agent-sdk";
 import {
 	HANDOFF_LABEL,
 	READY_LABEL,
@@ -11,7 +10,7 @@ import {
 	riskLabel,
 } from "@openfabriq/core";
 import { z } from "zod";
-import type { AgentResult } from "../agent/claude.js";
+import { type AgentResult, engineTool } from "../agent/port.js";
 import { errorText } from "../files.js";
 import type { GitHub } from "../github/github.js";
 import type { Outcome } from "./outputs/review.js";
@@ -63,37 +62,26 @@ const findingSchema = {
 
 /** The reviewer's only output: its verdict. The last call counts. */
 export function verdictTool(record: (verdict: Verdict) => void) {
-	return tool(
-		"submit_review",
-		"Give your verdict on the change, once, at the end: approved (nothing blocks), needs_changes (defects the author can fix: each blocking finding says where, what is wrong and the correction), or needs_human (only a person can decide). An approved change has a risk: low (nothing a user sees or stores can break), medium, or high (data, security, payments, or code many parts share); the engine labels the pull request with it. The summary is one line. Non-blocking remarks are findings with blocking: false.",
-		{
+	return engineTool({
+		name: "submit_review",
+		description:
+			"Give your verdict on the change, once, at the end: approved (nothing blocks), needs_changes (defects the author can fix: each blocking finding says where, what is wrong and the correction), or needs_human (only a person can decide). An approved change has a risk: low (nothing a user sees or stores can break), medium, or high (data, security, payments, or code many parts share); the engine labels the pull request with it. The summary is one line. Non-blocking remarks are findings with blocking: false.",
+		schema: {
 			verdict: z.enum(VERDICTS),
 			risk: z.enum(RISKS).optional(),
 			summary: z.string().min(1),
 			findings: z.array(z.strictObject(findingSchema)).default([]),
 		},
-		async (verdict) => {
+		run: async (verdict) => {
 			if (verdict.verdict === "approved" && !verdict.risk)
 				return {
-					content: [
-						{
-							type: "text" as const,
-							text: "Not recorded: an approved change needs a risk, low, medium or high. Call submit_review again with it.",
-						},
-					],
+					text: "Not recorded: an approved change needs a risk, low, medium or high. Call submit_review again with it.",
 					isError: true,
 				};
 			record(verdict);
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: "Recorded. The engine decides what happens next.",
-					},
-				],
-			};
+			return { text: "Recorded. The engine decides what happens next." };
 		},
-	);
+	});
 }
 
 const where = (f: Finding) =>

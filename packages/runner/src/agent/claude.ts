@@ -2,81 +2,86 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+	createSdkMcpServer,
 	type HookCallback,
 	type HookCallbackMatcher,
 	type HookEvent,
-	type McpSdkServerConfigWithInstance,
 	type Options,
 	query,
 	type SandboxSettings,
 	type SDKResultMessage,
 	type SDKSystemMessage,
+	tool,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
 	describeTool,
-	type Network,
 	networkSites,
+	OUTPUT_TOOL_PREFIX,
 	type Tool,
-	type ToolSummary,
 } from "@openfabriq/core";
 import { errorText } from "../files.js";
-import type { Verdict } from "../run/internal-review.js";
-import type { Proposal } from "../run/outputs/tools.js";
 import { engineSecretPaths } from "../state/secrets.js";
 import { prepareClaudeAuth } from "./env.js";
 import { insideOnly, realPath, webInNetwork } from "./guard.js";
 import { lockedDownOptions } from "./locked-down.js";
-import { type AgentMcp, unavailableMcp } from "./mcp.js";
+import { unavailableMcp } from "./mcp.js";
+import type {
+	AgentLauncher,
+	AgentResult,
+	AgentRun,
+	EngineTool,
+	Stop,
+} from "./port.js";
 import { repoSettings } from "./repo-settings.js";
 import { runTemp, settingsFolder, shellSandbox } from "./sandbox.js";
 
-export interface AgentRun {
-	prompt: string;
-	instructions: string;
-	cwd: string;
-	model: string;
-	tools: Tool[];
-	/** What its shell and web tool reach. */
-	network: Network;
-	/** Told the sites the network refused the web tool. */
-	onRefused?: (sites: string[]) => void;
-	/**
-	 * The output tools; `propose` is what they call. A fake launcher, in the tests, calls it
-	 * directly, as the agent would through a tool.
-	 */
-	outputs: {
-		server: McpSdkServerConfigWithInstance;
-		names: string[];
-		propose: (p: Proposal) => void;
-		/** A reviewer's verdict tool calls it (reviewed_by); a fake reviewer, in the tests, calls it directly. */
-		review?: (verdict: Verdict) => void;
+/** The engine's tools, served to Claude Code as the openfabriq MCP server: mcp__openfabriq__<tool>. */
+export function claudeTools(tools: EngineTool[]) {
+	return {
+		server: createSdkMcpServer({
+			name: "openfabriq",
+			tools: tools.map((t) =>
+				tool(t.name, t.description, t.schema, async (args) => {
+					const answer = await t.run(args);
+					return {
+						content: [{ type: "text" as const, text: answer.text }],
+						...(answer.isError ? { isError: true } : {}),
+					};
+				}),
+			),
+		}),
+		names: tools.map((t) => `${OUTPUT_TOOL_PREFIX}${t.name}`),
 	};
-	plugin?: string;
-	/** The factory's MCP servers this agent names, and the tools it may call. */
-	mcp?: AgentMcp;
-	/** The factory's harness: the checks at the agent's stop. */
-	hooks?: Partial<Record<HookEvent, HookCallbackMatcher[]>>;
-	budgetUsd: number;
-	timeoutMs: number;
-	/** The agent's environment: credential-free, with the factory's env and never its secrets. */
-	env: Record<string, string>;
-	transcript: string;
-	/** Each tool call of the agent, as it comes: a delegated Linear run shows them. */
-	onStep?(step: ToolSummary): void;
 }
 
-export interface AgentResult {
-	status: "succeeded" | "failed";
-	reason?: string;
-	costUsd: number;
-	turns: number;
-	tokens: { input: number; output: number };
-	model?: string;
-	/** Listed MCP tools and servers Claude Code could not offer: the run went on without them. */
-	mcpUnavailable?: string[];
+/** The factory's harness as Claude Code hooks: a stop it refuses with the reason, and any tool after it. */
+export function claudeHooks(
+	stop: Stop,
+): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+	return {
+		PostToolUse: [
+			{
+				hooks: [
+					async () => {
+						stop.afterTool();
+						return {};
+					},
+				],
+			},
+		],
+		Stop: [
+			{
+				hooks: [
+					async () => {
+						const reason = await stop.check();
+						return reason === undefined ? {} : { decision: "block", reason };
+					},
+				],
+				...(stop.timeoutSeconds ? { timeout: stop.timeoutSeconds } : {}),
+			},
+		],
+	};
 }
-
-export type AgentLauncher = (run: AgentRun) => Promise<AgentResult>;
 
 const TOOLS: Record<Tool, string[]> = {
 	read: ["Read", "Grep", "Glob"],
@@ -232,6 +237,8 @@ export function queryOptions(
 			...(run.plugin ? [resolve(run.plugin)] : []),
 		]))
 			preApproved.push(`Read(/${folder}/**)`);
+	const outputs = claudeTools(run.outputs.tools);
+	const hooks = run.stop ? claudeHooks(run.stop) : undefined;
 	// The repo's hooks never run, even for a read-only agent: they come from the pull request's branch.
 	return lockedDownOptions(
 		{
@@ -264,9 +271,9 @@ export function queryOptions(
 			session: {
 				...(given.sandbox ? { sandbox: given.sandbox } : {}),
 				hooks: {
-					...run.hooks,
+					...hooks,
 					PreToolUse: [
-						...(run.hooks?.PreToolUse ?? []),
+						...(hooks?.PreToolUse ?? []),
 						{ hooks: [given.guard] },
 						...(builtIn.includes("WebFetch") && sites !== "any"
 							? [{ hooks: [webInNetwork(run.network, run.onRefused)] }]
@@ -283,12 +290,12 @@ export function queryOptions(
 				tools: run.plugin ? [...builtIn, "Skill"] : builtIn,
 				allowedTools: [
 					...preApproved,
-					...run.outputs.names,
+					...outputs.names,
 					// Only the tools the agent lists: under dontAsk, its servers' other tools are refused.
 					...(run.mcp?.tools ?? []),
 				],
 				...(run.plugin ? { skills: "all" as const } : {}),
-				mcpServers: { ...run.mcp?.servers, openfabriq: run.outputs.server },
+				mcpServers: { ...run.mcp?.servers, openfabriq: outputs.server },
 				plugins: run.plugin ? [{ type: "local", path: run.plugin }] : [],
 			},
 			limits: { maxBudgetUsd: run.budgetUsd, persistSession: false },

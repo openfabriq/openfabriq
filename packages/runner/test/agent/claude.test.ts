@@ -19,7 +19,8 @@ let result: Record<string, unknown> | undefined = {};
 let initMessage: Record<string, unknown> | undefined;
 /** How Claude Code stops before its result: an error, or waiting until the run is aborted. */
 let failure: Error | "hang" | undefined;
-vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => ({
+	...(await importOriginal<object>()),
 	query: ({ options }: { options: Options }) => {
 		calls.push(options);
 		settingsFolderExisted = existsSync(options.env?.XDG_CONFIG_HOME ?? "");
@@ -50,6 +51,7 @@ vi.mock("../../src/agent/guard.js", async (importOriginal) => {
 	};
 });
 const { agentResult, claudeAgent } = await import("../../src/agent/claude.js");
+const { engineTool } = await import("../../src/agent/port.js");
 
 const dir = mkdtempSync(join(tmpdir(), "openfabriq-claude-"));
 const launch = (tools: Tool[], network: Network = "any") =>
@@ -60,7 +62,7 @@ const launch = (tools: Tool[], network: Network = "any") =>
 		model: "haiku",
 		tools,
 		network,
-		outputs: { server: {} as never, names: [], propose: () => undefined },
+		outputs: { tools: [], propose: () => undefined },
 		budgetUsd: 1,
 		timeoutMs: 60_000,
 		env: {},
@@ -229,8 +231,14 @@ it("gives the agent the factory's servers it names, allows only its listed tools
 		tools: ["read" as const],
 		network: "any" as const,
 		outputs: {
-			server: { type: "sdk", name: "openfabriq" } as never,
-			names: ["mcp__openfabriq__add_comment"],
+			tools: [
+				engineTool({
+					name: "add_comment",
+					description: "Post a comment.",
+					schema: {},
+					run: async () => ({ text: "Recorded." }),
+				}),
+			],
 			propose: () => undefined,
 		},
 		mcp: {
@@ -255,7 +263,7 @@ it("gives the agent the factory's servers it names, allows only its listed tools
 	initMessage = undefined;
 	expect(calls[0]?.mcpServers).toEqual({
 		sentry: { type: "http", url: "https://s.dev/mcp" },
-		openfabriq: { type: "sdk", name: "openfabriq" },
+		openfabriq: expect.objectContaining({ type: "sdk", name: "openfabriq" }),
 	});
 	expect(calls[0]?.strictMcpConfig).toBe(true);
 	// No "Generated with Claude Code" in pull requests, no Co-Authored-By in commits: the engine signs.
@@ -338,7 +346,7 @@ it("clears its time limit and removes its temp folder when a run cannot be prepa
 				model: "haiku",
 				tools: ["read"],
 				network: "any",
-				outputs: { server: {} as never, names: [], propose: () => undefined },
+				outputs: { tools: [], propose: () => undefined },
 				plugin: dir,
 				budgetUsd: 1,
 				timeoutMs: 60_000,
@@ -364,7 +372,7 @@ it("lets Read open the files beside a skill, in the factory's plugin folder", as
 		model: "haiku",
 		tools: ["read"],
 		network: "any",
-		outputs: { server: {} as never, names: [], propose: () => undefined },
+		outputs: { tools: [], propose: () => undefined },
 		plugin: dir,
 		budgetUsd: 1,
 		timeoutMs: 60_000,
@@ -447,7 +455,7 @@ it("never starts Claude Code in a repository whose settings set a credential hel
 		model: "haiku",
 		tools: ["read"],
 		network: "any",
-		outputs: { server: {} as never, names: [], propose: () => undefined },
+		outputs: { tools: [], propose: () => undefined },
 		budgetUsd: 1,
 		timeoutMs: 60_000,
 		env: {},

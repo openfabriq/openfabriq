@@ -1,12 +1,11 @@
-import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import {
 	type Action,
 	type Automation,
 	misfit,
-	OUTPUT_TOOL_PREFIX,
 	type SubjectKind,
 } from "@openfabriq/core";
 import { z } from "zod";
+import { type EngineTool, engineTool } from "../../agent/port.js";
 import { CLOSE_REASONS, type CloseReason } from "../../github/github.js";
 
 export type Proposal =
@@ -43,15 +42,8 @@ export interface Subject {
 	kind: SubjectKind;
 }
 
-const SERVER = "openfabriq";
-
 const recorded = {
-	content: [
-		{
-			type: "text" as const,
-			text: "Recorded. The engine applies it after the run, if the factory allows it.",
-		},
-	],
+	text: "Recorded. The engine applies it after the run, if the factory allows it.",
 };
 
 /**
@@ -61,7 +53,7 @@ const recorded = {
 export function outputTools(
 	automation: Automation,
 	subject: Subject,
-	extra: NonNullable<Parameters<typeof createSdkMcpServer>[0]["tools"]> = [],
+	extra: EngineTool[] = [],
 ) {
 	const proposals: Proposal[] = [];
 	const propose = (p: Proposal) => {
@@ -82,102 +74,109 @@ export function outputTools(
 		return labels ? ` Allowed labels: ${labels.join(", ")}.` : "";
 	};
 	const all = [
-		tool(
-			"add_comment",
-			subject.kind === "slack"
-				? "Reply in the Slack thread."
-				: `Post a comment on ${where}.`,
-			{ body: z.string().min(1) },
-			async ({ body }) => {
+		engineTool({
+			name: "add_comment",
+			description:
+				subject.kind === "slack"
+					? "Reply in the Slack thread."
+					: `Post a comment on ${where}.`,
+			schema: { body: z.string().min(1) },
+			run: async ({ body }) => {
 				propose({ action: "add_comment", body });
 				return recorded;
 			},
-		),
-		tool(
-			"add_labels",
-			`Add labels to ${where}.${labelsNote("add_labels")}`,
-			{ labels: z.array(z.string()).min(1) },
-			async ({ labels }) => {
+		}),
+		engineTool({
+			name: "add_labels",
+			description: `Add labels to ${where}.${labelsNote("add_labels")}`,
+			schema: { labels: z.array(z.string()).min(1) },
+			run: async ({ labels }) => {
 				propose({ action: "add_labels", labels });
 				return recorded;
 			},
-		),
-		tool(
-			"remove_labels",
-			`Remove labels from ${where}.${labelsNote("remove_labels")}`,
-			{ labels: z.array(z.string()).min(1) },
-			async ({ labels }) => {
+		}),
+		engineTool({
+			name: "remove_labels",
+			description: `Remove labels from ${where}.${labelsNote("remove_labels")}`,
+			schema: { labels: z.array(z.string()).min(1) },
+			run: async ({ labels }) => {
 				propose({ action: "remove_labels", labels });
 				return recorded;
 			},
-		),
-		tool(
-			"create_pull_request",
-			"Open a pull request with the commits you made in the working directory. Commit with git first; the engine pushes the branch.",
-			{ title: z.string().min(1), body: z.string().min(1) },
-			async ({ title, body }) => {
+		}),
+		engineTool({
+			name: "create_pull_request",
+			description:
+				"Open a pull request with the commits you made in the working directory. Commit with git first; the engine pushes the branch.",
+			schema: { title: z.string().min(1), body: z.string().min(1) },
+			run: async ({ title, body }) => {
 				propose({ action: "create_pull_request", title, body });
 				return recorded;
 			},
-		),
-		tool(
-			"push_to_pull_request",
-			"Push the commits you made in the working directory to this pull request. Commit with git first.",
-			{ summary: z.string().min(1) },
-			async ({ summary }) => {
+		}),
+		engineTool({
+			name: "push_to_pull_request",
+			description:
+				"Push the commits you made in the working directory to this pull request. Commit with git first.",
+			schema: { summary: z.string().min(1) },
+			run: async ({ summary }) => {
 				propose({ action: "push_to_pull_request", summary });
 				return recorded;
 			},
-		),
-		tool(
-			"request_changes",
-			"Publish a review that requests changes on this pull request.",
-			{ body: z.string().min(1) },
-			async ({ body }) => {
+		}),
+		engineTool({
+			name: "request_changes",
+			description:
+				"Publish a review that requests changes on this pull request.",
+			schema: { body: z.string().min(1) },
+			run: async ({ body }) => {
 				propose({ action: "request_changes", body });
 				return recorded;
 			},
-		),
-		tool(
-			"create_issue",
-			"Open a new issue in the repository.",
-			{ title: z.string().min(1), body: z.string().min(1) },
-			async ({ title, body }) => {
+		}),
+		engineTool({
+			name: "create_issue",
+			description: "Open a new issue in the repository.",
+			schema: { title: z.string().min(1), body: z.string().min(1) },
+			run: async ({ title, body }) => {
 				propose({ action: "create_issue", title, body });
 				return recorded;
 			},
-		),
+		}),
 		// No number to give: closing reaches only the run's own subject.
-		tool(
-			"close_issue",
-			"Close this issue. Explain why in a comment first. The reason: completed (done), not_planned (it will not be done), or duplicate (the work goes on in another issue).",
-			{
+		engineTool({
+			name: "close_issue",
+			description:
+				"Close this issue. Explain why in a comment first. The reason: completed (done), not_planned (it will not be done), or duplicate (the work goes on in another issue).",
+			schema: {
 				reason: z.enum(CLOSE_REASONS).optional(),
 			},
-			async ({ reason }) => {
+			run: async ({ reason }) => {
 				propose({ action: "close_issue", ...(reason ? { reason } : {}) });
 				return recorded;
 			},
-		),
-		tool(
-			"close_pr",
-			"Close this pull request without merging it. Explain why in a comment first.",
-			{},
-			async () => {
+		}),
+		engineTool({
+			name: "close_pr",
+			description:
+				"Close this pull request without merging it. Explain why in a comment first.",
+			schema: {},
+			run: async () => {
 				propose({ action: "close_pr" });
 				return recorded;
 			},
-		),
+		}),
 		// The engine merges only if the factory's conditions and its own locks hold.
-		tool(
-			"merge_pull_request",
-			"Ask the engine to merge this pull request. It merges only if the factory's conditions and its own checks hold; otherwise a person merges. Add your labels and your review comment first.",
-			{},
-			async () => {
+		engineTool({
+			name: "merge_pull_request",
+			description:
+				"Ask the engine to merge this pull request. It merges only if the factory's conditions and its own checks hold; otherwise a person merges. Add your labels and your review comment first.",
+			schema: {},
+			run: async () => {
 				propose({ action: "merge_pull_request" });
 				return recorded;
 			},
-		),
+		}),
 	];
 	const tools = all.filter((t) => {
 		const action = t.name as Action;
@@ -187,8 +186,8 @@ export function outputTools(
 		);
 	});
 	return {
-		server: createSdkMcpServer({ name: SERVER, tools: [...tools, ...extra] }),
-		names: [...tools, ...extra].map((t) => `${OUTPUT_TOOL_PREFIX}${t.name}`),
+		/** The output tools that fit, then the engine's others for the run. */
+		tools: [...tools, ...extra],
 		actions: tools.map((t) => t.name as Action),
 		propose,
 		/** What the agent proposed, filled as it calls the tools. */

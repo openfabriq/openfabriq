@@ -1,5 +1,7 @@
 import type { SyncHookJSONOutput } from "@anthropic-ai/claude-agent-sdk";
 import { describe, expect, it } from "vitest";
+import { claudeHooks, claudeTools } from "../../src/agent/claude.js";
+import type { EngineTool } from "../../src/agent/port.js";
 import { type CommandRun, harness } from "../../src/run/harness.js";
 
 const COMMANDS = {
@@ -40,13 +42,13 @@ function setup(
 	});
 	const signal = new AbortController().signal;
 	const stop = async () =>
-		(await h.hooks.Stop?.[0]?.hooks[0]?.(
+		(await claudeHooks(h.stop).Stop?.[0]?.hooks[0]?.(
 			{ hook_event_name: "Stop", stop_hook_active: false } as never,
 			undefined,
 			{ signal },
 		)) as SyncHookJSONOutput | undefined;
 	const anyTool = async () =>
-		(await h.hooks.PostToolUse?.[0]?.hooks[0]?.(
+		(await claudeHooks(h.stop).PostToolUse?.[0]?.hooks[0]?.(
 			{
 				hook_event_name: "PostToolUse",
 				tool_name: "Bash",
@@ -58,6 +60,28 @@ function setup(
 	return { h, executed, log, stop, anyTool };
 }
 
+/** A tool as Claude Code calls it: through the adapter's MCP server. */
+const served = (tool: EngineTool | undefined) => ({
+	...tool,
+	handler: async (args: never, extra: unknown) =>
+		(
+			claudeTools(tool ? [tool] : []).server.instance as unknown as {
+				_registeredTools: Record<
+					string,
+					{
+						handler: (
+							args: never,
+							extra: unknown,
+						) => Promise<{
+							content: { type: string; text: string }[];
+							isError?: boolean;
+						}>;
+					}
+				>;
+			}
+		)._registeredTools[tool?.name ?? ""]?.handler(args, extra),
+});
+
 describe("harness", () => {
 	it("offers run_command only to an agent with the commands tool, and runs named commands only", async () => {
 		expect(setup().h.tools).toEqual([]);
@@ -65,7 +89,7 @@ describe("harness", () => {
 			agentCommands: true,
 			failing: ["npm run lint"],
 		});
-		const [runCommand] = h.tools;
+		const runCommand = served(h.tools[0]);
 		expect(runCommand?.name).toBe("run_command");
 		expect(runCommand?.description).toContain("test: npm test");
 		const passed = await runCommand?.handler({ name: "test" } as never, {});
@@ -143,7 +167,7 @@ describe("harness", () => {
 				committed.push(change);
 			},
 		});
-		const [commit] = h.tools;
+		const commit = served(h.tools[0]);
 		expect(commit?.name).toBe("commit");
 		const done = await commit?.handler(
 			{

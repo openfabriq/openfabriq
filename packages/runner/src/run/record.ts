@@ -1,5 +1,5 @@
 import type { Factory } from "@openfabriq/core";
-import type { AgentResult } from "../agent/claude.js";
+import type { AgentResult } from "../agent/port.js";
 import type { QueuedRun } from "../engine/queue.js";
 import type { RunRecord } from "../state/journal.js";
 import type { SubjectRead } from "./subject.js";

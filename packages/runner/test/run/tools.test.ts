@@ -1,5 +1,6 @@
 import { type Automation, OUTPUT_TOOL_PREFIX } from "@openfabriq/core";
 import { expect, it } from "vitest";
+import { claudeTools } from "../../src/agent/claude.js";
 import { outputTools } from "../../src/run/outputs/tools.js";
 
 /** The tools as the MCP server registered them: what Claude Code calls. */
@@ -15,12 +16,13 @@ const automation = {
 
 it("records what the agent proposes through the server's tools, and writes nothing", async () => {
 	const outputs = outputTools(automation, { number: 4, kind: "issue" });
-	expect(outputs.names).toEqual([
+	const served = claudeTools(outputs.tools);
+	expect(served.names).toEqual([
 		`${OUTPUT_TOOL_PREFIX}add_comment`,
 		`${OUTPUT_TOOL_PREFIX}add_labels`,
 	]);
 	const tools = (
-		outputs.server.instance as unknown as { _registeredTools: Registered }
+		served.server.instance as unknown as { _registeredTools: Registered }
 	)._registeredTools;
 	const answer = await tools.add_comment?.handler({ body: "Looks good." }, {});
 	await tools.add_labels?.handler({ labels: ["bug"] }, {});

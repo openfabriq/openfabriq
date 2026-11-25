@@ -1,9 +1,13 @@
-import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import { type Agent, type Factory, secretNames } from "@openfabriq/core";
 import { secretValues } from "../state/factory-secrets.js";
 
+/** How to reach one of the factory's MCP servers: remote over HTTP, or a local command. */
+export type McpServer =
+	| { type: "http"; url: string; headers?: Record<string, string> }
+	| { command: string; args: string[]; env: Record<string, string> };
+
 export interface AgentMcp {
-	servers: Record<string, McpServerConfig>;
+	servers: Record<string, McpServer>;
 	/** The tools the agent may call, as Claude Code names them: mcp__<server>__<tool>. */
 	tools: string[];
 }
@@ -24,7 +28,7 @@ export async function agentMcp(
 	const entries = Object.entries(agent.mcp ?? {});
 	if (!entries.length) return undefined;
 	const values = secretValues(factory.repository, secretNames(factory), env);
-	const servers: Record<string, McpServerConfig> = {};
+	const servers: Record<string, McpServer> = {};
 	for (const [name] of entries) {
 		const server = factory.mcp?.[name];
 		if (!server) continue;

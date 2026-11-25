@@ -8,7 +8,12 @@ import {
 	WORKING_LABEL,
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type AgentLauncher, queryOptions } from "../../src/agent/claude.js";
+import {
+	claudeHooks,
+	claudeTools,
+	queryOptions,
+} from "../../src/agent/claude.js";
+import type { AgentLauncher } from "../../src/agent/port.js";
 import { rememberMerge } from "../../src/engine/cursors.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub, Review } from "../../src/github/github.js";
@@ -190,11 +195,19 @@ function agentProposing(
 	return async (run) => {
 		// What the MCP tools would record: the tools exposed are only those that `can` allows.
 		for (const p of proposals)
-			if (run.outputs.names.includes(`mcp__openfabriq__${p.action}`))
+			if (
+				claudeTools(run.outputs.tools).names.includes(
+					`mcp__openfabriq__${p.action}`,
+				)
+			)
 				run.outputs.propose(p);
 		// A forbidden proposal that slipped through anyway must still be refused by the engine.
 		for (const p of proposals)
-			if (!run.outputs.names.includes(`mcp__openfabriq__${p.action}`))
+			if (
+				!claudeTools(run.outputs.tools).names.includes(
+					`mcp__openfabriq__${p.action}`,
+				)
+			)
 				run.outputs.propose(p);
 		return {
 			status,
@@ -1126,10 +1139,12 @@ it("serves run_command to an agent with commands, and trusts checks passed at it
 			},
 		},
 		deps(async (r) => {
-			expect(r.outputs.names).toContain("mcp__openfabriq__run_command");
+			expect(claudeTools(r.outputs.tools).names).toContain(
+				"mcp__openfabriq__run_command",
+			);
 			expect(r.prompt).toContain("test: npm test");
 			const signal = new AbortController().signal;
-			await r.hooks?.Stop?.[0]?.hooks[0]?.(
+			await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
 				{ hook_event_name: "Stop", stop_hook_active: false } as never,
 				undefined,
 				{ signal },
@@ -1164,7 +1179,7 @@ it("gives setup the package registries at least, and the agent's network to its 
 			...deps(async (r) => {
 				seen.agent = r.network;
 				r.onRefused?.(["web.example"]);
-				await r.hooks?.Stop?.[0]?.hooks[0]?.(
+				await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
 					{ hook_event_name: "Stop", stop_hook_active: false } as never,
 					undefined,
 					{ signal: new AbortController().signal },
@@ -1242,7 +1257,7 @@ it("gives secrets to setup and commands only, and journals the names", async () 
 			{
 				...deps(async (r) => {
 					seen.agent = r.env;
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
+					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
 						{ hook_event_name: "Stop", stop_hook_active: false } as never,
 						undefined,
 						{ signal: new AbortController().signal },
@@ -1297,7 +1312,7 @@ it("runs the checks and commands of a run no maintainer started without the secr
 			},
 			{
 				...deps(async (r) => {
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
+					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
 						{ hook_event_name: "Stop", stop_hook_active: false } as never,
 						undefined,
 						{ signal: new AbortController().signal },
@@ -1383,7 +1398,9 @@ it("hides the secrets' values in a command's output: in the run's detail, and in
 			{ ...factory, ...HARNESS, secrets: ["PROBE_TOKEN"] },
 			{
 				...deps(async (r) => {
-					const stop = await r.hooks?.Stop?.[0]?.hooks[0]?.(
+					const stop = await (
+						r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0]
+					)?.(
 						{ hook_event_name: "Stop", stop_hook_active: false } as never,
 						undefined,
 						{ signal: new AbortController().signal },
@@ -2427,8 +2444,10 @@ describe("the internal review (reviewed_by)", () => {
 			};
 			if (r.outputs.review) {
 				seen.reviewerPrompts.push(r.prompt);
-				expect(r.outputs.names).toEqual(["mcp__openfabriq__submit_review"]);
-				expect(r.hooks).toBeUndefined();
+				expect(claudeTools(r.outputs.tools).names).toEqual([
+					"mcp__openfabriq__submit_review",
+				]);
+				expect(r.stop).toBeUndefined();
 				const next = verdicts.shift();
 				if (next) r.outputs.review(next);
 				return { ...done, costUsd: 0.25 };
@@ -2439,7 +2458,9 @@ describe("the internal review (reviewed_by)", () => {
 					title: "Add a counter",
 					body: `Counter, version ${round}.`,
 				});
-				const stop = await r.hooks?.Stop?.[0]?.hooks[0]?.(
+				const stop = await (
+					r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0]
+				)?.(
 					{ hook_event_name: "Stop", stop_hook_active: false } as never,
 					undefined,
 					{ signal: new AbortController().signal },
@@ -2937,7 +2958,7 @@ describe("the internal review (reviewed_by)", () => {
 				if (r.outputs.review) r.outputs.review(given);
 				else {
 					r.outputs.propose({ action: "push_to_pull_request", summary: "Fix" });
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
+					await (r.stop && claudeHooks(r.stop).Stop?.[0]?.hooks[0])?.(
 						{ hook_event_name: "Stop", stop_hook_active: false } as never,
 						undefined,
 						{ signal: new AbortController().signal },
@@ -3080,7 +3101,13 @@ describe("the internal review (reviewed_by)", () => {
 
 	it("refuses a verdict that approves without a risk, so the reviewer gives one", async () => {
 		const recorded: Verdict[] = [];
-		const handler = verdictTool((v) => recorded.push(v)).handler;
+		const handler = (
+			claudeTools([verdictTool((v) => recorded.push(v))]).server
+				.instance as unknown as { _registeredTools: Registered }
+		)._registeredTools.submit_review?.handler as (
+			args: unknown,
+			extra: unknown,
+		) => Promise<{ isError?: boolean; content: unknown }>;
 		const refused = await handler(
 			{ verdict: "approved", risk: undefined, summary: "Fine.", findings: [] },
 			undefined,
