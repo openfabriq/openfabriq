@@ -32,15 +32,24 @@ export const engineTool = <Shape extends z.ZodRawShape>(
 export interface Stop {
 	/** The agent wants to finish: undefined lets it, a reason sends it back to work with that reason. */
 	check: () => Promise<string | undefined>;
-	/** After any tool call: the code may have changed since a passing stop. */
+	/**
+	 * After every tool call, by every adapter: the code may have changed since a passing stop, and the
+	 * engine then runs the checks again before code leaves. An agent engine that cannot report its tool
+	 * calls cannot run a factory with checks.
+	 */
 	afterTool: () => void;
 	/** How long `check` may take, in seconds: a review runs in it. */
 	timeoutSeconds?: number;
 }
 
+/**
+ * One agent's run. The guard is data an adapter enforces its own way, and never loosens: the file
+ * tools stay in `cwd` (and read `plugin`), the shell and web tool reach `network` only.
+ */
 export interface AgentRun {
 	prompt: string;
 	instructions: string;
+	/** The worktree: the only folder its file tools reach. */
 	cwd: string;
 	model: string;
 	tools: Tool[];
@@ -49,7 +58,8 @@ export interface AgentRun {
 	/** Told the sites the network refused the web tool. */
 	onRefused?: (sites: string[]) => void;
 	/**
-	 * The output tools; `propose` is what they call. A fake launcher, in the tests, calls it
+	 * The engine's tools for the run: the outputs `can` allows, then run_command, commit or the
+	 * reviewer's verdict. `propose` is what the outputs call; a fake launcher, in the tests, calls it
 	 * directly, as the agent would through a tool.
 	 */
 	outputs: {
@@ -58,6 +68,7 @@ export interface AgentRun {
 		/** A reviewer's verdict tool calls it (reviewed_by); a fake reviewer, in the tests, calls it directly. */
 		review?: (verdict: Verdict) => void;
 	};
+	/** The folder of the factory's skills for this agent, which its file tools also read: a Claude Code plugin. */
 	plugin?: string;
 	/** The factory's MCP servers this agent names, and the tools it may call. */
 	mcp?: AgentMcp;

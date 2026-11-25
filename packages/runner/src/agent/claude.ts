@@ -38,6 +38,7 @@ import { runTemp, settingsFolder, shellSandbox } from "./sandbox.js";
 /** The engine's tools, served to Claude Code as the openfabriq MCP server: mcp__openfabriq__<tool>. */
 export function claudeTools(tools: EngineTool[]) {
 	return {
+		// OUTPUT_TOOL_PREFIX names this server: mcp__openfabriq__.
 		server: createSdkMcpServer({
 			name: "openfabriq",
 			tools: tools.map((t) =>
