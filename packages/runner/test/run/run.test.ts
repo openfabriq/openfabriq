@@ -8,6 +8,7 @@ import {
 	WORKING_LABEL,
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
 	claudeHooks,
 	claudeTools,
@@ -33,7 +34,11 @@ import type { Workspace } from "../../src/workspace/workspace.js";
 /** The tools as the MCP server registered them: what Claude Code calls. */
 type Registered = Record<
 	string,
-	{ handler: (args: unknown, extra: unknown) => Promise<unknown> }
+	{
+		description?: string;
+		inputSchema?: z.ZodType;
+		handler: (args: unknown, extra: unknown) => Promise<unknown>;
+	}
 >;
 
 const ROOT = join(import.meta.dirname, "../../../..");
@@ -2479,6 +2484,8 @@ describe("the internal review (reviewed_by)", () => {
 	 */
 	it("gives Claude Code the same tools, servers and hooks for the author and the reviewer", async () => {
 		const seen: unknown[] = [];
+		/** Each tool as Claude Code receives it: its description and its JSON schema. */
+		const served: unknown[] = [];
 		const signal = new AbortController().signal;
 		const launch: AgentLauncher = async (r) => {
 			const options = queryOptions(r, {
@@ -2549,6 +2556,17 @@ describe("the internal review (reviewed_by)", () => {
 					"tool-1",
 					{ signal },
 				);
+			served.push(
+				Object.fromEntries(
+					Object.entries(registered).map(([name, t]) => [
+						name,
+						{
+							description: t.description,
+							schema: t.inputSchema && z.toJSONSchema(t.inputSchema),
+						},
+					]),
+				),
+			);
 			seen.push({
 				reviewer: r.outputs.review !== undefined,
 				tools: options.tools,
@@ -2710,6 +2728,182 @@ describe("the internal review (reviewed_by)", () => {
 			      "Write",
 			      "Bash",
 			    ],
+			  },
+			]
+		`);
+		expect(served).toMatchInlineSnapshot(`
+			[
+			  {
+			    "submit_review": {
+			      "description": "Give your verdict on the change, once, at the end: approved (nothing blocks), needs_changes (defects the author can fix: each blocking finding says where, what is wrong and the correction), or needs_human (only a person can decide). An approved change has a risk: low (nothing a user sees or stores can break), medium, or high (data, security, payments, or code many parts share); the engine labels the pull request with it. The summary is one line. Non-blocking remarks are findings with blocking: false.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "findings": {
+			            "default": [],
+			            "items": {
+			              "additionalProperties": false,
+			              "properties": {
+			                "blocking": {
+			                  "type": "boolean",
+			                },
+			                "file": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			                "line": {
+			                  "exclusiveMinimum": 0,
+			                  "maximum": 9007199254740991,
+			                  "type": "integer",
+			                },
+			                "problem": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			                "suggestion": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			              },
+			              "required": [
+			                "problem",
+			                "blocking",
+			              ],
+			              "type": "object",
+			            },
+			            "type": "array",
+			          },
+			          "risk": {
+			            "enum": [
+			              "low",
+			              "medium",
+			              "high",
+			            ],
+			            "type": "string",
+			          },
+			          "summary": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			          "verdict": {
+			            "enum": [
+			              "approved",
+			              "needs_changes",
+			              "needs_human",
+			            ],
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "verdict",
+			          "summary",
+			          "findings",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			  },
+			  {
+			    "add_comment": {
+			      "description": "Post a comment on the issue or pull request.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "body": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "body",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "add_labels": {
+			      "description": "Add labels to the issue or pull request. Allowed labels: needs-info.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "labels": {
+			            "items": {
+			              "type": "string",
+			            },
+			            "minItems": 1,
+			            "type": "array",
+			          },
+			        },
+			        "required": [
+			          "labels",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "create_pull_request": {
+			      "description": "Open a pull request with the commits you made in the working directory. Commit with git first; the engine pushes the branch.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "body": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			          "title": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "title",
+			          "body",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "remove_labels": {
+			      "description": "Remove labels from the issue or pull request. Allowed labels: ready-for-agent.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "labels": {
+			            "items": {
+			              "type": "string",
+			            },
+			            "minItems": 1,
+			            "type": "array",
+			          },
+			        },
+			        "required": [
+			          "labels",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "run_command": {
+			      "description": "Run one of the project's named commands in the working directory, and get the end of its output. Only these exist: test: npm test; lint: npm run lint.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "name": {
+			            "enum": [
+			              "test",
+			              "lint",
+			            ],
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "name",
+			        ],
+			        "type": "object",
+			      },
+			    },
 			  },
 			]
 		`);
