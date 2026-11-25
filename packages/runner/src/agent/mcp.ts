@@ -8,9 +8,15 @@ export type McpServer =
 
 export interface AgentMcp {
 	servers: Record<string, McpServer>;
-	/** The tools the agent may call, as Claude Code names them: mcp__<server>__<tool>. */
-	tools: string[];
+	/** The tools the agent may call, by server, as the agent lists them. */
+	tools: Record<string, string[]>;
 }
+
+/** The tools the agent may call, as Claude Code names them: mcp__<server>__<tool>. */
+export const claudeMcpTools = (mcp: AgentMcp): string[] =>
+	Object.entries(mcp.tools).flatMap(([server, tools]) =>
+		tools.map((tool) => `mcp__${server}__${tool}`),
+	);
 
 /**
  * The factory's MCP servers this agent names, and the tools it lists. Secrets come from
@@ -55,8 +61,8 @@ export async function agentMcp(
 	}
 	return {
 		servers,
-		tools: entries.flatMap(([server, tools]) =>
-			tools.map((tool) => `mcp__${server}__${tool}`),
+		tools: Object.fromEntries(
+			entries.map(([server, tools]) => [server, [...tools]]),
 		),
 	};
 }
@@ -72,8 +78,10 @@ export function unavailableMcp(
 	const failed = init.mcp_servers
 		.filter((s) => s.name in mcp.servers && s.status !== "connected")
 		.map((s) => `${s.name} (${s.status})`);
-	const missing = mcp.tools
-		.filter((t) => !init.tools.includes(t))
-		.map((t) => t.replace(/^mcp__/, "").replace("__", "."));
+	const missing = Object.entries(mcp.tools).flatMap(([server, tools]) =>
+		tools
+			.filter((tool) => !init.tools.includes(`mcp__${server}__${tool}`))
+			.map((tool) => `${server}.${tool}`),
+	);
 	return [...failed, ...missing];
 }

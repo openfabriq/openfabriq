@@ -243,7 +243,7 @@ it("gives the agent the factory's servers it names, allows only its listed tools
 		},
 		mcp: {
 			servers: { sentry: { type: "http" as const, url: "https://s.dev/mcp" } },
-			tools: ["mcp__sentry__get_issue", "mcp__sentry__gone"],
+			tools: { sentry: ["get_issue", "gone"] },
 		},
 		budgetUsd: 1,
 		timeoutMs: 60_000,

@@ -488,7 +488,7 @@ const result = await claudeAgent({
 				headers: { Authorization: `Bearer ${TOKEN}` },
 			},
 		},
-		tools: ["mcp__remote__echo"],
+		tools: { remote: ["echo"] },
 	},
 	budgetUsd: 0.5,
 	timeoutMs: 180_000,

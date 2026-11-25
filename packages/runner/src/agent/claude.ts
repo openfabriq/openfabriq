@@ -24,7 +24,7 @@ import { engineSecretPaths } from "../state/secrets.js";
 import { prepareClaudeAuth } from "./env.js";
 import { insideOnly, realPath, webInNetwork } from "./guard.js";
 import { lockedDownOptions } from "./locked-down.js";
-import { unavailableMcp } from "./mcp.js";
+import { claudeMcpTools, unavailableMcp } from "./mcp.js";
 import type {
 	AgentLauncher,
 	AgentResult,
@@ -292,7 +292,7 @@ export function queryOptions(
 					...preApproved,
 					...outputs.names,
 					// Only the tools the agent lists: under dontAsk, its servers' other tools are refused.
-					...(run.mcp?.tools ?? []),
+					...(run.mcp ? claudeMcpTools(run.mcp) : []),
 				],
 				...(run.plugin ? { skills: "all" as const } : {}),
 				mcpServers: { ...run.mcp?.servers, openfabriq: outputs.server },
