@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import {
+	duration,
 	linkText,
 	outputHeadline,
 	placeOf,
@@ -67,4 +68,11 @@ it("reads an output's summary without its heading marks", () => {
 	expect(outputHeadline("#\nA title")).toBe("A title");
 	expect(outputHeadline("#hashtag")).toBe("#hashtag");
 	expect(outputHeadline("Add a counter")).toBe("Add a counter");
+});
+
+it("writes a duration, under a second as <1s rather than 0s", () => {
+	expect(duration(undefined)).toBe("—");
+	expect(duration(23)).toBe("<1s");
+	expect(duration(1_533)).toBe("2s");
+	expect(duration(125_000)).toBe("2m 05s");
 });
