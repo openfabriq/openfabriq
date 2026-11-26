@@ -33,6 +33,8 @@ export const money = (usd?: number) =>
 
 export const duration = (ms?: number) => {
 	if (ms === undefined) return "—";
+	// "0s" reads as nothing happened: most tool calls end within a second.
+	if (ms < 500) return "<1s";
 	const s = Math.round(ms / 1000);
 	if (s < 60) return `${s}s`;
 	const m = Math.floor(s / 60);
