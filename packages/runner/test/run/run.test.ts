@@ -15,7 +15,9 @@ import {
 	withLearning,
 } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AgentLauncher } from "../../src/agent/claude.js";
+import { z } from "zod";
+import { claudeTools, queryOptions } from "../../src/agent/claude.js";
+import type { AgentLauncher } from "../../src/agent/port.js";
 import { rememberMerge } from "../../src/engine/cursors.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub, Review } from "../../src/github/github.js";
@@ -37,6 +39,9 @@ import {
 } from "../../src/state/journal.js";
 import { diskJournal } from "../../src/state/run-journal.js";
 import type { Workspace } from "../../src/workspace/workspace.js";
+import { type ServedTool, servedTools, stopHook } from "../agent/served.js";
+
+type Registered = Record<string, ServedTool>;
 
 const ROOT = join(import.meta.dirname, "../../../..");
 const REPO = "acme/task-app";
@@ -198,12 +203,13 @@ function agentProposing(
 ): AgentLauncher {
 	return async (run) => {
 		// What the MCP tools would record: the tools exposed are only those that `can` allows.
+		const offered = claudeTools(run.outputs.tools).names;
 		for (const p of proposals)
-			if (run.outputs.names.includes(`mcp__openfabriq__${p.action}`))
+			if (offered.includes(`mcp__openfabriq__${p.action}`))
 				run.outputs.propose(p);
 		// A forbidden proposal that slipped through anyway must still be refused by the engine.
 		for (const p of proposals)
-			if (!run.outputs.names.includes(`mcp__openfabriq__${p.action}`))
+			if (!offered.includes(`mcp__openfabriq__${p.action}`))
 				run.outputs.propose(p);
 		return {
 			status,
@@ -1138,14 +1144,11 @@ it("serves run_command to an agent with commands, and trusts checks passed at it
 			},
 		},
 		deps(async (r) => {
-			expect(r.outputs.names).toContain("mcp__openfabriq__run_command");
-			expect(r.prompt).toContain("test: npm test");
-			const signal = new AbortController().signal;
-			await r.hooks?.Stop?.[0]?.hooks[0]?.(
-				{ hook_event_name: "Stop", stop_hook_active: false } as never,
-				undefined,
-				{ signal },
+			expect(claudeTools(r.outputs.tools).names).toContain(
+				"mcp__openfabriq__run_command",
 			);
+			expect(r.prompt).toContain("test: npm test");
+			await stopHook(r.stop);
 			return agentProposing([
 				{ action: "create_pull_request", title: "Add a counter", body: "x" },
 			])(r);
@@ -1176,11 +1179,7 @@ it("gives setup the package registries at least, and the agent's network to its 
 			...deps(async (r) => {
 				seen.agent = r.network;
 				r.onRefused?.(["web.example"]);
-				await r.hooks?.Stop?.[0]?.hooks[0]?.(
-					{ hook_event_name: "Stop", stop_hook_active: false } as never,
-					undefined,
-					{ signal: new AbortController().signal },
-				);
+				await stopHook(r.stop);
 				return agentProposing([])(r);
 			}),
 			workspace: {
@@ -1254,11 +1253,7 @@ it("gives secrets to setup and commands only, and journals the names", async () 
 			{
 				...deps(async (r) => {
 					seen.agent = r.env;
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 					return agentProposing([])(r);
 				}),
 				workspace: {
@@ -1309,11 +1304,7 @@ it("runs the checks and commands of a run no maintainer started without the secr
 			},
 			{
 				...deps(async (r) => {
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 					return agentProposing([])(r);
 				}),
 				workspace: {
@@ -1395,11 +1386,7 @@ it("hides the secrets' values in a command's output: in the run's detail, and in
 			{ ...factory, ...HARNESS, secrets: ["PROBE_TOKEN"] },
 			{
 				...deps(async (r) => {
-					const stop = await r.hooks?.Stop?.[0]?.hooks[0]?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					const stop = await stopHook(r.stop);
 					reason = (stop as { reason?: string } | undefined)?.reason ?? "";
 					return agentProposing([])(r);
 				}),
@@ -2439,8 +2426,10 @@ describe("the internal review (reviewed_by)", () => {
 			};
 			if (r.outputs.review) {
 				seen.reviewerPrompts.push(r.prompt);
-				expect(r.outputs.names).toEqual(["mcp__openfabriq__submit_review"]);
-				expect(r.hooks).toBeUndefined();
+				expect(claudeTools(r.outputs.tools).names).toEqual([
+					"mcp__openfabriq__submit_review",
+				]);
+				expect(r.stop).toBeUndefined();
 				const next = verdicts.shift();
 				if (next) r.outputs.review(next);
 				return { ...done, costUsd: 0.25 };
@@ -2451,11 +2440,7 @@ describe("the internal review (reviewed_by)", () => {
 					title: "Add a counter",
 					body: `Counter, version ${round}.`,
 				});
-				const stop = await r.hooks?.Stop?.[0]?.hooks[0]?.(
-					{ hook_event_name: "Stop", stop_hook_active: false } as never,
-					undefined,
-					{ signal: new AbortController().signal },
-				);
+				const stop = await stopHook(r.stop);
 				if (!stop || !("decision" in stop) || stop.decision !== "block") break;
 				seen.blocks.push(String(stop.reason));
 			}
@@ -2463,6 +2448,437 @@ describe("the internal review (reviewed_by)", () => {
 		};
 		return { launch, seen };
 	}
+
+	/**
+	 * What Claude Code receives for each launch of a reviewed run, through the engine's port and the
+	 * Claude adapter: its tools, servers and hooks, and what the output tools and the stop answer.
+	 */
+	it("gives Claude Code the same tools, servers and hooks for the author and the reviewer", async () => {
+		const seen: unknown[] = [];
+		/** Each tool as Claude Code receives it: its description and its JSON schema. */
+		const served: unknown[] = [];
+		const signal = new AbortController().signal;
+		const launch: AgentLauncher = async (r) => {
+			const options = queryOptions(r, {
+				executable: "claude",
+				auth: { env: {} },
+				repoEnv: {},
+				temp: "/tmp/openfabriq-run",
+				plugin: [],
+				guard: async () => ({}),
+				abort: new AbortController(),
+			});
+			const server = options.mcpServers?.openfabriq as unknown as {
+				instance: { _registeredTools: Registered };
+			};
+			const registered = server.instance._registeredTools;
+			const hooks = Object.fromEntries(
+				Object.entries(options.hooks ?? {}).map(([event, matchers]) => [
+					event,
+					matchers.map((m) => ({
+						hooks: m.hooks.length,
+						...(m.timeout ? { timeout: m.timeout } : {}),
+					})),
+				]),
+			);
+			const answers: Record<string, unknown> = {};
+			if (registered.submit_review)
+				answers.submit_review = [
+					await registered.submit_review.handler(
+						{ verdict: "approved", summary: "One counter.", findings: [] },
+						{},
+					),
+					await registered.submit_review.handler(
+						{
+							verdict: "approved",
+							risk: "low",
+							summary: "One counter.",
+							findings: [],
+						},
+						{},
+					),
+				];
+			if (registered.run_command)
+				answers.run_command = await registered.run_command.handler(
+					{ name: "lint" },
+					{},
+				);
+			if (registered.create_pull_request)
+				answers.create_pull_request =
+					await registered.create_pull_request.handler(
+						{ title: "Add a counter", body: "Counter." },
+						{},
+					);
+			const stop = options.hooks?.Stop?.[0]?.hooks[0];
+			const postTool = options.hooks?.PostToolUse?.[0]?.hooks[0];
+			const stopInput = {
+				hook_event_name: "Stop",
+				stop_hook_active: false,
+			} as never;
+			if (stop) {
+				commandFails = ["npm test"];
+				answers.stopFailing = await stop(stopInput, undefined, { signal });
+				commandFails = [];
+				answers.stopPassing = await stop(stopInput, undefined, { signal });
+			}
+			if (postTool)
+				answers.postTool = await postTool(
+					{ hook_event_name: "PostToolUse" } as never,
+					"tool-1",
+					{ signal },
+				);
+			served.push(
+				Object.fromEntries(
+					Object.entries(registered).map(([name, t]) => [
+						name,
+						{
+							description: t.description,
+							schema: t.inputSchema && z.toJSONSchema(t.inputSchema),
+						},
+					]),
+				),
+			);
+			seen.push({
+				reviewer: r.outputs.review !== undefined,
+				tools: options.tools,
+				allowedTools: options.allowedTools,
+				mcpServers: Object.keys(options.mcpServers ?? {}),
+				openfabriqTools: Object.keys(registered),
+				hooks,
+				answers,
+			});
+			return {
+				status: "succeeded",
+				costUsd: 0.1,
+				turns: 1,
+				tokens: { input: 1, output: 1 },
+			};
+		};
+		const implement = reviewed();
+		const implementer = implement.agents.implementer;
+		if (!implementer) throw new Error("no implementer");
+		await executeRun(
+			run("implement-ready-issues", READY),
+			{
+				...implement,
+				agents: {
+					...implement.agents,
+					implementer: {
+						...implementer,
+						tools: [...implementer.tools, "commands"],
+					},
+				},
+			},
+			deps(launch),
+			"main",
+		);
+		expect(seen).toMatchInlineSnapshot(`
+			[
+			  {
+			    "allowedTools": [
+			      "Bash",
+			      "Read(//tmp/openfabriq-run/**)",
+			      "mcp__openfabriq__submit_review",
+			    ],
+			    "answers": {
+			      "submit_review": [
+			        {
+			          "content": [
+			            {
+			              "text": "Not recorded: an approved change needs a risk, low, medium or high. Call submit_review again with it.",
+			              "type": "text",
+			            },
+			          ],
+			          "isError": true,
+			        },
+			        {
+			          "content": [
+			            {
+			              "text": "Recorded. The engine decides what happens next.",
+			              "type": "text",
+			            },
+			          ],
+			        },
+			      ],
+			    },
+			    "hooks": {
+			      "PreToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			    },
+			    "mcpServers": [
+			      "openfabriq",
+			    ],
+			    "openfabriqTools": [
+			      "submit_review",
+			    ],
+			    "reviewer": true,
+			    "tools": [
+			      "Read",
+			      "Grep",
+			      "Glob",
+			      "Bash",
+			    ],
+			  },
+			  {
+			    "allowedTools": [
+			      "Edit",
+			      "Write",
+			      "Bash",
+			      "Read(//tmp/openfabriq-run/**)",
+			      "mcp__openfabriq__add_comment",
+			      "mcp__openfabriq__add_labels",
+			      "mcp__openfabriq__remove_labels",
+			      "mcp__openfabriq__create_pull_request",
+			      "mcp__openfabriq__run_command",
+			    ],
+			    "answers": {
+			      "create_pull_request": {
+			        "content": [
+			          {
+			            "text": "Recorded. The engine applies it after the run, if the factory allows it.",
+			            "type": "text",
+			          },
+			        ],
+			      },
+			      "postTool": {},
+			      "run_command": {
+			        "content": [
+			          {
+			            "text": "lint passed.
+			ok",
+			            "type": "text",
+			          },
+			        ],
+			      },
+			      "stopFailing": {
+			        "decision": "block",
+			        "reason": "The check "test" failed (npm test). Fix it, then finish.
+
+			exited with code 1
+			1 test failed",
+			      },
+			      "stopPassing": {},
+			    },
+			    "hooks": {
+			      "PostToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			      "PreToolUse": [
+			        {
+			          "hooks": 1,
+			        },
+			      ],
+			      "Stop": [
+			        {
+			          "hooks": 1,
+			          "timeout": 2700,
+			        },
+			      ],
+			    },
+			    "mcpServers": [
+			      "openfabriq",
+			    ],
+			    "openfabriqTools": [
+			      "add_comment",
+			      "add_labels",
+			      "remove_labels",
+			      "create_pull_request",
+			      "run_command",
+			    ],
+			    "reviewer": false,
+			    "tools": [
+			      "Read",
+			      "Grep",
+			      "Glob",
+			      "Edit",
+			      "Write",
+			      "Bash",
+			    ],
+			  },
+			]
+		`);
+		expect(served).toMatchInlineSnapshot(`
+			[
+			  {
+			    "submit_review": {
+			      "description": "Give your verdict on the change, once, at the end: approved (nothing blocks), needs_changes (defects the author can fix: each blocking finding says where, what is wrong and the correction), or needs_human (only a person can decide). An approved change has a risk: low (nothing a user sees or stores can break), medium, or high (data, security, payments, or code many parts share); the engine labels the pull request with it. The summary is one line. Non-blocking remarks are findings with blocking: false.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "findings": {
+			            "default": [],
+			            "items": {
+			              "additionalProperties": false,
+			              "properties": {
+			                "blocking": {
+			                  "type": "boolean",
+			                },
+			                "file": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			                "line": {
+			                  "exclusiveMinimum": 0,
+			                  "maximum": 9007199254740991,
+			                  "type": "integer",
+			                },
+			                "problem": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			                "suggestion": {
+			                  "minLength": 1,
+			                  "type": "string",
+			                },
+			              },
+			              "required": [
+			                "problem",
+			                "blocking",
+			              ],
+			              "type": "object",
+			            },
+			            "type": "array",
+			          },
+			          "risk": {
+			            "enum": [
+			              "low",
+			              "medium",
+			              "high",
+			            ],
+			            "type": "string",
+			          },
+			          "summary": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			          "verdict": {
+			            "enum": [
+			              "approved",
+			              "needs_changes",
+			              "needs_human",
+			            ],
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "verdict",
+			          "summary",
+			          "findings",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			  },
+			  {
+			    "add_comment": {
+			      "description": "Post a comment on the issue or pull request.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "body": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "body",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "add_labels": {
+			      "description": "Add labels to the issue or pull request. Allowed labels: needs-info.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "labels": {
+			            "items": {
+			              "type": "string",
+			            },
+			            "minItems": 1,
+			            "type": "array",
+			          },
+			        },
+			        "required": [
+			          "labels",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "create_pull_request": {
+			      "description": "Open a pull request with the commits you made in the working directory. Commit with git first; the engine pushes the branch.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "body": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			          "title": {
+			            "minLength": 1,
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "title",
+			          "body",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "remove_labels": {
+			      "description": "Remove labels from the issue or pull request. Allowed labels: ready-for-agent.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "labels": {
+			            "items": {
+			              "type": "string",
+			            },
+			            "minItems": 1,
+			            "type": "array",
+			          },
+			        },
+			        "required": [
+			          "labels",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			    "run_command": {
+			      "description": "Run one of the project's named commands in the working directory, and get the end of its output. Only these exist: test: npm test; lint: npm run lint.",
+			      "schema": {
+			        "$schema": "https://json-schema.org/draft/2020-12/schema",
+			        "additionalProperties": false,
+			        "properties": {
+			          "name": {
+			            "enum": [
+			              "test",
+			              "lint",
+			            ],
+			            "type": "string",
+			          },
+			        },
+			        "required": [
+			          "name",
+			        ],
+			        "type": "object",
+			      },
+			    },
+			  },
+			]
+		`);
+	});
 
 	const reviewsJson = () =>
 		JSON.parse(
@@ -2707,11 +3123,7 @@ describe("the internal review (reviewed_by)", () => {
 				if (r.outputs.review) r.outputs.review(given);
 				else {
 					r.outputs.propose({ action: "push_to_pull_request", summary: "Fix" });
-					await r.hooks?.Stop?.[0]?.hooks[0]?.(
-						{ hook_event_name: "Stop", stop_hook_active: false } as never,
-						undefined,
-						{ signal: new AbortController().signal },
-					);
+					await stopHook(r.stop);
 				}
 				return {
 					status: "succeeded",
@@ -2850,7 +3262,9 @@ describe("the internal review (reviewed_by)", () => {
 
 	it("refuses a verdict that approves without a risk, so the reviewer gives one", async () => {
 		const recorded: Verdict[] = [];
-		const handler = verdictTool((v) => recorded.push(v)).handler;
+		const handler = servedTools([verdictTool((v) => recorded.push(v))])
+			.submit_review?.handler;
+		if (!handler) throw new Error("no submit_review");
 		const refused = await handler(
 			{ verdict: "approved", risk: undefined, summary: "Fine.", findings: [] },
 			undefined,

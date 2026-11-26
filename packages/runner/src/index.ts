@@ -1,6 +1,7 @@
 export * from "./agent/claude.js";
 export { claudeLogin, credentialFreeEnv } from "./agent/env.js";
 export { insideOnly } from "./agent/guard.js";
+export * from "./agent/port.js";
 export { repoSettings } from "./agent/repo-settings.js";
 export * from "./chat/chat.js";
 export { type ChatEvent, toChatEvents } from "./chat/events.js";

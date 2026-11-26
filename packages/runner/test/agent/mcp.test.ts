@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadFactory } from "@openfabriq/core";
 import { describe, expect, it } from "vitest";
-import { agentMcp, unavailableMcp } from "../../src/agent/mcp.js";
+import {
+	agentMcp,
+	claudeMcpTools,
+	unavailableMcp,
+} from "../../src/agent/mcp.js";
 
 const { factory, problems } = loadFactory({
 	"factory.yaml":
@@ -48,12 +52,11 @@ describe("an agent's MCP servers", () => {
 				// A secret missing on the machine: no header; start already names it.
 				docs: { type: "http", url: "https://docs.dev/mcp" },
 			},
-			tools: [
-				"mcp__sentry__get_issue",
-				"mcp__sentry__search_issues",
-				"mcp__db__query",
-				"mcp__docs__search",
-			],
+			tools: {
+				sentry: ["get_issue", "search_issues"],
+				db: ["query"],
+				docs: ["search"],
+			},
 		});
 		expect(
 			await agentMcp(
@@ -75,6 +78,13 @@ describe("an agent's MCP servers", () => {
 			values,
 		);
 		if (!mcp) throw new Error("no mcp");
+		// As Claude Code names them: what the adapter allows.
+		expect(claudeMcpTools(mcp)).toEqual([
+			"mcp__sentry__get_issue",
+			"mcp__sentry__search_issues",
+			"mcp__db__query",
+			"mcp__docs__search",
+		]);
 		expect(
 			unavailableMcp(mcp, {
 				tools: ["Read", "mcp__sentry__get_issue", "mcp__db__query"],

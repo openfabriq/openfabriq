@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Factory, type FactoryEvent, loadFactory } from "@openfabriq/core";
 import { beforeEach, expect, it } from "vitest";
-import type { AgentLauncher } from "../../src/agent/claude.js";
+import type { AgentLauncher } from "../../src/agent/port.js";
 import { startEngine } from "../../src/engine/engine.js";
 import type { QueuedRun } from "../../src/engine/queue.js";
 import type { GitHub } from "../../src/github/github.js";
