@@ -1,12 +1,14 @@
 version: 2
 updates:
-  # One grouped pull request a month for minors and patches: the workspace
-  # pins exact versions. A major stays out of the group and gets its own pull
-  # request, so it never holds back the safe updates.
+  # One grouped pull request a week for minors and patches: the workspace
+  # pins exact versions, and the Agent SDK moves fast, so small weekly batches
+  # beat a large monthly one. A major stays out of the group and gets its own
+  # pull request, so it never holds back the safe updates.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
     groups:
       dependencies:
         patterns: ["*"]
