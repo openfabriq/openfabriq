@@ -84,9 +84,9 @@ An improvement that breaks one of these rules is refused, and the run says why. 
 
 ## Once merged
 
-The engine applies a merged rule on its own, with `openfabriq start` running: within a minute of the merge, it reads the rule's one file on the default branch and applies it, without the other changes under `openfabriq/`, which still wait for your `openfabriq apply`. Merging was the review, and the checks above already made sure the rule changes only text. From then on, the agents use it, and the same mistake counts as coming back. A rule merged while `openfabriq start` was stopped, or that the engine could not read the first time, applies at the next merge on the default branch.
+The engine applies a merged rule on its own, with `openfabriq start` running: within a minute of the merge, it applies the rule's file as the merge commit has it, and nothing else. It does so only when the factory it runs has that file as it was just before the merge, so what goes live is exactly the rule you reviewed; the other changes under `openfabriq/` wait for your `openfabriq apply`. Merging was the review, and the checks above already made sure the rule changes only text. From then on, the agents use it, and the same mistake counts as coming back. A rule merged while `openfabriq start` was stopped, or that the engine could not read, applies at the next merge on the default branch.
 
-A rule waits for your `openfabriq apply` when its file's front matter changed since the factory was applied, when its file is not in the applied factory, or when the factory would not load with it; the engine's log says why. A closed pull request declines its lesson, and learning never proposes it again.
+A rule waits for your `openfabriq apply` when its file changed in the repository since the factory was applied (another merged change the engine must not bring along), when its pull request changed the file's front matter, when its file is not in the applied factory, or when the factory would not load with it; the engine's log says why. A closed pull request declines its lesson, and learning never proposes it again.
 
 ## Where lessons live
 
@@ -111,7 +111,7 @@ The name `learning` is reserved: no agent or automation of your factory can use 
 
 ```text
 Factory settings
-  + learning: each week the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md, by pull request only
+  + learning: each week the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md by pull request; the engine applies each one a person merges
 ```
 
 ## Turn it off

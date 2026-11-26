@@ -69,12 +69,8 @@ export interface Workspace {
 	create(clone: string, dir: string, ref: string): Promise<void>;
 	/** origin's branches, up to date in the clone: the studio reads the wiki there. */
 	fetch(clone: string): Promise<void>;
-	/** A file of origin's branch, as the clone last fetched it; undefined when it is not there. */
-	show(
-		clone: string,
-		branch: string,
-		path: string,
-	): Promise<string | undefined>;
+	/** A file at a commit the clone fetched (a sha, `<sha>^`, `origin/<branch>`); undefined when it is not there. */
+	show(clone: string, ref: string, path: string): Promise<string | undefined>;
 	remove(clone: string, dir: string): Promise<void>;
 	commitsAhead(clone: string, dir: string, base: string): Promise<number>;
 	/** The commits the run added since origin/base, up to `commit` (HEAD unless given). */
@@ -237,10 +233,8 @@ export function createWorkspace(): Workspace {
 	}
 
 	const self: Workspace = {
-		show(clone, branch, path) {
-			return cloneGit(clone, ["show", `origin/${branch}:${path}`]).catch(
-				() => undefined,
-			);
+		show(clone, ref, path) {
+			return cloneGit(clone, ["show", `${ref}:${path}`]).catch(() => undefined);
 		},
 		fetch(clone) {
 			return oneAtATime(clone, async () => {

@@ -876,7 +876,7 @@ it("keeps the clone on the default branch for the studio's wiki: at start and af
 	expect(off).toEqual([]);
 });
 
-it("applies a rule of learning on its own once its pull request is merged, from the default branch, and looks again until GitHub answers", async () => {
+it("applies a rule of learning on its own once its pull request is merged, as its merge commit has it, and looks again a few times until GitHub answers", async () => {
 	const files = sdlc({
 		"factory.yaml": `${sdlc()["factory.yaml"]}learning: true\n`,
 	});
@@ -912,19 +912,24 @@ it("applies a rule of learning on its own once its pull request is merged, from 
 			subject: async (_repo, number) => {
 				if (githubDown) throw new Error("GitHub is down");
 				return number === 66
-					? { state: "MERGED", mergedAt: "2026-11-02T10:01:00Z" }
+					? {
+							state: "MERGED",
+							mergedAt: "2026-11-02T10:01:00Z",
+							mergeCommit: { oid: "c0ffee" },
+						}
 					: { number };
 			},
 		},
 		{
 			workspace: {
 				...workspace,
-				// The default branch once the rule's pull request is merged.
-				show: async (_clone, branch, path) => {
-					shown.push(`${branch}:${path}`);
-					return path === `openfabriq/${AGENT}`
-						? `${files[AGENT]?.trimEnd()}\n\n${RULE}\n`
-						: undefined;
+				// The file just before the merge, as applied, and at the merge commit, with the rule.
+				show: async (_clone, ref, path) => {
+					shown.push(`${ref}:${path}`);
+					if (path !== `openfabriq/${AGENT}`) return undefined;
+					return ref === "c0ffee^"
+						? files[AGENT]
+						: `${files[AGENT]?.trimEnd()}\n\n${RULE}\n`;
 				},
 			},
 		},
@@ -942,7 +947,10 @@ it("applies a rule of learning on its own once its pull request is merged, from 
 	const line = `${REPO}: applied learning's rule L1 (#66) to openfabriq/${AGENT}`;
 	for (let i = 0; i < 50 && !logs.includes(line); i++) await settle();
 	expect(logs.filter((l) => l === line)).toHaveLength(1);
-	expect(shown).toEqual([`main:openfabriq/${AGENT}`]);
+	expect(shown).toEqual([
+		`c0ffee^:openfabriq/${AGENT}`,
+		`c0ffee:openfabriq/${AGENT}`,
+	]);
 	expect(readFactoryFolder(join(projectDir(REPO), "factory"))[AGENT]).toContain(
 		RULE,
 	);
@@ -952,6 +960,56 @@ it("applies a rule of learning on its own once its pull request is merged, from 
 	await e.tick();
 	await settle();
 	expect(logs.filter((l) => l === line)).toHaveLength(1);
+});
+
+it("stops looking at learning's merged rules after a few failed looks, until the next merge", async () => {
+	writeApplied(
+		REPO,
+		sdlc({ "factory.yaml": `${sdlc()["factory.yaml"]}learning: true\n` }),
+	);
+	saveLessons(REPO, [
+		{
+			id: "L1",
+			cause: "c",
+			rule: "r",
+			target: "openfabriq/agents/implementer/agent.md",
+			failures: [],
+			status: "proposed",
+			improvement: {
+				url: "https://github.com/acme/task-app/pull/66",
+				number: 66,
+				run: "learning-1",
+				at: T0.toISOString(),
+			},
+			createdAt: T0.toISOString(),
+			updatedAt: T0.toISOString(),
+		},
+	]);
+	let head = "main1";
+	let asked = 0;
+	const e = engine(0, neverEnds, {
+		branchHead: async () => head,
+		subject: async () => {
+			asked += 1;
+			throw new Error("GitHub cannot read this pull request");
+		},
+	});
+	await e.tick();
+	head = "main2";
+	for (let minute = 2; minute < 10; minute++) {
+		clock = new Date(T0.getTime() + minute * 60_000);
+		await e.tick();
+		await settle();
+	}
+	expect(asked).toBe(3);
+	expect(logs).toContain(
+		`${REPO}: learning's merged rules could not be read 3 times in a row: looked at again after the next merge`,
+	);
+	head = "main3"; // the next merge looks again
+	clock = new Date(T0.getTime() + 11 * 60_000);
+	await e.tick();
+	await settle();
+	expect(asked).toBe(4);
 });
 
 it("says why the applied factory does not load", async () => {

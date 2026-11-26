@@ -92,13 +92,13 @@ describe("learning", () => {
 				NO_FILES,
 			).settings.filter((l) => l.includes("learning"));
 		expect(plan(undefined, ON)).toEqual([
-			"+ learning: each week the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md, by pull request only",
+			"+ learning: each week the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md by pull request; the engine applies each one a person merges",
 		]);
 		expect(plan(ON, ON)).toEqual([]);
 		expect(plan(undefined, "")).toEqual([]);
 		expect(plan(ON, "")).toEqual(["- learning: off"]);
 		expect(plan(ON, 'learning:\n  schedule: "0 2 * * *"\n')).toEqual([
-			"~ learning: every day at 02:00 the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md, by pull request only",
+			"~ learning: every day at 02:00 the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md by pull request; the engine applies each one a person merges",
 		]);
 	});
 

@@ -8,7 +8,7 @@ What a factory does is written in `openfabriq/`: read the files, and you know wh
 | Native automation | What it does | Setting |
 | --- | --- | --- |
 | [The wiki](/factory/wiki/) | Keeps a map of the code for people and agents, by pull request, when you ask or after each merge | Off by default: `wiki: true` turns it on |
-| [Learning](/factory/learning/) | Studies the work that failed each week, and proposes improvements to skills and `agent.md` by pull request | Off by default: `learning: true` turns it on |
+| [Learning](/factory/learning/) | Studies the work that failed each week, and proposes improvements to skills, `agent.md` and `automation.md` by pull request; the engine applies each one a person merges | Off by default: `learning: true` turns it on |
 | [The answer to mentions](#the-answer-to-mentions) | When a maintainer mentions `@openfabriq` on a pull request or an issue the factory opened, the agent that opened it answers | On by default: `answer_mentions: false` turns it off |
 
 The rule: **the engine answers when you address it, and never acts on its own without a file that says so.** Reworking a pull request after a review, resolving a conflict, fixing a red check are automations you write, so they show in your files. Templates such as [01-quickstart](/templates/quickstart/) ship `rework-pull-requests` and `resolve-conflicts`, and `openfabriq init` proposes them when the factory opens pull requests.

@@ -49,6 +49,8 @@ export interface Lesson {
 	resolvedAt?: string;
 	/** When GitHub merged its improvement. */
 	mergedAt?: string;
+	/** The commit GitHub merged its improvement as: the engine applies the rule as it is there. */
+	mergeCommit?: string;
 	/** When the engine last asked for its improvement: one that came to nothing waits for a new failure. */
 	triedAt?: string;
 }
@@ -289,18 +291,30 @@ export function groupIntoLessons(
 	return { lessons: all, changed };
 }
 
+/** How an improvement's pull request stands on GitHub, and once merged, when and as which commit. */
+export interface PullState {
+	state: string;
+	mergedAt?: string;
+	mergeCommit?: string;
+}
+
 /** How an improvement's pull request stands on GitHub: OPEN, MERGED or CLOSED, with GitHub's merge time; undefined when GitHub did not answer, and the log says so. */
 export async function pullState(
 	github: Pick<GitHub, "subject">,
 	repository: string,
 	number: number,
 	log?: (line: string) => void,
-): Promise<{ state: string; mergedAt?: string } | undefined> {
+): Promise<PullState | undefined> {
 	return github.subject(repository, number, true).then(
-		(p) => ({
-			state: String(p.state ?? ""),
-			...(typeof p.mergedAt === "string" ? { mergedAt: p.mergedAt } : {}),
-		}),
+		(p) => {
+			const commit = (p.mergeCommit as { oid?: unknown } | null | undefined)
+				?.oid;
+			return {
+				state: String(p.state ?? ""),
+				...(typeof p.mergedAt === "string" ? { mergedAt: p.mergedAt } : {}),
+				...(typeof commit === "string" ? { mergeCommit: commit } : {}),
+			};
+		},
 		(error: unknown) => {
 			log?.(
 				`${repository}: could not read learning's pull request #${number}: ${errorText(error)}`,
@@ -313,10 +327,10 @@ export async function pullState(
 /** A lesson once its improvement's pull request is seen merged (GitHub's `mergedAt`), closed, or still open. */
 export function resolvedByPullRequest(
 	lesson: Lesson,
-	pull: { state: string; mergedAt?: string | undefined },
+	pull: PullState,
 	now: Date,
 ): Lesson | undefined {
-	const { state, mergedAt } = pull;
+	const { state, mergedAt, mergeCommit } = pull;
 	if (lesson.status !== "proposed") return undefined;
 	const status =
 		state === "MERGED"
@@ -331,6 +345,7 @@ export function resolvedByPullRequest(
 		status,
 		resolvedAt: at,
 		...(status === "promoted" && mergedAt ? { mergedAt } : {}),
+		...(status === "promoted" && mergeCommit ? { mergeCommit } : {}),
 		updatedAt: at,
 	};
 }

@@ -18,37 +18,46 @@ import {
 	saveLessons,
 } from "./lessons.js";
 
-// A rule of learning applies once a person merges its pull request: the engine applies its one
-// file, as the default branch has it, without the rest of the repository's changes under
-// openfabriq/, which wait for a person's `openfabriq apply`. Merging was the review: the guard
-// already made sure the pull request changes only text, never a front matter.
+// A rule of learning applies once a person merges its pull request: the engine applies the rule
+// and nothing else, its file as the merge commit has it, when the applied factory has that file as
+// it was just before the merge. Any other change, of that file or of the rest of openfabriq/,
+// waits for a person's `openfabriq apply`. Merging was the review: the guard already made sure
+// the pull request changes only text, never a front matter.
 
 const FOLDER = "openfabriq/";
 
 /**
- * The applied factory with a merged rule's file as the default branch has it, or why that file
- * cannot apply on its own: not a file learning improves, not in the applied factory, or a front
- * matter that changed since the factory was applied, which only a person's apply may take.
+ * The applied factory with a merged rule's file as its merge commit has it, or why the rule cannot
+ * apply on its own: not a file learning improves, not in the applied factory, a file that changed
+ * since the factory was applied (the merge would bring that change too), a front matter that the
+ * pull request changed, or a factory that would not load.
  */
 export function withMergedRule(
 	applied: FactoryFiles,
 	target: string,
-	merged: string,
+	/** The file just before the merge, and at the merge commit. */
+	file: { before: string | undefined; merged: string | undefined },
 ): FactoryFiles | { problem: string } {
 	if (!target.startsWith(FOLDER) || !isImprovable(target))
 		return { problem: `${target} is not a file learning improves` };
 	const path = target.slice(FOLDER.length);
-	const before = applied[path];
-	if (before === undefined)
+	const current = applied[path];
+	if (current === undefined)
 		return { problem: `${target} is not in the applied factory` };
+	if (file.merged === undefined)
+		return { problem: `${target} is not in the merge commit` };
+	if (file.before !== current)
+		return {
+			problem: `${target} changed in the repository since the factory was applied, and only the rule may apply on its own`,
+		};
 	if (
 		keepsFrontMatter(target) &&
-		rawFrontMatter(before) !== rawFrontMatter(merged)
+		rawFrontMatter(current) !== rawFrontMatter(file.merged)
 	)
 		return {
-			problem: `the front matter of ${target} changed since the factory was applied`,
+			problem: `the pull request changed the front matter of ${target}`,
 		};
-	const next = { ...applied, [path]: merged };
+	const next = { ...applied, [path]: file.merged };
 	const error = loadFactory(next).problems.find((p) => p.level === "error");
 	return error
 		? { problem: `the factory would not load: ${error.file}: ${error.message}` }
@@ -67,8 +76,8 @@ export async function applyMergedRules(
 	repository: string,
 	deps: {
 		github: Pick<GitHub, "subject">;
-		/** A file of the repository as the default branch has it now, or undefined. */
-		readMerged: (path: string) => Promise<string | undefined>;
+		/** A file of the repository at a commit (`<sha>` or `<sha>^`), or undefined where it is not. */
+		readAt: (commit: string, path: string) => Promise<string | undefined>;
 		log: (line: string) => void;
 		now: () => Date;
 	},
@@ -79,25 +88,30 @@ export async function applyMergedRules(
 	for (const lesson of readLessons(repository)) {
 		const number = lesson.improvement?.number;
 		if (number === undefined) continue;
-		let merged = lesson.status === "promoted" && !appliedAt(lesson, applies);
+		let merged: Lesson | undefined =
+			lesson.status === "promoted" && !appliedAt(lesson, applies)
+				? lesson
+				: undefined;
 		if (lesson.status === "proposed") {
 			const pull = await pullState(deps.github, repository, number, deps.log);
 			if (!pull) unread = true;
 			const settled = pull && resolvedByPullRequest(lesson, pull, deps.now());
 			if (!settled) continue;
 			saveLessons(repository, [settled]);
-			merged = settled.status === "promoted";
+			if (settled.status === "promoted") merged = settled;
 		}
 		if (!merged) continue;
-		const text = await deps.readMerged(lesson.target);
-		const next =
-			text === undefined
-				? { problem: `${lesson.target} is not on the default branch` }
-				: withMergedRule(
-						readFactoryFolder(join(projectDir(repository), "factory")),
-						lesson.target,
-						text,
-					);
+		const commit = merged.mergeCommit;
+		const next = commit
+			? withMergedRule(
+					readFactoryFolder(join(projectDir(repository), "factory")),
+					lesson.target,
+					{
+						before: await deps.readAt(`${commit}^`, lesson.target),
+						merged: await deps.readAt(commit, lesson.target),
+					},
+				)
+			: { problem: "GitHub did not say which commit merged it" };
 		if ("problem" in next) {
 			deps.log(
 				`${repository}: learning's rule ${lesson.id} (#${number}) is merged, not applied: ${next.problem}. Run "openfabriq apply".`,
