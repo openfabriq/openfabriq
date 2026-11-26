@@ -7,6 +7,7 @@ import {
 	eventSource,
 	type Factory,
 	type FactoryEvent,
+	LEARNING,
 	WIKI,
 } from "@openfabriq/core";
 import { writeFileAtomic } from "../files.js";
@@ -52,24 +53,33 @@ function readRequests(repository: string): [file: string, RunRequest][] {
 const waiting = (repository: string): string[] =>
 	readRequests(repository).map(([, request]) => request.automation);
 
+/** The engine's own automations a person can run from the studio, and whether the factory turns each on. */
+const ENGINE_RUNS = {
+	[WIKI]: (factory: Factory) => Boolean(factory.wiki),
+	[LEARNING]: (factory: Factory) => Boolean(factory.learning),
+};
+export type EngineAutomation = keyof typeof ENGINE_RUNS;
+
 /**
- * The studio's Refresh button: a manual run of the engine's wiki, like `openfabriq run wiki`,
- * unless one is already asked, queued or running.
+ * A studio button: a manual run of the engine's wiki or learning, like `openfabriq run wiki`,
+ * unless the factory leaves it off, or one is already asked, queued or running.
  */
-export function requestWikiRun(
+export function requestEngineRun(
 	repository: string,
+	automation: EngineAutomation,
 	now = new Date(),
 ): "asked" | "busy" | "off" {
-	if (!readAppliedFactory(repository)?.wiki) return "off";
+	const factory = readAppliedFactory(repository);
+	if (!factory || !ENGINE_RUNS[automation](factory)) return "off";
 	const { queued, running } = loadQueue(repository);
 	if (
-		waiting(repository).includes(WIKI) ||
-		[...queued, ...running].some((r) => r.automation === WIKI)
+		waiting(repository).includes(automation) ||
+		[...queued, ...running].some((r) => r.automation === automation)
 	)
 		return "busy";
 	requestRun(repository, {
 		id: randomUUID(),
-		automation: WIKI,
+		automation,
 		isPullRequest: false,
 		by: "studio",
 		at: now.toISOString(),
@@ -77,8 +87,8 @@ export function requestWikiRun(
 	return "asked";
 }
 
-/** Where the wiki's latest run stands, for the studio: asked, queued, running, or ended. */
-export type WikiRun =
+/** Where the latest run of the engine's wiki or learning stands, for the studio: asked, queued, running, or ended. */
+export type EngineRun =
 	| { state: "asked" }
 	| {
 			state: RunRecord["status"];
@@ -90,9 +100,12 @@ export type WikiRun =
 			pullRequest?: string;
 	  };
 
-export function wikiRun(repository: string): WikiRun | undefined {
-	if (waiting(repository).includes(WIKI)) return { state: "asked" };
-	const run = readRuns(repository).find((r) => r.automation === WIKI);
+export function engineRun(
+	repository: string,
+	automation: EngineAutomation,
+): EngineRun | undefined {
+	if (waiting(repository).includes(automation)) return { state: "asked" };
+	const run = readRuns(repository).find((r) => r.automation === automation);
 	if (!run) return undefined;
 	const opened = run.outputs.find(
 		(o) => o.action === "create_pull_request" && o.status === "applied",

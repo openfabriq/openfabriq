@@ -7,6 +7,7 @@ import {
 } from "@openfabriq/core";
 import { errorText, readJsonIfExists } from "../files.js";
 import { type Cursor, pollGitHub } from "../github/poll.js";
+import { applyMergedRules } from "../learning/apply.js";
 import type { RunDeps } from "../run/execute.js";
 import { type Relay, usesRelay } from "../sources/relay.js";
 import { sentryWatches } from "../sources/sentry/events.js";
@@ -52,6 +53,9 @@ export function startEngine(given: EngineDeps) {
 	let lastMinute = "";
 	let timer: NodeJS.Timeout | undefined;
 	let ticking = false;
+	/** The projects whose merged rules of learning wait for a look, and those being looked at. */
+	const rulesToApply = new Set<string>();
+	const applyingRules = new Set<string>();
 	let stopped = false;
 	let lastSentryWatches = "";
 	const warned = new Set<string>();
@@ -124,15 +128,18 @@ export function startEngine(given: EngineDeps) {
 		factories.set(repo, { factory, defaultBranch });
 		// The clone fetches for runs; the studio reads the wiki there too, so it follows the
 		// default branch at start and after each merge, the engine's own included.
+		const clone = join(projectDir(repo), "repo");
 		const fetchClone = () =>
-			void deps.workspace
-				.fetch(join(projectDir(repo), "repo"))
-				.catch((error) =>
+			deps.workspace.fetch(clone).then(
+				() => true,
+				(error) => {
 					deps.log(
 						`${repo}: could not fetch the default branch: ${errorText(error)}`,
-					),
-				);
-		if (first && factory.wiki) fetchClone();
+					);
+					return false;
+				},
+			);
+		if (first && factory.wiki) void fetchClone();
 		const polled = await pollGitHub(repo, factory, defaultBranch, {
 			github: deps.github,
 			now,
@@ -146,7 +153,32 @@ export function startEngine(given: EngineDeps) {
 			);
 		for (const event of polled.events) queueFor(repo, factory, event);
 		writeCursor(cursorPath(repo), polled.cursor);
-		if (polled.headMoved && factory.wiki) fetchClone();
+		// After a merge, the wiki reads the default branch in the clone. Learning's merged rules apply
+		// from it too, each on its own: one look at a time per project, looked at again until GitHub
+		// and the clone answered.
+		if (polled.headMoved && factory.learning) rulesToApply.add(repo);
+		if (rulesToApply.has(repo) && !applyingRules.has(repo)) {
+			rulesToApply.delete(repo);
+			applyingRules.add(repo);
+			void fetchClone()
+				.then(async (fetched) => {
+					const { unread } = fetched
+						? await applyMergedRules(repo, {
+								github: deps.github,
+								readMerged: (path) =>
+									deps.workspace.show(clone, defaultBranch, path),
+								log: deps.log,
+								now,
+							})
+						: { unread: true };
+					if (unread) rulesToApply.add(repo);
+				})
+				.catch((error: unknown) => {
+					deps.log(`${repo}: learning's rules: ${errorText(error)}`);
+					rulesToApply.add(repo);
+				})
+				.finally(() => applyingRules.delete(repo));
+		} else if (polled.headMoved && factory.wiki) void fetchClone();
 	}
 
 	async function tick() {

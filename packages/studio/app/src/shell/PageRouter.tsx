@@ -64,9 +64,7 @@ export function PageRouter({
 		case "settings":
 			return <Settings project={project} tab={param("tab")} />;
 		case "learning":
-			return (
-				<Learning project={project} lesson={path[1]} period={param("period")} />
-			);
+			return <Learning project={project} lesson={path[1]} tab={param("tab")} />;
 		case "wiki":
 			return (
 				<Wiki project={project} page={param("page")} find={param("find")} />

@@ -79,5 +79,5 @@ export function learningText(learning: Learning): string {
 		learning.schedule === DEFAULT_LEARNING.schedule
 			? "each week"
 			: cronWords(learning.schedule);
-	return `${when} the engine studies the work that failed, and proposes improvements to skills and agent.md, by pull request only`;
+	return `${when} the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md, by pull request only`;
 }

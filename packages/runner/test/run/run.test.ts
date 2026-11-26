@@ -182,6 +182,7 @@ const workspace: Workspace = {
 	versions: async () => versions,
 	commitsSince: async () => pushedCommits,
 	fetch: async () => {},
+	show: async () => undefined,
 	contains: async () => true,
 	snapshot: async () => async () => {},
 	conflictMarkers: async () => [],

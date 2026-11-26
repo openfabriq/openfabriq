@@ -455,6 +455,8 @@ it("answers every route, method and odd path as it always did", async () => {
 		["POST", "/api/chat", { signedIn: false }],
 		["POST", "/api/wiki/refresh"],
 		["POST", "/api/wiki/refresh", { type: "application/json" }],
+		["POST", "/api/learning/run"],
+		["POST", "/api/learning/run", { type: "application/json" }],
 		["DELETE", `/api/chats?${p}`],
 		["DELETE", `/api/chats/?${p}`],
 		["DELETE", `/api/chats/nothing?${p}`],
@@ -505,6 +507,8 @@ it("answers every route, method and odd path as it always did", async () => {
 		POST /api/chat | 401 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Open the studio from the address that \\"openfabriq start\\" printed, the one with ?token=."}
 		POST /api/wiki/refresh | 415 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Send { project } as application/json."}
 		POST /api/wiki/refresh | 400 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Expected JSON { project }."}
+		POST /api/learning/run | 415 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Send { project } as application/json."}
+		POST /api/learning/run | 400 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Expected JSON { project }."}
 		DELETE /api/chats?project=acme%2Ftask-app | 405 | text/plain | no-store | DENY, frame-ancestors 'none', noindex, nofollow | Read only.
 		DELETE /api/chats/?project=acme%2Ftask-app | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No such conversation."}
 		DELETE /api/chats/nothing?project=acme%2Ftask-app | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No such conversation."}

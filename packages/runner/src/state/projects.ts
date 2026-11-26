@@ -123,10 +123,19 @@ export function fingerprint(files: FactoryFiles): string {
 	return hash.digest("hex").slice(0, 12);
 }
 
+/** An apply of the factory: all of it by a person, or the rules of learning the engine applied on their own. */
+export interface Apply {
+	at: string;
+	/** The lessons whose rule the engine applied alone; none for a person's apply. */
+	lessons?: string[];
+}
+
 export function writeApplied(
 	repository: string,
 	files: FactoryFiles,
 	now = new Date(),
+	/** The engine applies learning's merged rules on their own: which lessons. */
+	lessons?: string[],
 ): ProjectState {
 	const dir = projectDir(repository);
 	const staging = join(dir, "factory.new");
@@ -152,16 +161,19 @@ export function writeApplied(
 	// Every apply, kept: learning tells from it when a merged improvement started to run.
 	appendFileSync(
 		join(dir, "applies.jsonl"),
-		`${JSON.stringify({ at: state.appliedAt, fingerprint: state.fingerprint })}\n`,
+		`${JSON.stringify({ at: state.appliedAt, fingerprint: state.fingerprint, ...(lessons ? { lessons } : {}) })}\n`,
 	);
 	return state;
 }
 
 /** When the factory of a project was applied, oldest first: since the engine keeps them. */
-export function readApplies(repository: string): string[] {
+export function readApplies(repository: string): Apply[] {
 	const file = join(projectDir(repository), "applies.jsonl");
 	return existsSync(file)
-		? jsonLines<{ at: string }>(readFileSync(file, "utf8")).map((a) => a.at)
+		? jsonLines<Apply>(readFileSync(file, "utf8")).map((a) => ({
+				at: a.at,
+				...(a.lessons ? { lessons: a.lessons } : {}),
+			}))
 		: [];
 }
 

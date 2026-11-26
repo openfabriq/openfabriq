@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import {
 	highlight,
-	isBusy,
 	neighbors,
 	pageGroups,
 	pageName,
@@ -15,6 +14,7 @@ import {
 	wikiNotice,
 	withoutHeader,
 } from "../../../app/src/features/wiki/wiki-view.js";
+import { isBusy } from "../../../app/src/lib/engine-run.js";
 
 const view: WikiView = {
 	folder: "docs/wiki",

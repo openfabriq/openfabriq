@@ -1,8 +1,8 @@
 // The wiki page's logic, pure: page names, the order of the list, where a link goes.
 
-import type { WikiMatch, WikiRun, WikiView } from "@openfabriq/runner";
+import type { EngineRun, WikiMatch, WikiView } from "@openfabriq/runner";
 
-export type { WikiMatch, WikiRun, WikiView };
+export type { EngineRun, WikiMatch, WikiView };
 
 /** "areas/payment-flows.md" → "Payment flows"; index.md → "Index". */
 export function pageName(page: string): string {
@@ -144,16 +144,12 @@ export type WikiNotice =
 	| { kind: "merge"; pullRequest: string }
 	| { kind: "failed"; id: string; reason?: string };
 
-/** Whether a run of the wiki waits or works: then nobody can start another one. */
-export const isBusy = (run: WikiRun | null | undefined) =>
-	run?.state === "asked" || run?.state === "queued" || run?.state === "running";
-
 /**
  * The notice for the latest run: working, a pull request to merge (it ended after the commit the
  * page shows, so its pages are not there yet), or a failure. Nothing once the wiki shows its work.
  */
 export function wikiNotice(
-	run: WikiRun | null | undefined,
+	run: EngineRun | null | undefined,
 	view: WikiView,
 ): WikiNotice | undefined {
 	if (!run) return undefined;

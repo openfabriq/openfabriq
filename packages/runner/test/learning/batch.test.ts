@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Factory, LEARNING_FOLDER } from "@openfabriq/core";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { EngineTool } from "../../src/agent/port.js";
 import { takeRequests } from "../../src/engine/requests.js";
 import type { GitHub } from "../../src/github/github.js";
 import { prepareBatch } from "../../src/learning/batch.js";
@@ -70,21 +71,46 @@ const batch = (runs: RunRecord[], gh = github()) =>
 	});
 
 /** Calls the record_lessons tool as the agent would. */
-async function record(
-	tool: { handler: (input: never, extra: never) => Promise<unknown> },
-	lessons: unknown,
-) {
-	const answer = (await tool.handler({ lessons } as never, {} as never)) as {
-		content: { text: string }[];
-		isError?: boolean;
-	};
-	return { text: answer.content[0]?.text ?? "", error: answer.isError };
+async function record(tool: EngineTool, lessons: unknown) {
+	const answer = await tool.run({ lessons } as never);
+	return { text: answer.text, error: answer.isError };
 }
 
 describe("a batch of learning", () => {
 	it("has nothing to do without a new failure or a lesson waiting", async () => {
 		expect(await batch([])).toBeUndefined();
 		expect(existsSync(join(worktree, LEARNING_FOLDER))).toBe(false);
+	});
+
+	it("keeps a lesson the engine promoted while the agent worked", async () => {
+		const proposed = {
+			id: "L1",
+			cause: "tests are not run",
+			rule: "Run the tests before you finish.",
+			target: "openfabriq/agents/coder/agent.md",
+			failures: [
+				{ id: "r0:check", agent: "coder", at: "2026-11-10T00:00:00Z" },
+			],
+			status: "proposed" as const,
+			improvement: {
+				url: "https://github.com/acme/app/pull/7",
+				number: 7,
+				run: "l0",
+				at: "2026-11-11T00:00:00Z",
+			},
+			createdAt: "2026-11-10T00:00:00Z",
+			updatedAt: "2026-11-11T00:00:00Z",
+		};
+		saveLessons(REPO, [proposed]);
+		const learning = await batch([failed("r1", "2026-11-20T10:00:00Z")]);
+		const [tool] = learning?.tools ?? [];
+		if (!tool) throw new Error("record_lessons");
+		// Meanwhile, the pull request is merged and the engine applies the rule.
+		saveLessons(REPO, [{ ...proposed, status: "promoted" }]);
+		await record(tool, [{ lesson: "L1", failures: ["r1:check"] }]);
+		expect(
+			readLessons(REPO).map((l) => [l.id, l.status, l.failures.length]),
+		).toEqual([["L1", "promoted", 2]]);
 	});
 
 	it("stages each new failure with what tells why, records the lessons, and asks for the improvement once a lesson has two", async () => {

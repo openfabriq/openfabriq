@@ -21,13 +21,14 @@ export {
 	startable,
 } from "./engine/queue.js";
 export {
+	type EngineAutomation,
+	type EngineRun,
+	engineRun,
 	manualEvent,
 	type RunRequest,
+	requestEngineRun,
 	requestRun,
-	requestWikiRun,
 	takeRequests,
-	type WikiRun,
-	wikiRun,
 } from "./engine/requests.js";
 export * from "./exec.js";
 export * from "./files.js";
@@ -43,9 +44,11 @@ export {
 } from "./learning/batch.js";
 export type { Failure, FailureKind } from "./learning/failures.js";
 export {
+	appliedAt,
 	awaitsImprovement,
 	cameBack,
 	failedRuns,
+	ignoredFailures,
 	type Lesson,
 	type LessonFailure,
 	type LessonStatus,

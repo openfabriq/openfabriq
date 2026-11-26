@@ -1,4 +1,5 @@
-import { money, serverWhere } from "../../lib/format.js";
+import { cronWords } from "@openfabriq/core";
+import { capitalized, money, serverWhere } from "../../lib/format.js";
 import type { FactorySettings } from "../../lib/types.js";
 
 // What the settings page says about each key of factory.yaml, in words.
@@ -92,6 +93,14 @@ function factorySection(s: FactorySettings): Section {
 				note: s.wiki
 					? `The engine keeps this map of the code up to date ${s.wiki.refresh === "after_merge" ? "after each merge" : "when you ask on the Wiki page"}, by pull request.`
 					: "wiki: false: the engine keeps no map of the code for the agents.",
+			},
+			{
+				label: "Learning",
+				key: "learning",
+				value: s.learning ? capitalized(cronWords(s.learning.schedule)) : "Off",
+				note: s.learning
+					? "On this schedule, the engine studies the agents' mistakes and proposes the rules that would avoid them, by pull request. A rule a person merges applies on its own."
+					: "learning: false: the engine proposes no rule from the agents' mistakes. It still counts them on the Learning page.",
 			},
 			{
 				label: "Signature",

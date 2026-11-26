@@ -1,9 +1,22 @@
-import { type Factory, LESSON_THRESHOLD, learningText } from "@openfabriq/core";
 import {
+	cronWords,
+	type Factory,
+	isEngineName,
+	LESSON_THRESHOLD,
+	learningText,
+	nextRun,
+} from "@openfabriq/core";
+import {
+	type Apply,
+	appliedAt,
 	awaitsImprovement,
 	cameBack,
+	type EngineRun,
+	engineRun,
 	type Failure,
+	type FailureKind,
 	failedRuns,
+	ignoredFailures,
 	type Lesson,
 	type LessonFailure,
 	type LessonStatus,
@@ -34,6 +47,8 @@ export interface LessonRow {
 	agents: string[];
 	/** How many of them came back after its improvement was merged. */
 	cameBack: number;
+	/** When the merged rule started to run: the first apply after the merge. */
+	appliedAt?: string;
 	updatedAt: string;
 	improvement?: NonNullable<Lesson["improvement"]>;
 	resolvedAt?: string;
@@ -43,8 +58,15 @@ export interface LessonRow {
 
 /** What GET /api/learning sends. */
 export interface LearningAnswer {
-	/** Learning's schedule and its sentence, when the factory turns it on. */
-	learning?: { schedule: string; text: string };
+	/** Learning's schedule, in words too, its next batch in the factory's time zone, and its sentence, when the factory turns it on. */
+	learning?: {
+		schedule: string;
+		words: string;
+		next?: string;
+		/** The factory's time zone, which the schedule and the next batch are read in; none: the machine's. */
+		timezone?: string;
+		text: string;
+	};
 	threshold: number;
 	unheard: GitHubFailureEvent[];
 	numbers: {
@@ -56,40 +78,101 @@ export interface LearningAnswer {
 	toReview: LessonRow[];
 	candidates: LessonRow[];
 	history: LessonRow[];
-	recent: Failure[];
+	/** The latest corrections, each with the lesson it went into once a batch studied it. */
+	recent: (Failure & { lesson?: { id: string; rule: string } })[];
+	/** The failures of the period by kind. */
+	byKind: Partial<Record<FailureKind, number>>;
 	byAgent: Record<string, { failures: number; toReview: number }>;
+	/** Mistakes per run before and after the first learned rule applied; absent until one has. */
+	progress?: Progress;
+	/** Learning's latest run, which the page's button waits on, and the factory's limit per run it stops at. */
+	run: EngineRun | null;
+	usdPerRun?: number;
+}
+
+/** The factory's runs and mistakes on each side of the first learned rule's apply. */
+export interface Progress {
+	since: string;
+	before: { runs: number; mistakes: number };
+	after: { runs: number; mistakes: number };
+	/** Below this many runs on a side, the page waits instead of comparing. */
+	minRuns: number;
+}
+
+/** Fewer runs than this on a side make the rate noise. */
+export const PROGRESS_RUNS = 20;
+
+/**
+ * The runs of the factory's own agents that ended, and their mistakes, before and after `since`.
+ * Learning's and the wiki's runs are the engine's: they are not the factory's work.
+ */
+export function progressOf(
+	runs: RunRecord[],
+	failures: Failure[],
+	since: string,
+): Progress {
+	const side = (before: boolean) => ({
+		runs: runs.filter(
+			(r) =>
+				(r.status === "succeeded" || r.status === "failed") &&
+				!isEngineName(r.automation) &&
+				// When it ended, as its mistakes are dated: a run that spans the apply stays on one side.
+				(r.endedAt ?? r.startedAt ?? r.queuedAt) < since === before,
+		).length,
+		mistakes: failures.filter(
+			(f) => !isEngineName(f.automation) && f.at < since === before,
+		).length,
+	});
+	return {
+		since,
+		before: side(true),
+		after: side(false),
+		minRuns: PROGRESS_RUNS,
+	};
 }
 
 /** What GET /api/learning/:id sends. */
 export interface LessonAnswer extends Omit<LessonRow, "failures"> {
 	/** Each failure as the journal tells it, or as the lesson kept it when the journal no longer has it. */
-	failures: (Failure | LessonFailure)[];
+	failures: ((Failure | LessonFailure) & { kind: FailureKind })[];
+	createdAt: string;
+	mergedAt?: string;
+	/** When the engine last asked for its improvement. */
+	triedAt?: string;
 	cameBackIds: string[];
 	targetUrl: string;
 	diff?: ShownFiles;
 	diffFrom?: "pull request" | "run";
 }
 
-const lessonRow = (lesson: Lesson, applies: string[]): LessonRow => ({
-	id: lesson.id,
-	cause: lesson.cause,
-	rule: lesson.rule,
-	target: lesson.target,
-	status: lesson.status,
-	failures: lesson.failures.length,
-	runs: failedRuns(lesson),
-	agents: lessonAgents(lesson).sort(),
-	cameBack: cameBack(lesson, applies).length,
-	updatedAt: lesson.updatedAt,
-	...(lesson.improvement ? { improvement: lesson.improvement } : {}),
-	...(lesson.resolvedAt ? { resolvedAt: lesson.resolvedAt } : {}),
-	...(lesson.status === "candidate" &&
-	lesson.triedAt !== undefined &&
-	failedRuns(lesson) >= LESSON_THRESHOLD &&
-	!awaitsImprovement(lesson)
-		? { waits: true as const }
-		: {}),
-});
+/** A failure's kind, read from its id: `<run>:<kind>`. */
+const kindOfId = (id: string) =>
+	id.slice(id.lastIndexOf(":") + 1) as FailureKind;
+
+function lessonRow(lesson: Lesson, applies: Apply[]): LessonRow {
+	const applied = appliedAt(lesson, applies);
+	return {
+		id: lesson.id,
+		cause: lesson.cause,
+		rule: lesson.rule,
+		target: lesson.target,
+		status: lesson.status,
+		failures: lesson.failures.length,
+		runs: failedRuns(lesson),
+		agents: lessonAgents(lesson).sort(),
+		cameBack: cameBack(lesson, applies).length,
+		...(applied ? { appliedAt: applied } : {}),
+		updatedAt: lesson.updatedAt,
+		...(lesson.improvement ? { improvement: lesson.improvement } : {}),
+		...(lesson.resolvedAt ? { resolvedAt: lesson.resolvedAt } : {}),
+		...(lesson.status === "candidate" &&
+		lesson.triedAt !== undefined &&
+		failedRuns(lesson) >= LESSON_THRESHOLD &&
+		!awaitsImprovement(lesson)
+			? { waits: true as const }
+			: {}),
+	};
+}
 
 /** The failures that come from GitHub: the journal holds them only when an automation of the factory ran on them. */
 const FROM_GITHUB = [
@@ -97,6 +180,11 @@ const FROM_GITHUB = [
 	"pull_request.changes_requested",
 ] as const;
 type GitHubFailureEvent = (typeof FROM_GITHUB)[number];
+
+const nextBatch = (schedule: string, now: Date, timezone?: string) => {
+	const next = nextRun(schedule, now, timezone);
+	return next ? { next: next.toISOString() } : {};
+};
 
 /** The GitHub events of failures no automation of the factory runs on: learning never sees those failures. */
 export const unheardEvents = (factory: Factory): GitHubFailureEvent[] =>
@@ -155,13 +243,17 @@ export function learningOf(
 	states: SubjectStates,
 ): LearningAnswer {
 	const shown = new Set(runsInPeriod(runs, period, now).map((r) => r.id));
-	const failures = projectFailures(
-		repository,
-		runs,
-		factory.maintainers,
-	).filter((f) => shown.has(f.run));
 	const lessons = lessonsNow(repository, states, now);
+	// What learning ignored was outside the agents' hands: not their mistakes.
+	const ignored = ignoredFailures(lessons);
+	const all = projectFailures(repository, runs, factory.maintainers).filter(
+		(f) => !ignored.has(f.id),
+	);
+	const failures = all.filter((f) => shown.has(f.run));
 	const applies = readApplies(repository);
+	const firstApply = lessons
+		.flatMap((l) => appliedAt(l, applies) ?? [])
+		.sort()[0];
 	const row = (lesson: Lesson) => lessonRow(lesson, applies);
 	const withStatus = (status: LessonStatus) =>
 		lessons.filter((l) => l.status === status);
@@ -173,7 +265,11 @@ export function learningOf(
 		byAgent[agent] ??= { failures: 0, toReview: 0 };
 		return byAgent[agent];
 	};
-	for (const f of failures) agentShare(f.agent).failures += 1;
+	const byKind: Partial<Record<FailureKind, number>> = {};
+	for (const f of failures) {
+		agentShare(f.agent).failures += 1;
+		byKind[f.kind] = (byKind[f.kind] ?? 0) + 1;
+	}
 	for (const l of toReview)
 		for (const agent of lessonAgents(l)) agentShare(agent).toReview += 1;
 	return {
@@ -181,6 +277,9 @@ export function learningOf(
 			? {
 					learning: {
 						schedule: factory.learning.schedule,
+						words: cronWords(factory.learning.schedule),
+						...nextBatch(factory.learning.schedule, now, factory.timezone),
+						...(factory.timezone ? { timezone: factory.timezone } : {}),
 						text: learningText(factory.learning),
 					},
 				}
@@ -197,11 +296,24 @@ export function learningOf(
 		},
 		toReview: toReview.sort(latestFirst).map(row),
 		candidates: withStatus("candidate").sort(latestFirst).map(row),
-		history: [...withStatus("promoted"), ...withStatus("rejected")]
+		history: [
+			...withStatus("promoted"),
+			...withStatus("rejected"),
+			...withStatus("ignored"),
+		]
 			.sort(latestFirst)
 			.map(row),
-		recent: failures.slice(0, RECENT),
+		recent: failures.slice(0, RECENT).map((f) => {
+			const held = lessons.find((l) => l.failures.some((x) => x.id === f.id));
+			return held ? { ...f, lesson: { id: held.id, rule: held.rule } } : f;
+		}),
+		byKind,
 		byAgent,
+		...(firstApply ? { progress: progressOf(runs, all, firstApply) } : {}),
+		run: engineRun(repository, "learning") ?? null,
+		...(factory.limits.usd_per_run !== undefined
+			? { usdPerRun: factory.limits.usd_per_run }
+			: {}),
 	};
 }
 
@@ -225,9 +337,10 @@ export async function lessonOf(
 	const journalFailures = new Map(
 		projectFailures(repository, runs, maintainers).map((f) => [f.id, f]),
 	);
-	const failures = lesson.failures.map(
-		(f): Failure | LessonFailure => journalFailures.get(f.id) ?? f,
-	);
+	const failures = lesson.failures.map((f) => ({
+		kind: kindOfId(f.id),
+		...(journalFailures.get(f.id) ?? f),
+	}));
 	const pullText =
 		lesson.improvement &&
 		(await pullDiff(repository, lesson.improvement.number));
@@ -243,6 +356,9 @@ export async function lessonOf(
 		...lessonRow(lesson, applies),
 		failures,
 		cameBackIds: cameBack(lesson, applies).map((f) => f.id),
+		createdAt: lesson.createdAt,
+		...(lesson.mergedAt ? { mergedAt: lesson.mergedAt } : {}),
+		...(lesson.triedAt ? { triedAt: lesson.triedAt } : {}),
 		targetUrl: `https://github.com/${repository}/blob/HEAD/${lesson.target}`,
 		...(diff ? { diff, diffFrom: onPull.length ? "pull request" : "run" } : {}),
 	};

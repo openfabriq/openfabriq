@@ -1,8 +1,9 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LESSON_THRESHOLD, readImportedSkills } from "@openfabriq/core";
-import { jsonLines } from "../files.js";
-import { projectDir } from "../state/projects.js";
+import { errorText, jsonLines } from "../files.js";
+import type { GitHub } from "../github/github.js";
+import { type Apply, projectDir } from "../state/projects.js";
 import type { Failure } from "./failures.js";
 
 // Lessons: the common cause of failures and the rule that would have avoided it. They stay
@@ -10,9 +11,16 @@ import type { Failure } from "./failures.js";
 
 /**
  * candidate: waiting for failures or for its improvement; proposed: its improvement is open;
- * promoted: merged; rejected: closed unmerged, never proposed again.
+ * promoted: merged; rejected: closed unmerged, never proposed again; ignored: its failures teach
+ * nothing an instruction could fix (a flaky test, a service that was down), never proposed, and
+ * not counted as the agents' mistakes.
  */
-export type LessonStatus = "candidate" | "proposed" | "promoted" | "rejected";
+export type LessonStatus =
+	| "candidate"
+	| "proposed"
+	| "promoted"
+	| "rejected"
+	| "ignored";
 
 /** A failure as a lesson keeps it: enough to count it without the journal. */
 export interface LessonFailure {
@@ -27,8 +35,9 @@ export interface Lesson {
 	/** L1, L2…: short, for people and for the agent. */
 	id: string;
 	cause: string;
+	/** Empty for an ignored lesson: there is no rule to write. */
 	rule: string;
-	/** The file the rule goes into, from the repository's root: a skill's Markdown or an agent.md under openfabriq/. */
+	/** The file the rule goes into, from the repository's root: a skill's Markdown, an agent.md or an automation.md under openfabriq/. Empty for an ignored lesson. */
 	target: string;
 	failures: LessonFailure[];
 	status: LessonStatus;
@@ -47,10 +56,19 @@ export interface Lesson {
 /** Why a file cannot take a lesson, or undefined. */
 export type TargetRefusal = (target: string) => string | undefined;
 
-/** What the learning agent says of a lesson: an existing one the failures join, or a new one. */
+/** What the learning agent says of a lesson: an existing one the failures join, a new one, or a new one to ignore. */
 export type Grouping =
 	| { lesson: string; failures: string[] }
-	| { cause: string; rule: string; target: string; failures: string[] };
+	| { cause: string; rule: string; target: string; failures: string[] }
+	| { cause: string; ignore: true; failures: string[] };
+
+/** The failures of the ignored lessons: not the agents' mistakes, so never counted as such. */
+export const ignoredFailures = (lessons: Lesson[]) =>
+	new Set(
+		lessons
+			.filter((l) => l.status === "ignored")
+			.flatMap((l) => l.failures.map((f) => f.id)),
+	);
 
 const lessonsFile = (repository: string) =>
 	join(projectDir(repository), "lessons.jsonl");
@@ -112,11 +130,11 @@ export const awaitsImprovement = (lesson: Lesson) =>
 export const nextToImprove = (lessons: Lesson[], refusal: TargetRefusal) =>
 	lessons.find((l) => awaitsImprovement(l) && !refusal(l.target));
 
-/** Why a file cannot take a lesson, or undefined: a skill's Markdown or an agent.md of the factory. */
+/** Why a file cannot take a lesson, or undefined: a skill's Markdown, an agent.md or an automation.md of the factory. */
 export function targetProblem(target: string): string | undefined {
 	return isImprovable(target)
 		? undefined
-		: `"${target}" is neither a Markdown file of a skill of the factory nor an agent.md: name one, like openfabriq/skills/<skill>/SKILL.md or openfabriq/agents/<agent>/agent.md`;
+		: `"${target}" is neither a Markdown file of a skill of the factory, an agent.md, nor an automation.md: name one, like openfabriq/skills/<skill>/SKILL.md, openfabriq/agents/<agent>/agent.md or openfabriq/automations/<automation>/automation.md`;
 }
 
 /** The folders of the skills imported from public repositories, as `openfabriq/<folder>/`, from imported-skills.json: none when it is missing or broken, which validate refuses. */
@@ -138,23 +156,25 @@ export function importedProblem(
 		: undefined;
 }
 
-/** A file whose front matter an improvement keeps: an agent.md, or a skill's SKILL.md. */
+/** A file whose front matter an improvement keeps: an agent.md, an automation.md (its triggers and rights), or a skill's SKILL.md. */
 export const keepsFrontMatter = (path: string) =>
-	path.endsWith("/agent.md") || path.endsWith("/SKILL.md");
+	path.endsWith("/agent.md") ||
+	path.endsWith("/automation.md") ||
+	path.endsWith("/SKILL.md");
 
-/** Why an agent.md or a SKILL.md that is not in the worktree cannot take a lesson: an improvement only changes their body. */
+/** Why an agent.md, an automation.md or a SKILL.md that is not in the worktree cannot take a lesson: an improvement only changes their body. */
 function missingFileProblem(
 	target: string,
 	worktree: string,
 ): string | undefined {
 	if (!keepsFrontMatter(target) || existsSync(join(worktree, target)))
 		return undefined;
-	return `${target} does not exist: an improvement changes the body of an existing agent.md or SKILL.md. Name one, or another Markdown file of a skill`;
+	return `${target} does not exist: an improvement changes the body of an existing agent.md, automation.md or SKILL.md. Name one, or another Markdown file of a skill`;
 }
 
 /**
  * Why a file of this worktree cannot take a lesson: not improvable, in an imported skill, or an
- * agent.md or SKILL.md that is not there.
+ * agent.md, automation.md or SKILL.md that is not there.
  */
 export function targetRefusalIn(
 	worktree: string,
@@ -166,7 +186,7 @@ export function targetRefusalIn(
 		missingFileProblem(target, worktree);
 }
 
-/** A file an improvement may change, from the repository's root: a skill's Markdown, or an agent.md (its body: the guard checks the front matter). */
+/** A file an improvement may change, from the repository's root: a skill's Markdown, an agent.md or an automation.md (their body: the guard checks the front matter). */
 export function isImprovable(path: string): boolean {
 	if (
 		path.split("/").some((part) => part === "" || part === "." || part === "..")
@@ -175,7 +195,9 @@ export function isImprovable(path: string): boolean {
 	return (
 		/^openfabriq\/([^/]+\/)?(agents\/[^/]+\/)?skills\/[^/]+\/.+\.md$/.test(
 			path,
-		) || /^openfabriq\/([^/]+\/)?agents\/[^/]+\/agent\.md$/.test(path)
+		) ||
+		/^openfabriq\/([^/]+\/)?agents\/[^/]+\/agent\.md$/.test(path) ||
+		/^openfabriq\/([^/]+\/)?automations\/[^/]+\/automation\.md$/.test(path)
 	);
 }
 
@@ -206,7 +228,7 @@ export function groupIntoLessons(
 		if ("lesson" in g) {
 			if (!lessons.some((l) => l.id === g.lesson))
 				problems.push(`${g.lesson} is not a lesson`);
-		} else {
+		} else if (!("ignore" in g)) {
 			const why = refusal(g.target);
 			if (why) problems.push(why);
 		}
@@ -249,13 +271,14 @@ export function groupIntoLessons(
 			changed.push(grown);
 		} else {
 			lastNumber += 1;
+			const ignored = "ignore" in g;
 			const lesson: Lesson = {
 				id: `L${lastNumber}`,
 				cause: g.cause,
-				rule: g.rule,
-				target: g.target,
+				rule: ignored ? "" : g.rule,
+				target: ignored ? "" : g.target,
 				failures: kept(g.failures),
-				status: "candidate",
+				status: ignored ? "ignored" : "candidate",
 				createdAt: at,
 				updatedAt: at,
 			};
@@ -264,6 +287,27 @@ export function groupIntoLessons(
 		}
 	}
 	return { lessons: all, changed };
+}
+
+/** How an improvement's pull request stands on GitHub: OPEN, MERGED or CLOSED, with GitHub's merge time; undefined when GitHub did not answer, and the log says so. */
+export async function pullState(
+	github: Pick<GitHub, "subject">,
+	repository: string,
+	number: number,
+	log?: (line: string) => void,
+): Promise<{ state: string; mergedAt?: string } | undefined> {
+	return github.subject(repository, number, true).then(
+		(p) => ({
+			state: String(p.state ?? ""),
+			...(typeof p.mergedAt === "string" ? { mergedAt: p.mergedAt } : {}),
+		}),
+		(error: unknown) => {
+			log?.(
+				`${repository}: could not read learning's pull request #${number}: ${errorText(error)}`,
+			);
+			return undefined;
+		},
+	);
 }
 
 /** A lesson once its improvement's pull request is seen merged (GitHub's `mergedAt`), closed, or still open. */
@@ -295,12 +339,26 @@ export function resolvedByPullRequest(
  * The failures of a lesson that happened once its improvement ran: after the first apply of the
  * factory that followed GitHub's merge. Merged and not applied yet, nothing came back.
  */
-export function cameBack(lesson: Lesson, applies: string[]): LessonFailure[] {
+export function cameBack(lesson: Lesson, applies: Apply[]): LessonFailure[] {
+	const applied = appliedAt(lesson, applies);
+	return applied ? lesson.failures.filter((f) => f.at > applied) : [];
+}
+
+/**
+ * When a merged improvement started to run: the first apply after GitHub's merge, a person's or
+ * the engine's of this very rule; undefined before. Another rule applied alone does not carry it.
+ */
+export function appliedAt(
+	lesson: Lesson,
+	applies: Apply[],
+): string | undefined {
 	// GitHub's merge time; an older lesson has only the batch that saw it.
 	const merged = lesson.mergedAt ?? lesson.resolvedAt;
-	const applied =
-		lesson.status === "promoted" && merged
-			? applies.filter((at) => at >= merged).sort()[0]
-			: undefined;
-	return applied ? lesson.failures.filter((f) => f.at > applied) : [];
+	if (lesson.status !== "promoted" || !merged) return undefined;
+	return applies
+		.filter(
+			(a) => a.at >= merged && (!a.lessons || a.lessons.includes(lesson.id)),
+		)
+		.map((a) => a.at)
+		.sort()[0];
 }

@@ -58,13 +58,13 @@ export const overviewHref = (to: {
 export const wikiHref = (to: { project: Param; page?: Param; find?: Param }) =>
 	`#/wiki${query({ project: to.project, page: to.page, find: to.find })}`;
 
-/** The Learning page over a period, or one lesson's improvement: `#/learning/<id>?project=…`. */
+/** The Learning page on one of its tabs, or one lesson: `#/learning/<id>?project=…`. */
 export const learningHref = (to: {
 	project: Param;
 	lesson?: Param;
-	period?: Param;
+	tab?: Param;
 }) =>
-	`#/learning${to.lesson ? `/${encodeURIComponent(to.lesson)}` : ""}${query({ project: to.project, period: to.period })}`;
+	`#/learning${to.lesson ? `/${encodeURIComponent(to.lesson)}` : ""}${query({ project: to.project, tab: to.tab })}`;
 
 /** The page of the menu a page belongs to: a run's page is under Runs. */
 export const menuPageOf = (page: string) => (page === "run" ? "runs" : page);

@@ -1,333 +1,243 @@
-import { ChevronRight, ExternalLink, GraduationCap } from "lucide-react";
-import { AgentTag } from "../../components/badges.js";
-import { Empty, ErrorNote, PageSkeleton } from "../../components/feedback.js";
-import { PageHeader, Section } from "../../components/page-layout.js";
-import { Segmented } from "../../components/segmented.js";
+import { Check, CircleAlert, Loader2 } from "lucide-react";
+import { Elapsed } from "../../components/badges.js";
+import {
+	ConfirmRun,
+	NoticeBox,
+	RunButton,
+} from "../../components/engine-run.js";
+import { ErrorNote, PageSkeleton } from "../../components/feedback.js";
+import { PageHeader } from "../../components/page-layout.js";
 import { useApi } from "../../hooks/use-api.js";
+import { useEngineRun } from "../../hooks/use-engine-run.js";
 import { query } from "../../lib/api.js";
+import { isBusy } from "../../lib/engine-run.js";
 import { ago } from "../../lib/format.js";
-import { learningHref, runHref } from "../../lib/route.js";
-import type { LearningAnswer, LessonAnswer, Period } from "../../lib/types.js";
-import { Card, Figure } from "../overview/charts.js";
-import { FileDiff } from "../run-detail/FileDiff.js";
-import { candidateNote, FAILURE_WORDS, outcomeWords } from "./learning-view.js";
+import { runHref } from "../../lib/route.js";
+import type { LearningAnswer } from "../../lib/types.js";
+import { LearningDashboard, Progress, tabOf } from "./LearningDashboard.js";
+import { LessonDetail } from "./LessonDetail.js";
+import { type LearningNotice, learningNotice } from "./learning-view.js";
 
-// Learning, read-only: what failed, the lessons drawn from it, and the improvements to review on
-// GitHub. The studio never approves nor merges: a person does, on the pull request.
+// Learning: the mistakes of the factory's work, the lessons drawn from them, and the rules to
+// review on GitHub. The studio never approves nor merges: a person does, on the pull request. Its
+// one action asks the engine for a batch now, like `openfabriq run learning`.
 
-const PERIODS: { value: Period; label: string }[] = [
-	{ value: "7d", label: "7 days" },
-	{ value: "30d", label: "30 days" },
-	{ value: "all", label: "All time" },
-];
-
-type Row = LearningAnswer["toReview"][number];
-
-const inlineCode = (text: string) => (
-	<code className="rounded-md bg-sunken px-1.5 py-0.5 font-mono text-xs text-fg ring-1 ring-line">
-		{text}
-	</code>
-);
-
-/** Learning's page, or one lesson's improvement. */
+/** Learning's page on one of its tabs, or one lesson's page. */
 export function Learning({
 	project,
 	lesson,
-	period,
+	tab,
 }: {
 	project: string | undefined;
 	lesson: string | undefined;
-	period: string | undefined;
+	tab: string | undefined;
 }) {
 	return lesson ? (
-		<LessonPage project={project} id={lesson} />
+		<LessonDetail project={project} id={lesson} />
 	) : (
-		<LearningPage
-			project={project}
-			period={PERIODS.find((p) => p.value === period)?.value ?? "30d"}
-		/>
-	);
-}
-
-function LessonList({
-	rows,
-	project,
-	aside,
-}: {
-	rows: Row[];
-	project: string | undefined;
-	aside: (row: Row) => string;
-}) {
-	return (
-		<ul className="panel divide-y divide-line">
-			{rows.map((row) => (
-				<li key={row.id}>
-					<a
-						href={learningHref({ project, lesson: row.id })}
-						className="flex items-center gap-3 px-4 py-3 text-sm text-fg no-underline transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-hover sm:px-5"
-					>
-						<span className="tnum w-8 shrink-0 font-mono text-xs text-fg-3">
-							{row.id}
-						</span>
-						<span className="min-w-0 flex-1">
-							<span className="block truncate">{row.rule}</span>
-							<span className="block truncate font-mono text-xs text-fg-2">
-								{row.target}
-							</span>
-						</span>
-						<span className="hidden shrink-0 text-xs text-fg-2 sm:block">
-							{aside(row)}
-						</span>
-						<ChevronRight className="size-4 shrink-0 text-fg-3" aria-hidden />
-					</a>
-				</li>
-			))}
-		</ul>
+		<LearningPage project={project} tab={tab} />
 	);
 }
 
 function LearningPage({
 	project,
-	period,
+	tab,
 }: {
 	project: string | undefined;
-	period: Period;
+	tab: string | undefined;
 }) {
-	const { data, error } = useApi<LearningAnswer>(
-		`/api/learning${query({ project, period })}`,
-		30_000,
+	const { justAsked, failure, confirming, setConfirming, ask } = useEngineRun(
+		"/api/learning/run",
+		project,
+	);
+	const { data, error, refetch } = useApi<LearningAnswer>(
+		`/api/learning${query({ project })}`,
+		// Read every 3 s while a batch waits or works, so the page follows it.
+		(latest) => (justAsked || isBusy(latest?.run) ? 3000 : 30_000),
 	);
 	if (error && !data) return <ErrorNote>{error}</ErrorNote>;
 	if (!data) return <PageSkeleton />;
-	const { numbers: n } = data;
 	return (
 		<>
 			<PageHeader
 				title="Learning"
-				description={
-					data.learning
-						? `${data.learning.text[0]?.toUpperCase()}${data.learning.text.slice(1)}. A person merges each one, then applies the factory.`
-						: "The factory's failed work: checks that kept failing, reviews and maintainers that asked for changes."
-				}
+				description="Mistakes that repeat become rules for the agents, reviewed by a person on GitHub."
 			>
-				<Segmented
-					label="Period"
-					value={period}
-					options={PERIODS}
-					href={(p) =>
-						learningHref({ project, period: p === "30d" ? undefined : p })
-					}
-				/>
+				{project && data.learning && (
+					<>
+						<RunButton
+							label="Run learning now"
+							busyLabel="Learning…"
+							icon="play"
+							busy={justAsked || isBusy(data.run)}
+							onClick={() => setConfirming(true)}
+						/>
+						<ConfirmRun
+							open={confirming}
+							title="Run learning now?"
+							text={`An agent reads the mistakes since the last batch and groups them into lessons. When a cause shows in ${data.threshold} runs, it proposes its rule by pull request. With no new mistake and no rule waiting, it stops before it starts and costs nothing.`}
+							confirm="Run"
+							usdPerRun={data.usdPerRun}
+							onCancel={() => setConfirming(false)}
+							onConfirm={() => void ask(refetch)}
+						/>
+					</>
+				)}
 			</PageHeader>
-			{!data.learning && (
-				<p className="panel mb-6 px-5 py-4 text-sm text-fg-2">
-					Learning is off. To turn it on, add {inlineCode("learning: true")} to{" "}
-					{inlineCode("openfabriq/factory.yaml")}, then run{" "}
-					{inlineCode("openfabriq apply")}: each week the engine studies the
-					work that failed, and proposes improvements to skills and agent.md, by
-					pull request only.
-				</p>
+			{project && (
+				<RunNotice
+					notice={learningNotice(data.run)}
+					failure={failure}
+					project={project}
+				/>
 			)}
-			{data.learning && data.unheard.length > 0 && (
-				<p className="panel mb-6 px-5 py-4 text-sm text-fg-2">
-					Failed checks and changes a maintainer asks for on GitHub count as
-					failures only when an automation of the factory runs on them. None
-					runs on{" "}
-					{data.unheard.map((event, i) => (
-						<span key={event}>
-							{i > 0 && " or "}
-							{inlineCode(event)}
-						</span>
-					))}
-					: learning does not see those failures.
-				</p>
-			)}
-			<div className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
-				<Card title="Failures">
-					<Figure value={n.failures}>over the period</Figure>
-				</Card>
-				<Card title="Lessons">
-					<Figure value={n.lessons}>not resolved yet</Figure>
-				</Card>
-				<Card title="To review">
-					<Figure value={n.toReview}>improvements on GitHub</Figure>
-				</Card>
-				<Card title="Came back">
-					<Figure value={n.cameBack}>after a merged improvement</Figure>
-				</Card>
-			</div>
-			<div className="space-y-10">
-				{data.toReview.length > 0 && (
-					<Section title="Improvements to review">
-						<LessonList
-							rows={data.toReview}
-							project={project}
-							aside={(r) => `${r.failures} failures`}
-						/>
-					</Section>
-				)}
-				{data.candidates.length > 0 && (
-					<Section title="Candidate lessons">
-						<LessonList
-							rows={data.candidates}
-							project={project}
-							aside={(r) => candidateNote(r, data.threshold)}
-						/>
-					</Section>
-				)}
-				{data.history.length > 0 && (
-					<Section title="History">
-						<LessonList
-							rows={data.history}
-							project={project}
-							aside={(r) =>
-								`${outcomeWords(r.status)}${r.cameBack ? `, came back ${r.cameBack}×` : ""}`
-							}
-						/>
-					</Section>
-				)}
-				<Section title="Recent failures">
-					{data.recent.length === 0 ? (
-						<Empty icon={<GraduationCap />} title="No failure over the period">
-							A failure is a check that kept failing, an internal review that
-							asked for changes, or failed checks and requested changes on a
-							pull request the factory opened.
-						</Empty>
-					) : (
-						<ul className="panel divide-y divide-line">
-							{data.recent.map((f) => (
-								<li key={f.id}>
-									<a
-										href={runHref(f.run, { project })}
-										className="flex items-center gap-3 px-4 py-2.5 text-sm text-fg no-underline transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-hover sm:px-5"
-									>
-										<span className="w-28 shrink-0 truncate">
-											<AgentTag name={f.agent} className="max-w-full" />
-										</span>
-										<span className="min-w-0 flex-1">
-											<span className="block truncate">
-												{FAILURE_WORDS[f.kind]}
-											</span>
-											<span className="block truncate text-xs text-fg-2">
-												{f.summary}
-											</span>
-										</span>
-										<span className="tnum w-16 shrink-0 text-right text-xs text-fg-2">
-											{ago(f.at)}
-										</span>
-									</a>
-								</li>
-							))}
-						</ul>
-					)}
-				</Section>
-			</div>
+			<LearningDashboard
+				data={data}
+				project={project}
+				tab={tabOf(tab, data)}
+				status={
+					(data.progress || (project && data.learning)) && (
+						<div className="mb-8 flex flex-wrap items-center justify-between gap-x-10 gap-y-2">
+							{data.progress ? <Progress progress={data.progress} /> : <span />}
+							{project && data.learning && (
+								<BatchTimes
+									learning={data.learning}
+									run={data.run}
+									project={project}
+								/>
+							)}
+						</div>
+					)
+				}
+			/>
 		</>
 	);
 }
 
-/** Explore improvement: the lesson, the diff its pull request proposed, and the failures it comes from. */
-function LessonPage({
+/** "Mon 30 Nov", in the factory's time zone, as its schedule is read. */
+const batchDay = (iso: string, timeZone?: string) =>
+	new Date(iso).toLocaleDateString("en-GB", {
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+		...(timeZone ? { timeZone } : {}),
+	});
+
+/** Learning's batches, in a line: "Runs every Monday at 08:00 · next Mon 30 Nov · last 2h ago"; the last opens its run. */
+function BatchTimes({
+	learning,
+	run,
 	project,
-	id,
 }: {
-	project: string | undefined;
-	id: string;
+	learning: NonNullable<LearningAnswer["learning"]>;
+	run: LearningAnswer["run"];
+	project: string;
 }) {
-	const { data, error } = useApi<LessonAnswer>(
-		// Read once: the diff comes from GitHub.
-		`/api/learning/${encodeURIComponent(id)}${query({ project })}`,
-	);
-	if (error && !data) return <ErrorNote>{error}</ErrorNote>;
-	if (!data) return <PageSkeleton />;
-	const cameBack = new Set(data.cameBackIds);
+	const busy = isBusy(run);
+	const last = run && "id" in run && !busy ? run : undefined;
+	const dot = <span className="text-fg-3"> · </span>;
 	return (
-		<>
-			<PageHeader title={`Lesson ${data.id}`} description={data.cause}>
-				{data.improvement && (
-					<a
-						href={data.improvement.url}
-						target="_blank"
-						rel="noreferrer"
-						className="btn"
-					>
-						<ExternalLink className="size-3.5 text-fg-2" aria-hidden />
-						Review on GitHub
-					</a>
-				)}
-			</PageHeader>
-			<div className="space-y-10">
-				<Section
-					title="Rule"
-					aside={
-						<a href={data.targetUrl} target="_blank" rel="noreferrer">
-							{data.target}
-						</a>
-					}
+		<p className="tnum text-sm text-fg-2">
+			Runs {learning.words}
+			{learning.next && (
+				<>
+					{dot}next{" "}
+					<span className="text-fg">
+						{batchDay(learning.next, learning.timezone)}
+					</span>
+				</>
+			)}
+			{dot}
+			{busy ? (
+				<span className="text-fg">running now</span>
+			) : last ? (
+				<a
+					href={runHref(last.id, { project })}
+					title="Open its run"
+					aria-label={`Last batch: ${ago(last.at)}, open its run`}
+					className={`no-underline transition-colors duration-150 hover:text-fg-2 ${last.state === "failed" ? "text-bad" : "text-fg"}`}
 				>
-					<p className="panel px-5 py-4 text-sm text-fg">{data.rule}</p>
-				</Section>
-				{data.diff && (
-					<Section
-						title="The change it proposes"
-						aside={
-							data.diffFrom === "run"
-								? "As the learning run proposed it: GitHub did not answer"
-								: "As on the pull request"
-						}
-					>
-						<div className="panel overflow-hidden">
-							{data.diff.files.map((file) => (
-								<div key={file.path}>
-									<p className="px-4 py-2 font-mono text-xs text-fg-2">
-										{file.path}
-									</p>
-									{file.hunks && (
-										<FileDiff path={file.path} hunks={file.hunks} />
-									)}
-								</div>
-							))}
-						</div>
-					</Section>
-				)}
-				<Section title={`Failures (${data.failures.length})`}>
-					<ul className="panel divide-y divide-line">
-						{data.failures.map((f) => (
-							<li
-								key={f.id}
-								className="flex items-center gap-3 px-4 py-2.5 text-sm sm:px-5"
-							>
-								<span className="w-28 shrink-0 truncate">
-									<AgentTag name={f.agent} className="max-w-full" />
-								</span>
-								<span className="min-w-0 flex-1">
-									{"summary" in f ? (
-										<a href={runHref(f.run, { project })}>{f.summary}</a>
-									) : (
-										<span className="text-fg-2">{f.id}</span>
-									)}
-									{cameBack.has(f.id) && (
-										<span className="ml-2 text-xs text-warn">came back</span>
-									)}
-								</span>
-								{"url" in f && f.url && (
-									<a
-										href={f.url}
-										target="_blank"
-										rel="noreferrer"
-										className="shrink-0 text-xs text-fg-2"
-									>
-										GitHub
-									</a>
-								)}
-								<span className="tnum w-16 shrink-0 text-right text-xs text-fg-2">
-									{ago(f.at)}
-								</span>
-							</li>
-						))}
-					</ul>
-				</Section>
-			</div>
-		</>
+					last {last.state === "failed" ? "failed " : ""}
+					{ago(last.at)}
+				</a>
+			) : (
+				<span className="text-fg">never run yet</span>
+			)}
+		</p>
 	);
+}
+
+/** Where learning's latest batch stands, above the dashboard. */
+function RunNotice({
+	notice,
+	failure,
+	project,
+}: {
+	notice: LearningNotice | undefined;
+	failure: string | undefined;
+	project: string;
+}) {
+	const runLink = (id: string) => (
+		<a href={runHref(id, { project })} className="whitespace-nowrap">
+			See the run
+		</a>
+	);
+	const working = (
+		<Loader2 className="animate-spin text-accent-text" aria-hidden />
+	);
+	const failed = <CircleAlert className="text-bad" aria-hidden />;
+	if (failure)
+		return (
+			<NoticeBox tone="failed" icon={failed}>
+				{failure}
+			</NoticeBox>
+		);
+	switch (notice?.kind) {
+		case "asked":
+			return (
+				<NoticeBox tone="working" icon={working}>
+					Asked. Learning starts within a minute.
+				</NoticeBox>
+			);
+		case "queued":
+			return (
+				<NoticeBox tone="working" icon={working}>
+					Waiting for its turn: the engine runs a few agents at a time.{" "}
+					{runLink(notice.id)}
+				</NoticeBox>
+			);
+		case "running":
+			return (
+				<NoticeBox tone="working" icon={working}>
+					Learning is studying the new mistakes, for{" "}
+					<Elapsed since={notice.since} /> so far. {runLink(notice.id)}
+				</NoticeBox>
+			);
+		case "failed":
+			return (
+				<NoticeBox tone="failed" icon={failed}>
+					The last batch did not finish
+					{notice.reason ? `: ${notice.reason}` : ""}. {runLink(notice.id)}
+				</NoticeBox>
+			);
+		case "done":
+			return (
+				<NoticeBox tone="done" icon={<Check className="text-ok" aria-hidden />}>
+					{notice.pullRequest ? (
+						<>
+							The batch is done and proposed a rule:{" "}
+							<a href={notice.pullRequest} target="_blank" rel="noreferrer">
+								review its pull request
+							</a>
+							.
+						</>
+					) : (
+						"The batch is done: nothing new to propose this time."
+					)}{" "}
+					{runLink(notice.id)}
+				</NoticeBox>
+			);
+		default:
+			return null;
+	}
 }

@@ -243,6 +243,7 @@ it("keeps the order of the sections and their rows", () => {
 			"Default model",
 			"Time zone",
 			"Wiki",
+			"Learning",
 			"Signature",
 		],
 		[
@@ -333,6 +334,13 @@ it("says whether the engine keeps a wiki, and whether what it writes on GitHub i
 	).toBe(
 		"The engine keeps this map of the code up to date when you ask on the Wiki page, by pull request.",
 	);
+	expect(row(bare, "Learning")).toMatchObject({
+		key: "learning",
+		value: "Off",
+	});
+	expect(
+		row({ ...bare, learning: { schedule: "0 8 * * 1" } }, "Learning"),
+	).toMatchObject({ value: "Every Monday at 08:00" });
 	expect(row(bare, "Signature")).toEqual({
 		label: "Signature",
 		key: "signature",

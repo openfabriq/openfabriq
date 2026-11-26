@@ -4,14 +4,16 @@ import { join } from "node:path";
 import { type Automation, type Factory, loadFactory } from "@openfabriq/core";
 import { beforeEach, expect, it } from "vitest";
 import {
+	engineRun,
 	manualEvent,
 	manualRuns,
+	requestEngineRun,
 	requestRun,
 	takeRequests,
-	wikiRun,
 } from "../../src/engine/requests.js";
 import { readFactoryFolder } from "../../src/files.js";
 import { appendRun, type RunRecord } from "../../src/state/journal.js";
+import { writeApplied } from "../../src/state/projects.js";
 
 const ROOT = join(import.meta.dirname, "../../../..");
 const REPO = "acme/task-app";
@@ -143,9 +145,9 @@ it("runs the engine's wiki, which has no trigger on demand, on the whole reposit
 });
 
 it("says where the wiki's latest run stands, for the studio", () => {
-	expect(wikiRun(REPO)).toBeUndefined();
+	expect(engineRun(REPO, "wiki")).toBeUndefined();
 	requestRun(REPO, { ...request(), automation: "wiki" });
-	expect(wikiRun(REPO)).toEqual({ state: "asked" });
+	expect(engineRun(REPO, "wiki")).toEqual({ state: "asked" });
 	takeRequests(REPO);
 	const run: Omit<RunRecord, "status"> = {
 		id: "w1",
@@ -158,7 +160,7 @@ it("says where the wiki's latest run stands, for the studio", () => {
 		outputs: [],
 	};
 	appendRun({ ...run, status: "running", startedAt: "2026-11-06T10:01:00Z" });
-	expect(wikiRun(REPO)).toEqual({
+	expect(engineRun(REPO, "wiki")).toEqual({
 		state: "running",
 		id: "w1",
 		at: "2026-11-06T10:01:00Z",
@@ -177,10 +179,25 @@ it("says where the wiki's latest run stands, for the studio", () => {
 			},
 		],
 	});
-	expect(wikiRun(REPO)).toEqual({
+	expect(engineRun(REPO, "wiki")).toEqual({
 		state: "succeeded",
 		id: "w1",
 		at: "2026-11-06T10:09:00Z",
 		pullRequest: "https://github.com/acme/app/pull/7",
 	});
+});
+
+it("asks for a run of learning from the studio once, and only when the factory turns it on", () => {
+	expect(requestEngineRun(REPO, "learning")).toBe("off");
+	writeApplied(
+		REPO,
+		readFactoryFolder(join(ROOT, "fixtures/valid/learning/openfabriq")),
+	);
+	expect(requestEngineRun(REPO, "learning")).toBe("asked");
+	expect(engineRun(REPO, "learning")).toEqual({ state: "asked" });
+	// One at a time: a second click waits for the first.
+	expect(requestEngineRun(REPO, "learning")).toBe("busy");
+	expect(takeRequests(REPO).map((r) => [r.automation, r.by])).toEqual([
+		["learning", "studio"],
+	]);
 });

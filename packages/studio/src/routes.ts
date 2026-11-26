@@ -249,18 +249,20 @@ export type WriteRoute = (
 	res: ServerResponse,
 ) => Promise<void>;
 
-/** The routes that write, by "METHOD /path": the chat, its conversations, the wiki's button, the sign-in. */
+/** The routes that write, by "METHOD /path": the chat, its conversations, the wiki's and learning's buttons, the sign-in. */
 export function writeRoutes(handlers: {
 	/** Only with a password. */
 	login: WriteRoute | undefined;
 	chat: { post: WriteRoute; remove: WriteRoute };
 	refreshWiki: WriteRoute;
+	runLearning: WriteRoute;
 }): Record<string, WriteRoute> {
 	return {
 		...(handlers.login ? { "POST /login": handlers.login } : {}),
 		"POST /api/chat": handlers.chat.post,
 		"DELETE /api/chats/*": handlers.chat.remove,
 		"POST /api/wiki/refresh": handlers.refreshWiki,
+		"POST /api/learning/run": handlers.runLearning,
 	};
 }
 

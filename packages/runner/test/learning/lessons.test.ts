@@ -7,6 +7,7 @@ import { outsideLearning } from "../../src/learning/guard.js";
 import {
 	cameBack,
 	groupIntoLessons,
+	ignoredFailures,
 	importedFolders,
 	isImprovable,
 	type Lesson,
@@ -107,7 +108,42 @@ describe("lessons", () => {
 			expect(nextToImprove(grouped.lessons, targetProblem)?.id).toBe("L1");
 	});
 
-	it("refuse groupings that leave out a failure, take one twice, or aim beyond skills and agent.md", () => {
+	it("ignore the failures that teach nothing an instruction could fix: never proposed, never counted", () => {
+		const grouped = groupIntoLessons(
+			[],
+			[failure("r1:check"), failure("r2:check")],
+			[
+				{
+					cause: "the staging API was down",
+					ignore: true,
+					failures: ["r1:check", "r2:check"],
+				},
+			],
+			NOW,
+			// An ignored lesson names no file: none is checked.
+			() => "refused",
+		);
+		expect(grouped).toMatchObject({
+			changed: [
+				{
+					id: "L1",
+					status: "ignored",
+					rule: "",
+					target: "",
+					cause: "the staging API was down",
+				},
+			],
+		});
+		if (!("lessons" in grouped)) throw new Error("not grouped");
+		// Seen in two runs, yet learning proposes nothing.
+		expect(nextToImprove(grouped.lessons, targetProblem)).toBeUndefined();
+		expect([...ignoredFailures(grouped.lessons)]).toEqual([
+			"r1:check",
+			"r2:check",
+		]);
+	});
+
+	it("refuse groupings that leave out a failure, take one twice, or aim beyond skills, agent.md and automation.md", () => {
 		expect(
 			groupIntoLessons(
 				[],
@@ -129,7 +165,7 @@ describe("lessons", () => {
 				"r1:check is in two lessons",
 				"r9:check is not a failure of this batch",
 				"every failure needs a lesson: r2:check",
-				'"openfabriq/factory.yaml" is neither a Markdown file of a skill of the factory nor an agent.md: name one, like openfabriq/skills/<skill>/SKILL.md or openfabriq/agents/<agent>/agent.md',
+				'"openfabriq/factory.yaml" is neither a Markdown file of a skill of the factory, an agent.md, nor an automation.md: name one, like openfabriq/skills/<skill>/SKILL.md, openfabriq/agents/<agent>/agent.md or openfabriq/automations/<automation>/automation.md',
 				"L7 is not a lesson",
 			],
 		});
@@ -199,11 +235,16 @@ describe("lessons", () => {
 			],
 		});
 		// Merged, not applied yet: nothing came back.
-		expect(cameBack(promoted, ["2026-11-04T00:00:00Z"])).toEqual([]);
+		expect(cameBack(promoted, [{ at: "2026-11-04T00:00:00Z" }])).toEqual([]);
+		// The engine applying another lesson's rule alone does not apply this one.
+		expect(
+			cameBack(promoted, [{ at: "2026-11-06T00:00:00Z", lessons: ["L9"] }]),
+		).toEqual([]);
 		const applies = [
-			"2026-11-04T00:00:00Z",
-			"2026-11-06T00:00:00Z",
-			"2026-11-11T00:00:00Z",
+			{ at: "2026-11-04T00:00:00Z" },
+			{ at: "2026-11-06T00:00:00Z", lessons: ["L9"] },
+			{ at: "2026-11-06T12:00:00Z" },
+			{ at: "2026-11-11T00:00:00Z" },
 		];
 		expect(cameBack(promoted, applies).map((f) => f.id)).toEqual(["b", "c"]);
 		// An older lesson has only the batch that saw it merged.
@@ -275,7 +316,9 @@ describe("lessons", () => {
 		["openfabriq/qa/agents/tester/agent.md", true],
 		["openfabriq/skills/testing/run.sh", false],
 		["openfabriq/factory.yaml", false],
-		["openfabriq/automations/implement/automation.md", false],
+		["openfabriq/automations/implement/automation.md", true],
+		["openfabriq/qa/automations/test/automation.md", true],
+		["openfabriq/automations/implement/notes.md", false],
 		["openfabriq/skills/../factory.md", false],
 		["src/app.ts", false],
 	])("may change %s: %s", (path, ok) => {
@@ -322,6 +365,34 @@ describe("the guard of learning's pull requests", () => {
 		expect(
 			await outsideLearning(["openfabriq/skills/dates/reference.md"], withLock),
 		).toBeUndefined();
+	});
+
+	it("lets an automation's task change, never its triggers nor its outputs", async () => {
+		const automation = (header: string) =>
+			`---\n${header}\n---\nImplement the issue.\n`;
+		const path = ["openfabriq/automations/implement/automation.md"];
+		const task = automation(
+			"when: issue.opened\nagent: coder\ncan: [create_pull_request]",
+		);
+		expect(
+			await outsideLearning(
+				path,
+				versions(task, `${task}\nTag the release.\n`),
+			),
+		).toBeUndefined();
+		expect(
+			await outsideLearning(
+				path,
+				versions(
+					task,
+					automation(
+						"when: issue.opened\nagent: coder\ncan: [create_pull_request, merge_pull_request]",
+					),
+				),
+			),
+		).toContain(
+			"front matter of openfabriq/automations/implement/automation.md",
+		);
 	});
 
 	it("refuses another file, a changed front matter, a new agent.md, a removed file", async () => {

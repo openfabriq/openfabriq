@@ -33,9 +33,16 @@ it("keeps every apply, oldest first: learning counts from it what came back once
 		{ "factory.yaml": "name: G\n" },
 		new Date("2026-11-21T08:00:00Z"),
 	);
+	writeApplied(
+		"acme/app",
+		{ "factory.yaml": "name: G\n" },
+		new Date("2026-11-22T08:00:00Z"),
+		["L3"],
+	);
 	expect(readApplies("acme/app")).toEqual([
-		"2026-11-20T08:00:00.000Z",
-		"2026-11-21T08:00:00.000Z",
+		{ at: "2026-11-20T08:00:00.000Z" },
+		{ at: "2026-11-21T08:00:00.000Z" },
+		{ at: "2026-11-22T08:00:00.000Z", lessons: ["L3"] },
 	]);
 });
 

@@ -30,7 +30,7 @@ export interface CodeToJudge {
 
 /**
  * Why the agent's code cannot be published, if it cannot: a CI workflow changed, the wiki's agent
- * wrote outside the wiki, learning's beyond the text of skills and agent.md files, a conflict left
+ * wrote outside the wiki, learning's beyond the text of skills and the body of agent.md and automation.md files, a conflict left
  * unresolved, or a check of the factory that failed.
  */
 export async function judgeCode(
