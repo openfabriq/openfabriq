@@ -4,6 +4,10 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+
+- The studio shows a duration under half a second as "<1s" instead of "0s", so a run's log no longer reads as if nothing happened at each step.
+
 ## [0.2.0] - 2026-11-23
 
 ### Added
