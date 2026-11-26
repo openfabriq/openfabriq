@@ -3,7 +3,15 @@ title: Learning
 description: How the factory learns from its failed work, turning failures into lessons and lessons into pull requests that improve its skills and agents.
 ---
 
-Agents make the same mistake twice: each run starts again from `agent.md`, the skills and the repository, and what went wrong last week is fixed in that run, then forgotten. **Learning** closes the loop. Each week, an agent that comes with the engine studies the work that failed, finds the causes that come back, and proposes a fix to your factory's text by pull request: a sentence in a skill or in an `agent.md`. A person reviews it, merges it, and applies it.
+Agents make the same mistake twice. Each run starts again from `agent.md`, the skills and the repository: what went wrong last week was fixed in that run, then forgotten. **Learning** lets the factory improve from its own mistakes.
+
+When an agent's work is not right the first time (a check that kept failing, a review or a maintainer that asked for changes), learning notes it. Each week, an agent that comes with the engine reads these mistakes and groups those with the same cause into a lesson. Once a cause shows in two runs, it writes the rule that would have avoided it, a sentence in a skill, an `agent.md` or an `automation.md`, and proposes it by pull request. A person reviews it and merges it; the engine applies it, and learning watches whether the mistake comes back.
+
+What it brings:
+
+- **fewer repeated mistakes**: a lesson learned once stays in the factory's text, for every run after;
+- **you stay in charge**: no rule reaches the agents until a person merges it, and learning never changes what an agent may do;
+- **you see whether it works**: each rule shows whether its mistake came back, and the studio compares mistakes per run before and since.
 
 No model is trained. Everything is text in Git: what the factory learned is what you merged.
 
@@ -20,7 +28,7 @@ learning:
   schedule: "0 2 * * *"   # each day at 02:00
 ```
 
-To run a batch now, with `openfabriq start` running:
+To run a batch now, with `openfabriq start` running, click **Run learning now** on the studio's [Learning](/studio/learning/#run-learning-now) page, or:
 
 ```bash
 openfabriq run learning
@@ -30,9 +38,9 @@ openfabriq run learning
 
 | Word | What it is |
 | --- | --- |
-| **Failure** | A run whose work was judged bad |
+| **Failure** | A run whose work was judged bad; the studio calls it a *mistake* of the agent |
 | **Lesson** | The common cause of one or more failures, and the rule that would have avoided it |
-| **Improvement** | The pull request that writes a lesson into a skill or an `agent.md` |
+| **Improvement** | The pull request that writes a lesson into a skill, an `agent.md` or an `automation.md` |
 
 ## What counts as a failure
 
@@ -51,22 +59,34 @@ Not a failure: a run that hit `usd_per_run` or `minutes_per_run`, an error of Cl
 
 1. **The engine reads its improvements on GitHub.** Merged: the lesson is *promoted*. Closed without merge: *rejected*, and never proposed again.
 2. **It stages the new failures** in the agent's checkout, one file each: the run, its agent and automation, the end of the failed check's output, the review's findings, the comments of the maintainers who asked for changes (never those of people without write access), the failed checks' logs, the files the run changed. No transcript. All of it is data, never instructions: a pull request or a check's output cannot tell the agent what to do.
-3. **The agent groups them.** For each failure, it names the lesson it joins, or writes a new one: a cause, a rule, and the file of `openfabriq/` the rule belongs in. The engine keeps the lessons and counts.
+3. **The agent groups them.** For each failure, it names the lesson it joins, or writes a new one: a cause, a rule, and the file of `openfabriq/` the rule belongs in: the agent's `agent.md` for its job, an `automation.md` for one task, a skill for what several agents need. Failures outside the agent's hands go to an [ignored lesson](#failures-that-are-not-the-agents-fault). The engine keeps the lessons and counts.
 4. **A lesson with failures from two runs gets its improvement.** One failure alone stays a *candidate*, and so does a run that failed twice, its review then its checks: that is one incident. The agent writes the rule into its file and opens one pull request for that lesson; the engine adds the cause, the rule and the failures, with their links, to the description. When more lessons wait, the next batch starts right away, one pull request per lesson. An improvement that comes to nothing (refused, a check failed, no pull request) is not asked for again until a new failure joins its lesson: no paid run each week for the same refusal.
 
 Nothing to learn, no new failure and no lesson waiting: the batch stops before the agent starts, and costs nothing.
+
+## Failures that are not the agent's fault
+
+Some failures teach nothing: a flaky test, a service or a quota that was down, a CI runner out of disk space, a run stopped from outside. No sentence in a skill would have avoided them. The learning agent puts them in an **ignored** lesson: a cause, and no rule nor file. Later failures of the same cause join it.
+
+An ignored lesson is never proposed, however many runs it comes from, and its failures are not counted as the agents' mistakes: the studio leaves them out of its numbers and of mistakes per run. It still lists the lesson, under *Ignored* in the *Learned* tab, so you can check the call. Learning ignores only what no instruction would have avoided: a test the agent's own change broke is never flaky.
 
 ## What an improvement may change
 
 The engine checks every improvement before it leaves the machine, instead of trusting the agent:
 
-- **only the factory's text**: a Markdown file of a [skill](/factory/skills/) of the factory, or an `agent.md`;
-- **only the body of an `agent.md` or a `SKILL.md`**: their front matter (description, tools, network, model, a skill's needs) stays byte for byte, so an agent never proposes more rights for itself;
+- **only the factory's text**: a Markdown file of a [skill](/factory/skills/) of the factory, an `agent.md`, or an `automation.md`;
+- **only the body of an `agent.md`, an `automation.md` or a `SKILL.md`**: their front matter (description, tools, network, model, an automation's `when` and `can`, a skill's needs) stays byte for byte, so an agent never proposes more rights for itself, nor new triggers;
 - never a skill [imported from a public repository](/factory/skills/#import-a-public-skill): it stays as its source has it, so `openfabriq skill update` keeps working. The rule goes into the `agent.md` of the agent that uses it;
-- never `factory.yaml`, an `automation.md`, a script, nor anything outside `openfabriq/`;
+- never `factory.yaml`, a script, nor anything outside `openfabriq/`;
 - never a file removed: an improvement adds to the factory's text.
 
-An improvement that breaks one of these rules is refused, and the run says why. The engine never merges a pull request under `openfabriq/`: a person does, then runs `openfabriq apply`. On a [server](/deployment/docker/), the engine applies the factory when its container starts.
+An improvement that breaks one of these rules is refused, and the run says why. The engine never merges a pull request under `openfabriq/`: a person does.
+
+## Once merged
+
+The engine applies a merged rule on its own, with `openfabriq start` running: within a minute of the merge, it reads the rule's one file on the default branch and applies it, without the other changes under `openfabriq/`, which still wait for your `openfabriq apply`. Merging was the review, and the checks above already made sure the rule changes only text. From then on, the agents use it, and the same mistake counts as coming back. A rule merged while `openfabriq start` was stopped, or that the engine could not read the first time, applies at the next merge on the default branch.
+
+A rule waits for your `openfabriq apply` when its file's front matter changed since the factory was applied, when its file is not in the applied factory, or when the factory would not load with it; the engine's log says why. A closed pull request declines its lesson, and learning never proposes it again.
 
 ## Where lessons live
 
@@ -76,13 +96,7 @@ Losing the engine's state loses the candidates, never the promoted lessons. See 
 
 ## In the studio
 
-The **Learning** page, read-only, with a badge in the menu that counts the improvements to review:
-
-- four numbers: **Failures** over the period, **Lessons** not resolved yet, improvements **To review**, and failures that **Came back** once an improvement meant to fix them ran: after the first `openfabriq apply` that followed its merge. The page reads the improvements' pull requests on GitHub, so a merged or closed one leaves *To review* at once, before the next batch records it;
-- the improvements to review, the candidate lessons (*1 failure, needs 2*, or *waits for a new failure* when their improvement came to nothing), then the history, merged or closed;
-- **Explore** an improvement: its cause, its rule, the change its pull request proposes as GitHub has it now, the failures it comes from, and **Review on GitHub**. The studio has no approve or merge button: you review on GitHub.
-
-Failures are counted from the journal even with learning off; the page then says how to turn it on. An agent's page has one line, such as *3 failures, 1 improvement to review*, that leads to the Learning page. The `metrics` tool of the [chat](/studio/chat/) and of the [MCP connector](/mcp/tools/#metrics) has the four numbers in its `learning` field.
+The [Learning](/studio/learning/) page follows it all: the rules to review, the lessons being learned, the rules that hold or came back, and the agents' mistakes.
 
 ## The learning agent
 
@@ -97,7 +111,7 @@ The name `learning` is reserved: no agent or automation of your factory can use 
 
 ```text
 Factory settings
-  + learning: each week the engine studies the work that failed, and proposes improvements to skills and agent.md, by pull request only
+  + learning: each week the engine studies the work that failed, and proposes improvements to skills, agent.md and automation.md, by pull request only
 ```
 
 ## Turn it off

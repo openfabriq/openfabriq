@@ -1,0 +1,25 @@
+---
+title: Learning
+description: Follow what the factory learns from its mistakes, review the rules it proposes, and see whether they hold.
+---
+
+The Learning page shows what [learning](/factory/learning/) does with the agents' mistakes: the rules it proposes, those you merged, and whether the mistakes stopped. You review and merge each rule on GitHub: the studio has no approve or merge button. A badge in the menu counts the rules waiting for you.
+
+![The Learning page: the line on mistakes per run, four cards, and the rule waiting for review.](/screenshots/studio/learning.png)
+
+One line sits above the cards. On the left, once a learned rule has applied, it shows **mistakes per run** before and since. On the right, it shows when learning runs, its next batch, and how long ago the last one ran; click that to open its run. The comparison waits until 20 runs have finished on each side, and shows a rise as plainly as a fall. Four cards follow, each with an info mark that says what it counts, and each opening its tab:
+
+- **To review**: the rules learning proposed, each in a pull request. Once you merge one, the engine applies it.
+- **Being learned**: the lessons not seen in enough runs yet.
+- **Learned**: the rules merged, those that hold, those whose mistake came back, and any the engine could not apply on its own; declined and [ignored](/factory/learning/#failures-that-are-not-the-agents-fault) lessons are listed in the tab, not counted.
+- **Agent mistakes**: the last 30 days, by kind, each linked to its run and to the lesson it went into.
+
+## Run learning now
+
+**Run learning now** asks the engine for a batch, like `openfabriq run learning`, without waiting for its schedule. A batch uses Claude, so the studio first says what it does and that it stops at the factory's limit per run; Cancel has the focus. While the batch is asked, waits or works, the button stays off and a note says where it is, with a link to its run. With no new mistake and no rule waiting, the batch stops before the agent starts and costs nothing. The button shows when learning is on.
+
+## A lesson
+
+![A lesson's page: its rule, where it stands, why, the change its pull request proposes, the mistakes it comes from, and its history.](/screenshots/studio/lesson.png)
+
+A lesson's page says where it stands in a word and a sentence, whom the rule is for and the file it goes into, why (the cause, and the runs it was seen in), the change its pull request proposes, the mistakes it comes from, and its history. **Review on GitHub** opens the pull request.

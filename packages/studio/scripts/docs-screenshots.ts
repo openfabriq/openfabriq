@@ -29,6 +29,8 @@ const pages: Record<string, [string, string?]> = {
 	settings: [`#/settings?${p}`],
 	"settings-connections": [`#/settings?${p}&tab=connections`],
 	wiki: [`#/wiki?${p}&page=how-it-fits-together.md`],
+	learning: [`#/learning?${p}`],
+	lesson: [`#/learning/L2?${p}`],
 };
 // Only the screenshots named on the command line, when some are: `docs-screenshots wiki wiki-search`.
 const only = process.argv.slice(2);
