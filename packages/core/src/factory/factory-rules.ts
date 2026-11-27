@@ -1,5 +1,5 @@
 import { SIGNATURES } from "../vocabulary.js";
-import { isOneOf, unknownWord } from "../words.js";
+import { isOneOf, suggested, unknownWord } from "../words.js";
 import { changesLoading, isEngineVariable } from "./env.js";
 import type { FactoryShape, Parsed } from "./schema.js";
 
@@ -18,7 +18,13 @@ export function factoryProblems(fields: Parsed<typeof FactoryShape>): string[] {
 	// checks name commands; they never repeat one.
 	for (const name of fields.checks ?? [])
 		if (!Object.hasOwn(fields.commands ?? {}, name))
-			problems.push(`checks lists "${name}", which is not in commands`);
+			problems.push(
+				suggested(
+					`checks lists "${name}", which is not in commands.`,
+					name,
+					Object.keys(fields.commands ?? {}),
+				),
+			);
 	// A factory never hands the engine's tokens back to its commands.
 	for (const name of Object.keys(fields.env ?? {}))
 		if (isEngineVariable(name))

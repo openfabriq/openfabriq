@@ -847,7 +847,25 @@ describe("the harness: commands and checks", () => {
 					"factory.yaml": `${FACTORY}commands:\n  test: npm test\nchecks: [test, build]\n`,
 				}),
 			),
-		).toEqual(['factory.yaml: checks lists "build", which is not in commands']);
+		).toEqual([
+			'factory.yaml: checks lists "build", which is not in commands. Use one of: test',
+		]);
+		expect(
+			messages(
+				minimal("when: issue.opened\nagent: worker", {
+					"factory.yaml": `${FACTORY}commands:\n  test: npm test\nchecks: [tset]\n`,
+				}),
+			),
+		).toEqual([
+			'factory.yaml: checks lists "tset", which is not in commands. Did you mean "test"?',
+		]);
+		expect(
+			messages(
+				minimal("when: issue.opened\nagent: worker", {
+					"factory.yaml": `${FACTORY}checks: [test]\n`,
+				}),
+			),
+		).toEqual(['factory.yaml: checks lists "test", which is not in commands.']);
 		expect(
 			messages(
 				minimal("when: issue.opened\nagent: worker", {

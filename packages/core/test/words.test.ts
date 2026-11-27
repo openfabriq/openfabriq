@@ -79,4 +79,11 @@ describe("suggested", () => {
 		expect(suggested("No.", "ab", ["xy"])).toBe("No. Use one of: xy");
 		expect(suggested("No.", "a", ["b"])).toBe('No. Did you mean "b"?');
 	});
+
+	it("counts two swapped letters as one mistake", () => {
+		expect(suggested("No.", "tset", ["test"])).toBe('No. Did you mean "test"?');
+		expect(suggested("No.", "ab", ["ba"])).toBe('No. Did you mean "ba"?');
+		// Two swaps are two mistakes: too many for 4 letters.
+		expect(suggested("No.", "etts", ["test"])).toBe("No. Use one of: test");
+	});
 });
