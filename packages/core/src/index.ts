@@ -129,4 +129,4 @@ export {
 	TOOLS,
 	type Tool,
 } from "./vocabulary.js";
-export { sentenceList } from "./words.js";
+export { sentenceList, unknownWord } from "./words.js";

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { unknownWord } from "@openfabriq/core";
 import { errorText, exec, gh, localGit } from "@openfabriq/runner";
 import { type CommandLine, readCommandLine, reportsHowItWent } from "./args.js";
 import {
@@ -72,6 +73,25 @@ Commands:
   --version, -v            print the installed version
 
 [folder] is a repository root or its openfabriq/ folder (default: current folder).`;
+
+/** The commands of the usage, in its order, to suggest one for a mistyped command. */
+const COMMANDS = [
+	"init",
+	"validate",
+	"doctor",
+	"plan",
+	"apply",
+	"start",
+	"run",
+	"status",
+	"mcp",
+	"connect",
+	"deploy",
+	"skill",
+	"secret",
+	"update",
+	"help",
+];
 
 async function main(line: CommandLine): Promise<CommandResult> {
 	const { command, dir, positionals, values } = line;
@@ -179,7 +199,12 @@ async function main(line: CommandLine): Promise<CommandResult> {
 				{ ask: terminalAsk, env: process.env },
 			);
 		default:
-			return { code: command ? 1 : 0, output: USAGE };
+			return command
+				? {
+						code: 1,
+						output: `${unknownWord("command", command, COMMANDS)}\n\n${USAGE}`,
+					}
+				: { code: 0, output: USAGE };
 	}
 }
 
@@ -196,7 +221,10 @@ async function main(line: CommandLine): Promise<CommandResult> {
 				? result.output
 				: result.output === USAGE
 					? paintUsage(USAGE)
-					: outcome(result, reportsHowItWent(command)),
+					: result.output.endsWith(`\n\n${USAGE}`)
+						? // An unknown command: its line led by ✗, then the usage as without a command.
+							`${outcome({ ...result, output: result.output.slice(0, -USAGE.length).trim() }, true)}\n\n${paintUsage(USAGE)}`
+						: outcome(result, reportsHowItWent(command)),
 		);
 		process.exitCode = result.code;
 	},

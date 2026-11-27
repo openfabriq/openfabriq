@@ -58,3 +58,27 @@ it.skipIf(!built)(
 	// Four starts of the CLI: well past Vitest's 5 s on a loaded machine.
 	60_000,
 );
+
+it.skipIf(!built)(
+	"an unknown command says so, suggests the closest one, then prints the usage and exits 1 (skipped until pnpm build makes packages/cli/dist)",
+	() => {
+		const result = openfabriq("valdiate");
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(
+			/^unknown command "valdiate"\. Did you mean "validate"\?\n\nUsage: openfabriq/,
+		);
+	},
+	60_000,
+);
+
+it.skipIf(!built)(
+	"an unknown command far from any lists the commands, then prints the usage (skipped until pnpm build makes packages/cli/dist)",
+	() => {
+		const result = openfabriq("xyzzyplugh");
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(
+			/^unknown command "xyzzyplugh"\. Use one of: init, validate, .*\n\nUsage: openfabriq/,
+		);
+	},
+	60_000,
+);
