@@ -23,7 +23,7 @@
 		"@openfabriq/core": "workspace:*",
 		"@openfabriq/runner": "workspace:*",
 		"@tanstack/react-query": "5.107.1",
-		"@xyflow/react": "^12.12.1",
+		"@xyflow/react": "^13.0.2",
 		"lucide-react": "1.72.0",
 		"mermaid": "12.3.0",
 		"react": "^19.3.1",
