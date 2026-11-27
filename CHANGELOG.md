@@ -11,6 +11,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 ### Changed
 
 - The studio shows relative times as `5m ago`, `3h ago` and `2d ago`.
+- A mistyped command now gets a line saying it is unknown, with the closest command suggested, before the list of commands.
 
 ### Fixed
 
