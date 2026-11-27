@@ -11,9 +11,11 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 ### Changed
 
 - The studio shows relative times as `5m ago`, `3h ago` and `2d ago`.
+- A mistyped command, as in `openfabriq valdiate`, now starts with `unknown command "valdiate". Did you mean "validate"?` before the usage. The exit code is still 1.
 
 ### Fixed
 
+- A typo under `limits` in `factory.yaml` is reported as `limits: unknown key "usd_per_runs". Did you mean "usd_per_run"?`, like the other keys, instead of a raw `Unrecognized key` message.
 - The studio shows a duration under half a second as "<1s" instead of "0s", so a run's log no longer reads as if nothing happened at each step.
 
 ## [0.2.0] - 2026-11-23
