@@ -12,6 +12,7 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 - The studio shows relative times as `5m ago`, `3h ago` and `2d ago`.
 - A mistyped command, as in `openfabriq valdiate`, now starts with `unknown command "valdiate". Did you mean "validate"?` before the usage. The exit code is still 1.
+- `validate` suggests the closest name when `checks` lists a command that does not exist. Suggestions also catch two swapped letters, such as `tset` for `test`.
 
 ### Fixed
 
