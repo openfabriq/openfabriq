@@ -16,7 +16,9 @@ export function isOneOf<T extends string>(
 	return (list as readonly string[]).includes(word);
 }
 
+/** Letters to add, remove or change, or neighbours to swap, to turn a into b: "tset" is one from "test". */
 function distance(a: string, b: string): number {
+	let beforePrevious: number[] = [];
 	let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
 	for (let i = 1; i <= a.length; i++) {
 		const current = [i];
@@ -26,7 +28,13 @@ function distance(a: string, b: string): number {
 				(current[j - 1] ?? 0) + 1,
 				(previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
 			);
+			if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+				current[j] = Math.min(
+					current[j] ?? 0,
+					(beforePrevious[j - 2] ?? 0) + 1,
+				);
 		}
+		beforePrevious = previous;
 		previous = current;
 	}
 	return previous[b.length] ?? 0;
