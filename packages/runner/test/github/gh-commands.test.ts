@@ -256,7 +256,7 @@ describe("reads", () => {
 				"-R",
 				"acme/app",
 				"--json",
-				"number,title,body,author,labels,comments,state,url,reviews,headRefName,baseRefName,headRepositoryOwner,isCrossRepository,closingIssuesReferences,files,statusCheckRollup,headRefOid,changedFiles,mergeStateStatus",
+				"number,title,body,author,labels,comments,state,url,reviews,headRefName,baseRefName,headRepositoryOwner,isCrossRepository,closingIssuesReferences,files,statusCheckRollup,headRefOid,changedFiles,mergeStateStatus,mergedAt,mergeCommit",
 			],
 		]);
 	});

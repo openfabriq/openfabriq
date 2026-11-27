@@ -1,0 +1,48 @@
+---
+title: Back up the engine
+description: What the engine keeps in its data folder, what rebuilds itself, and what to back up on a server.
+---
+
+Your factory is safe in Git: the `openfabriq/` folder of your repository, and every improvement [learning](/factory/learning/) proposed and a person merged. The engine keeps the rest in its data folder, `~/.openfabriq` (or [`OPENFABRIQ_HOME`](/reference/environment/#the-data-folder)); with [Docker](/deployment/docker/), the `engine-data` volume. This page says what it holds, and what you lose if it goes.
+
+## What to back up
+
+| Path | What it is | Lost without a backup |
+| --- | --- | --- |
+| `secrets.json` | The tokens of `openfabriq connect` and the GitHub App's key | Every connection: run `openfabriq connect` again |
+| `secrets/` | The values of `openfabriq secret set` | The factory's secrets: set them again |
+| `projects/<owner>/<repo>/runs.jsonl`, `runs/` | The journal of runs, with each run's prompt, commands, reviews, changed files and transcript | The history of the studio, its numbers, and the failures learning has not studied yet |
+| `projects/<owner>/<repo>/lessons.jsonl` | Learning's lessons | The candidate lessons; the promoted ones are in your factory already |
+| `projects/<owner>/<repo>/applies.jsonl` | When the factory was applied | When learning's merged improvements started to run: *Came back* counts from the next apply |
+| `projects/<owner>/<repo>/chats/`, `chats.jsonl` | The studio's conversations | The conversations |
+| `mcp-grants.json` | The clients you connected to the studio's MCP connector | Connect Claude again |
+
+These are small: text, a few megabytes for most projects. Encrypt the copy: `secrets.json` and `secrets/` hold credentials, and runs hold what your issues and pull requests say.
+
+## What rebuilds itself
+
+| Path | What it is | How it comes back |
+| --- | --- | --- |
+| `projects/<owner>/<repo>/factory/`, `state.json` | The applied factory | `openfabriq apply` again; in Docker, the container applies at start |
+| `projects/<owner>/<repo>/repo/`, `worktrees/`, `cache/`, `trash/` | The engine's clone, the runs' checkouts, the package caches | Cloned and filled again by the next runs |
+| `projects/<owner>/<repo>/queue.json`, `requests/` | Runs waiting, manual runs asked | Lost, as during a stop: ask again with `openfabriq run` |
+| `projects/<owner>/<repo>/cursor.json`, `schedule-cursor.json`, `merges.json` | How far the engine read GitHub, the schedules, its own merges | A new start counts only what happens from then on: events while the engine was gone start nothing |
+| `relay-handled.json` | The relay's events already handled | Rebuilt as events come |
+| `viewer-token`, `engine.pid` | The studio's local token, the running engine | Written again at the next start |
+
+The clone, the checkouts and the caches are most of the folder's size. Leave them out of the backup; the engine makes them again.
+
+## How
+
+Stop the engine first, or copy while it runs and accept that the last line of a journal may be cut: the engine skips a broken last line when it reads one. On a laptop, a copy of the files above with your usual backup tool is enough. With Docker, copy them out of the volume:
+
+```bash
+docker compose stop engine
+docker run --rm -v openfabriq_engine-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/openfabriq-engine.tgz \
+  --exclude='*/repo' --exclude='*/worktrees' --exclude='*/cache' --exclude='*/trash' \
+  -C /data .
+docker compose start engine
+```
+
+The volume's name starts with the folder of your `docker-compose.yml`: `docker volume ls` lists it. To restore, stop the engine, extract the archive into the volume, and start it again.

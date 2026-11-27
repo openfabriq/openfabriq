@@ -37,7 +37,7 @@ export interface Agent {
 	mcp?: Record<string, string[]>;
 	/** What its shell, web tool, commands and checks reach; the factory's when absent. */
 	network?: Network;
-	/** Provided by the engine, not written in openfabriq/: the wiki's agent. */
+	/** Provided by the engine, not written in openfabriq/: the wiki's and learning's agents. */
 	builtIn?: true;
 }
 
@@ -48,6 +48,12 @@ export interface Wiki {
 	refresh: "manual" | "after_merge";
 	/** openfabriq/wiki.md: the pages the maintainers add to the default plan. */
 	pages?: string;
+}
+
+/** Learning: the engine's own agent studies the work that failed, on a schedule. */
+export interface Learning {
+	/** A cron, in the factory's time zone. */
+	schedule: string;
 }
 
 /** A server of the factory: remote, with a bearer secret, or run on this machine with its secrets. */
@@ -141,6 +147,8 @@ export interface Factory {
 	mcp?: Record<string, McpServer>;
 	/** Absent when factory.yaml says `wiki: false`. */
 	wiki?: Wiki;
+	/** Absent unless factory.yaml turns learning on. */
+	learning?: Learning;
 	/** `false`: what the factory writes on GitHub leaves out the line saying openfabriq wrote it. */
 	signature?: false;
 	/** `false`: the engine no longer answers mentions of @openfabriq on the pull requests its agents opened. */

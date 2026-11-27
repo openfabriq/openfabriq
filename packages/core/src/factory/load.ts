@@ -4,6 +4,7 @@ import { agentProblems, parseTools } from "./agent-rules.js";
 import { answerMentionsNameClashes } from "./answer-mentions.js";
 import { automationProblems } from "./automation-rules.js";
 import { parseCan } from "./can.js";
+import { LEARNING, reservedNameClashes, WIKI } from "./engine-names.js";
 import { factoryProblems } from "./factory-rules.js";
 import {
 	duplicateNames,
@@ -19,6 +20,7 @@ import {
 	splitFrontMatter,
 } from "./files.js";
 import { importedSkillsProblems } from "./imported.js";
+import { readLearning } from "./learning.js";
 import {
 	AgentShape,
 	AutomationShape,
@@ -37,7 +39,7 @@ import type {
 	Problem,
 } from "./types.js";
 import { parseWhen } from "./when.js";
-import { readWiki, wikiNameClashes } from "./wiki.js";
+import { readWiki } from "./wiki.js";
 
 type Fields = Parsed<typeof FactoryShape>;
 /** A problem of one file, before loadFactory says whether it is an error or a warning. */
@@ -80,7 +82,14 @@ export function loadFactory(files: FactoryFiles): {
 			message:
 				"the wiki is off, so this file is not read: add wiki: true to factory.yaml to turn it on",
 		});
-	errors.push(...wikiNameClashes(layout));
+	const { learning, problems: learningProblems } = readLearning(
+		fields.learning,
+	);
+	errors.push(
+		...inFile("factory.yaml", learningProblems),
+		...reservedNameClashes(layout, WIKI),
+		...reservedNameClashes(layout, LEARNING),
+	);
 
 	const agentFiles = [...layout.agentFiles].sort();
 	const agents: Record<string, Agent> = {};
@@ -144,7 +153,7 @@ export function loadFactory(files: FactoryFiles): {
 	];
 	const factory =
 		errors.length === 0
-			? toFactory(fields, { wiki, layout, agents, automations })
+			? toFactory(fields, { wiki, learning, layout, agents, automations })
 			: undefined;
 	return factory ? { factory, problems } : { problems };
 }

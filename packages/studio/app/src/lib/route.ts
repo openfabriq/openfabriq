@@ -58,6 +58,14 @@ export const overviewHref = (to: {
 export const wikiHref = (to: { project: Param; page?: Param; find?: Param }) =>
 	`#/wiki${query({ project: to.project, page: to.page, find: to.find })}`;
 
+/** The Learning page on one of its tabs, or one lesson: `#/learning/<id>?project=…`. */
+export const learningHref = (to: {
+	project: Param;
+	lesson?: Param;
+	tab?: Param;
+}) =>
+	`#/learning${to.lesson ? `/${encodeURIComponent(to.lesson)}` : ""}${query({ project: to.project, tab: to.tab })}`;
+
 /** The page of the menu a page belongs to: a run's page is under Runs. */
 export const menuPageOf = (page: string) => (page === "run" ? "runs" : page);
 
@@ -83,14 +91,23 @@ export function projectSwitchHref(
 	return `#/${menuPageOf(page)}${query({ project, ...kept })}`;
 }
 
+/** The pages that need the list of projects to show. */
+const PAGES_NEEDING_PROJECTS = [
+	"agents",
+	"chat",
+	"workflow",
+	"wiki",
+	"learning",
+	"settings",
+];
+
 /** Whether a page waits for the list of projects before it shows: those that need it, and any without a project. */
 export const waitsForProjects = (
 	page: string,
 	projects: string[] | undefined,
 	project: string | undefined,
 ) =>
-	(!projects &&
-		["agents", "chat", "workflow", "wiki", "settings"].includes(page)) ||
+	(!projects && PAGES_NEEDING_PROJECTS.includes(page)) ||
 	(!project && !projects);
 
 /** What the breadcrumb names after the page: the run or agent open, or the overview's view. */
@@ -99,7 +116,8 @@ export function crumbDetail(
 	params: URLSearchParams,
 ): string | undefined {
 	const page = path[0] ?? "overview";
-	if (page === "run" || page === "agents") return path[1];
+	if (page === "run" || page === "agents" || page === "learning")
+		return path[1];
 	if (page === "overview")
 		return params.get("view") === "cost" ? "Cost and return" : "Productivity";
 	return undefined;

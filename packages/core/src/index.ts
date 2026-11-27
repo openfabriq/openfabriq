@@ -7,11 +7,18 @@ export {
 	answerMentionsName,
 	withAnswerMentions,
 } from "./factory/answer-mentions.js";
+export {
+	isEngineAgent,
+	isEngineName,
+	LEARNING,
+	WIKI,
+} from "./factory/engine-names.js";
 export { isEngineVariable, looksSecret, secretNames } from "./factory/env.js";
 export {
 	areasOf,
 	frontMatterField,
 	grantsTools,
+	rawFrontMatter,
 	resourceFolder,
 	scanLayout,
 	splitArea,
@@ -30,6 +37,13 @@ export {
 	skillPlace,
 	withDeclaredSkill,
 } from "./factory/imported.js";
+export {
+	DEFAULT_LEARNING,
+	LEARNING_FOLDER,
+	LESSON_THRESHOLD,
+	learningText,
+	withLearning,
+} from "./factory/learning.js";
 export { loadFactory } from "./factory/load.js";
 export { machineNeeds } from "./factory/needs.js";
 export {
@@ -49,6 +63,7 @@ export type {
 	DeclaredSkill,
 	Factory,
 	FactoryFiles,
+	Learning,
 	Limits,
 	McpServer,
 	MergeConditions,
@@ -57,7 +72,7 @@ export type {
 	Trigger,
 	Wiki,
 } from "./factory/types.js";
-export { WIKI, withWiki } from "./factory/wiki.js";
+export { withWiki } from "./factory/wiki.js";
 export {
 	agentOrder,
 	type WorkflowEdge,

@@ -56,7 +56,7 @@ Run `plan` on a pull request that changes `openfabriq/`, to review the **effects
 
 ## apply
 
-`apply` shows the plan and asks for confirmation (`--yes` skips it). When `factory.yaml` names another repository than the checkout's `origin`, the plan says so, and `--yes` refuses it unless `--project` gives the repository. It then creates the missing labels on GitHub, and copies `openfabriq/` to `~/.openfabriq/projects/<owner>/<repo>/factory/`. That copy is what runs.
+`apply` shows the plan and asks for confirmation (`--yes` skips it). When `factory.yaml` names another repository than the checkout's `origin`, the plan says so, and `--yes` refuses it unless `--project` gives the repository. It then creates the missing labels on GitHub, and copies `openfabriq/` to `~/.openfabriq/projects/<owner>/<repo>/factory/`. That copy is what runs. One exception: with [learning](/factory/learning/#once-merged) on, once a person merges one of its rules, the engine applies that rule on its own, and nothing else.
 
 `apply` warns you when you are not on the default branch, or when `openfabriq/` has uncommitted changes: apply what is merged.
 

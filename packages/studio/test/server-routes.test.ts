@@ -116,6 +116,10 @@ beforeAll(async () => {
 	const app = temp("openfabriq-app-");
 	writeFileSync(join(app, "index.html"), "<!doctype html><title>app</title>");
 	server = startStudio(0, app, {
+		pullDiff: async (_repo, number) =>
+			number === 12
+				? "diff --git a/x.md b/x.md\n--- a/x.md\n+++ b/x.md\n@@ -1 +1,2 @@\n x\n+Run the tests.\n"
+				: undefined,
 		subjectState: async (url) => {
 			asked.push(url);
 			if (url === ISSUE) return { merged: false, open: true };
@@ -451,6 +455,8 @@ it("answers every route, method and odd path as it always did", async () => {
 		["POST", "/api/chat", { signedIn: false }],
 		["POST", "/api/wiki/refresh"],
 		["POST", "/api/wiki/refresh", { type: "application/json" }],
+		["POST", "/api/learning/run"],
+		["POST", "/api/learning/run", { type: "application/json" }],
 		["DELETE", `/api/chats?${p}`],
 		["DELETE", `/api/chats/?${p}`],
 		["DELETE", `/api/chats/nothing?${p}`],
@@ -501,10 +507,84 @@ it("answers every route, method and odd path as it always did", async () => {
 		POST /api/chat | 401 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Open the studio from the address that \\"openfabriq start\\" printed, the one with ?token=."}
 		POST /api/wiki/refresh | 415 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Send { project } as application/json."}
 		POST /api/wiki/refresh | 400 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Expected JSON { project }."}
+		POST /api/learning/run | 415 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Send { project } as application/json."}
+		POST /api/learning/run | 400 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"Expected JSON { project }."}
 		DELETE /api/chats?project=acme%2Ftask-app | 405 | text/plain | no-store | DENY, frame-ancestors 'none', noindex, nofollow | Read only.
 		DELETE /api/chats/?project=acme%2Ftask-app | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No such conversation."}
 		DELETE /api/chats/nothing?project=acme%2Ftask-app | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No such conversation."}
 		DELETE /api/chats/a/b?project=acme%2Ftask-app | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No such conversation."}
 		DELETE /api/chats/nothing?project=someone/else | 404 | application/json | no-store | DENY, frame-ancestors 'none', noindex, nofollow | {"error":"No project someone/else."}"
 	`);
+});
+
+it("serves learning: its numbers, its lessons and one lesson's improvement, read-only", async () => {
+	appendRun(
+		run({
+			id: "run-check",
+			number: 9,
+			url: ISSUE,
+			status: "failed",
+			reason: 'the check "test" failed (npm test)',
+			endedAt: "2026-11-02T10:05:00.000Z",
+		}),
+	);
+	const lesson = {
+		id: "L1",
+		cause: "tests are not run",
+		rule: "Run the tests before you finish.",
+		target: "openfabriq/agents/implementer/agent.md",
+		status: "proposed",
+		failures: [
+			{
+				id: "run-check:check",
+				agent: "implementer",
+				at: "2026-11-02T10:05:00.000Z",
+			},
+			{ id: "old:check", agent: "implementer", at: "2026-10-01T00:00:00.000Z" },
+		],
+		improvement: {
+			url: `${PR.slice(0, -1)}12`,
+			number: 12,
+			run: "run-l",
+			at: "2026-11-03T00:00:00.000Z",
+		},
+		createdAt: "2026-11-02T00:00:00.000Z",
+		updatedAt: "2026-11-03T00:00:00.000Z",
+	};
+	write(join(projectDir(REPO), "lessons.jsonl"), `${JSON.stringify(lesson)}\n`);
+	const p = `project=${encodeURIComponent(REPO)}`;
+	const { status, body } = await json(`/api/learning?${p}&period=all`);
+	expect(status).toBe(200);
+	expect(body.learning).toBeUndefined();
+	// 02-sdlc's fixture reworks a pull request on requested changes, not on failed checks.
+	expect(body.unheard).toEqual(["pull_request.checks_failed"]);
+	// GitHub says the improvement is merged: the page shows it so before the next batch records it.
+	expect(body.numbers).toEqual({
+		failures: 1,
+		lessons: 0,
+		toReview: 0,
+		cameBack: 0,
+	});
+	expect(
+		body.history.map((l: { id: string; status: string }) => [l.id, l.status]),
+	).toEqual([["L1", "promoted"]]);
+	expect(body.byAgent).toEqual({ implementer: { failures: 1, toReview: 0 } });
+	expect(asked).toContain(`${PR.slice(0, -1)}12`);
+	const detail = await json(`/api/learning/L1?${p}`);
+	expect(detail.body).toMatchObject({
+		id: "L1",
+		status: "promoted",
+		targetUrl: `https://github.com/${REPO}/blob/HEAD/openfabriq/agents/implementer/agent.md`,
+		diffFrom: "pull request",
+		diff: { total: 1, files: [{ path: "x.md", add: 1, del: 0 }] },
+		failures: [
+			{ id: "run-check:check", summary: 'the check "test" failed (npm test)' },
+			{ id: "old:check" },
+		],
+	});
+	expect(await json(`/api/learning/L9?${p}`)).toEqual({
+		status: 404,
+		body: { error: "No such lesson." },
+	});
+	expect((await json(`/api/learning?${p}&period=1y`)).status).toBe(400);
 });

@@ -7,6 +7,7 @@ import { patchOf } from "./diff.js";
 import {
 	addWorktree,
 	clearReplacedObjects,
+	cloneGit,
 	excludeSandboxMounts,
 	fetchOrigin,
 	GH_AUTH,
@@ -68,6 +69,8 @@ export interface Workspace {
 	create(clone: string, dir: string, ref: string): Promise<void>;
 	/** origin's branches, up to date in the clone: the studio reads the wiki there. */
 	fetch(clone: string): Promise<void>;
+	/** A file at a commit the clone fetched (a sha, `<sha>^`, `origin/<branch>`); undefined when it is not there. */
+	show(clone: string, ref: string, path: string): Promise<string | undefined>;
 	remove(clone: string, dir: string): Promise<void>;
 	commitsAhead(clone: string, dir: string, base: string): Promise<number>;
 	/** The commits the run added since origin/base, up to `commit` (HEAD unless given). */
@@ -162,6 +165,13 @@ export interface Workspace {
 	): Promise<string>;
 	/** The files the agent's commits touched since origin/base: both sides of a rename. */
 	touched(clone: string, dir: string, base: string): Promise<string[]>;
+	/** A file where origin/base was at the start, and at HEAD; undefined where it does not exist. */
+	versions(
+		clone: string,
+		dir: string,
+		base: string,
+		path: string,
+	): Promise<{ start?: string; head?: string }>;
 	/**
 	 * Whether HEAD contains where origin/branch was when the run started: a conflict merged in.
 	 * With `at`, whether origin/at contained it at the start: the base was already in the pull request.
@@ -223,6 +233,9 @@ export function createWorkspace(): Workspace {
 	}
 
 	const self: Workspace = {
+		show(clone, ref, path) {
+			return cloneGit(clone, ["show", `${ref}:${path}`]).catch(() => undefined);
+		},
 		fetch(clone) {
 			return oneAtATime(clone, async () => {
 				// apply makes the clone: until then, there is nothing to fetch.
@@ -447,6 +460,21 @@ export function createWorkspace(): Workspace {
 						.filter(Boolean),
 				),
 			];
+		},
+		async versions(clone, dir, base, path) {
+			const show = (commit: string) =>
+				worktreeGit(clone, dir, ["show", `${commit}:${path}`]).then(
+					(text): string | undefined => text,
+					() => undefined,
+				);
+			const [start, head] = await Promise.all([
+				show(baseOf(dir, base)),
+				show("HEAD"),
+			]);
+			return {
+				...(start !== undefined ? { start } : {}),
+				...(head !== undefined ? { head } : {}),
+			};
 		},
 		async contains(clone, dir, branch, at) {
 			return worktreeGit(clone, dir, [

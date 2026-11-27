@@ -10,7 +10,7 @@ import {
 } from "@openfabriq/core";
 import type { runEnv } from "../agent/env.js";
 import { agentMcp } from "../agent/mcp.js";
-import type { AgentResult } from "../agent/port.js";
+import type { AgentResult, EngineTool } from "../agent/port.js";
 import type { QueuedRun } from "../engine/queue.js";
 import { errorText } from "../files.js";
 import { projectDir } from "../state/projects.js";
@@ -134,6 +134,8 @@ export interface AgentLaunch {
 	hide: (text: string) => string;
 	time: RunTime;
 	now: () => Date;
+	/** Tools the engine adds for this run, like learning's record_lessons. */
+	tools?: EngineTool[];
 }
 
 /**
@@ -295,7 +297,10 @@ export async function launchAgent(step: AgentLaunch): Promise<{
 				}
 			: {}),
 	});
-	const outputs = outputTools(automation, step.subject, checks.tools);
+	const outputs = outputTools(automation, step.subject, [
+		...checks.tools,
+		...(step.tools ?? []),
+	]);
 	const plugin = deps.workspace.plugin(
 		join(projectDir(repo), "factory"),
 		agent,

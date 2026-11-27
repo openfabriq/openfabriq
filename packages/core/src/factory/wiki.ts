@@ -1,7 +1,5 @@
-import type { Agent, Automation, Factory, Problem, Wiki } from "./types.js";
-
-/** The name of the wiki's agent and automation, reserved in every factory. */
-export const WIKI = "wiki";
+import { WIKI } from "./engine-names.js";
+import type { Agent, Automation, Factory, Wiki } from "./types.js";
 
 export const DEFAULT_WIKI: Wiki = { folder: "wiki", refresh: "manual" };
 
@@ -46,29 +44,6 @@ export function readWiki(
 		},
 		problems: [],
 	};
-}
-
-/** Agents and automations called like the wiki's: its name is reserved, even with the wiki off. */
-export function wikiNameClashes(layout: {
-	agentFiles: Map<string, string>;
-	automationFiles: Map<string, string>;
-}): Omit<Problem, "level">[] {
-	return (
-		[
-			["an agent", layout.agentFiles],
-			["an automation", layout.automationFiles],
-		] as const
-	).flatMap(([kind, names]) => {
-		const file = names.get(WIKI);
-		return file === undefined
-			? []
-			: [
-					{
-						file,
-						message: `${kind} cannot be called ${WIKI}: the engine's wiki uses that name. Rename it`,
-					},
-				];
-	});
 }
 
 /** The engine's own agent, which writes the wiki with the wiki skill. */

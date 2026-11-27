@@ -17,3 +17,5 @@ export type ProjectMetrics = ReturnType<typeof projectsMetrics>[number];
 export type Workflow = ReturnType<typeof workflowOf>;
 /** GET /api/wiki */
 export type WikiAnswer = Awaited<ReturnType<typeof wikiOf>>;
+/** GET /api/learning and GET /api/learning/:id, typed where they are built. */
+export type { LearningAnswer, LessonAnswer } from "./learning/learning.js";

@@ -60,7 +60,7 @@ export async function startDemo(): Promise<void> {
 			: Promise.resolve(answer(404, "This demo does not have this page."));
 	};
 
-	// The runs say "2 h ago" as they did when recorded, whenever the demo is opened.
+	// The runs say "2h ago" as they did when recorded, whenever the demo is opened.
 	const shift = Date.now() - recorded.recordedAt;
 	const RealDate = Date;
 	class DemoDate extends RealDate {

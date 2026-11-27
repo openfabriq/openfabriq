@@ -23,7 +23,7 @@ Before any task, read `CONTRIBUTING.md` and the documentation site's pages about
 ```
 packages/core/      openfabriq/ format: factory/ (loading, validation), plan/, cron, graph
 packages/runner/    local engine: engine/, github/, sources/ (relay.ts, then slack/, linear/, sentry/, webhook/), run/, agent/, workspace/, state/, chat/
-packages/studio/    local app: JSON server (src/, read-only except the protected chat routes and the sign-in, by feature) and Vite React app (app/src: shell/, lib/, components/, features/<page>/ with pure logic beside the components)
+packages/studio/    local app: JSON server (src/, read-only except the protected chat routes, the buttons that ask the engine for a run of the wiki or of learning, and the sign-in, by feature) and Vite React app (app/src: shell/, lib/, components/, features/<page>/ with pure logic beside the components)
 packages/cli/       openfabriq init | validate | doctor | plan | apply | start | status | run | connect | deploy | secret (src/commands/, connect/<service>.ts, deploy/<target>.ts); scripts/package.ts builds the npm package
 packages/relay/     Cloudflare Worker + Durable Object the user deploys: webhooks and OAuth for the engine; src/integrations/<name>/; self-hosted with workerd, Docker and Caddy
 packages/docs/      the documentation site, Fumadocs exported as static files, in English
@@ -39,7 +39,7 @@ docs/               the maintainers' notes: roadmap, architecture, ADRs, audits 
 ## Architecture
 
 - Hexagonal: `core` depends on neither GitHub, Claude, nor the disk. GitHub (`gh`), the agent engine (Agent SDK) and storage are adapters behind ports.
-- The engine knows no particular agent: agents, automations and limits are data read from `openfabriq/`. Exceptions, under a rule, are the native automations: the engine provides what every agent builds on (the project's context and knowledge: the wiki), and answers when someone addresses it (a maintainer's mention of @openfabriq on a pull request the factory opened, by the agent that opened it); it never acts on its own without a file that says so, and the rest of the work (review, rework, conflicts, triage, code, fixes) stays in the factory's agents.
+- The engine knows no particular agent: agents, automations and limits are data read from `openfabriq/`. Exceptions, under a rule, are the native automations: the engine provides what every agent builds on (the project's context and knowledge: the wiki), learns from the factory's failed work when `factory.yaml` turns learning on (an agent of the engine that proposes changes to skills, `agent.md` and `automation.md` by pull request only; once a person merges one, the engine applies that rule on its own), and answers when someone addresses it (a maintainer's mention of @openfabriq on a pull request the factory opened, by the agent that opened it); it never acts on its own without a file that says so, and the rest of the work (review, rework, conflicts, triage, code, fixes) stays in the factory's agents.
 - Pure functions wherever possible. I/O (files, `gh`, `git`, Agent SDK) stays at the edges.
 - One folder per integration: code for Slack, Linear, Sentry or webhooks goes in `relay/src/integrations/<name>/`, `runner/src/sources/<name>/` and `cli/src/commands/connect/<name>.ts`, never in a shared file. `CONTRIBUTING.md` lists the steps to add one.
 

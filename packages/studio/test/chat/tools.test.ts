@@ -57,6 +57,13 @@ it("gives the chat the numbers of the Overview page", async () => {
 		unknown: 0,
 	});
 	expect(metrics.cost.byOutcome.merged).toBe(1.5);
+	// Learning's four numbers, counted from the journal even with learning off.
+	expect(metrics.learning).toEqual({
+		failures: 0,
+		lessons: 0,
+		toReview: 0,
+		cameBack: 0,
+	});
 });
 
 it("gives the chat the board, each card in a few fields", async () => {

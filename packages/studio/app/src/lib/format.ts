@@ -14,13 +14,13 @@ export const dateTime = (iso: string) =>
 export const clock = (iso: string) =>
 	new Date(iso).toLocaleTimeString("en-GB", { hour12: false });
 
-/** "just now", "5 min ago", "3 h ago", "2 d ago", then the date. */
+/** "just now", "5m ago", "3h ago", "2d ago", then the date: the units of `duration`. */
 export function ago(iso: string, now = Date.now()): string {
 	const s = (now - new Date(iso).getTime()) / 1000;
 	if (s < 45) return "just now";
-	if (s < 3600) return `${Math.round(s / 60)} min ago`;
-	if (s < 86_400) return `${Math.round(s / 3600)} h ago`;
-	if (s < 7 * 86_400) return `${Math.round(s / 86_400)} d ago`;
+	if (s < 3600) return `${Math.round(s / 60)}m ago`;
+	if (s < 86_400) return `${Math.round(s / 3600)}h ago`;
+	if (s < 7 * 86_400) return `${Math.round(s / 86_400)}d ago`;
 	return dateTime(iso);
 }
 
@@ -249,3 +249,7 @@ export function markdownPreview(text: string): {
 		prose.length > 280 ? `${prose.slice(0, 279).trimEnd()}…` : prose;
 	return title ? { title, excerpt } : { excerpt };
 }
+
+/** "every Monday" → "Every Monday": a phrase that starts a line. */
+export const capitalized = (text: string) =>
+	text.charAt(0).toUpperCase() + text.slice(1);

@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { Agents } from "../features/agents/Agents.js";
 import { Board } from "../features/board/Board.js";
+import { Learning } from "../features/learning/Learning.js";
 import { Overview } from "../features/overview/Overview.js";
 import { Runs } from "../features/runs/Runs.js";
 import { Settings } from "../features/settings/Settings.js";
@@ -62,6 +63,8 @@ export function PageRouter({
 			return <Workflow project={project} area={param("area")} />;
 		case "settings":
 			return <Settings project={project} tab={param("tab")} />;
+		case "learning":
+			return <Learning project={project} lesson={path[1]} tab={param("tab")} />;
 		case "wiki":
 			return (
 				<Wiki project={project} page={param("page")} find={param("find")} />

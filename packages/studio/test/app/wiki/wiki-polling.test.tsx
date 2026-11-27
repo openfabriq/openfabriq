@@ -8,12 +8,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Wiki } from "../../../app/src/features/wiki/Wiki.js";
-import type { WikiRun } from "../../../app/src/features/wiki/wiki-view.js";
+import type { EngineRun } from "../../../app/src/features/wiki/wiki-view.js";
 import { WithQueries } from "../query.js";
 
 // How often the wiki page reads /api/wiki: every 10 s, every 3 s while a run waits or works.
 
-let run: WikiRun | null;
+let run: EngineRun | null;
 let reads = 0;
 const posts: string[] = [];
 

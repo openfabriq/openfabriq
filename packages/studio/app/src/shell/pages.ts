@@ -6,6 +6,7 @@ import {
 	ListChecks,
 	MessageSquare,
 	Settings2,
+	Sprout,
 	Workflow as WorkflowIcon,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ export const PAGES = [
 	{ id: "agents", label: "Agents", icon: Bot },
 	{ id: "workflow", label: "Workflow", icon: WorkflowIcon },
 	{ id: "wiki", label: "Wiki", icon: BookOpen },
+	{ id: "learning", label: "Learning", icon: Sprout },
 	{ id: "settings", label: "Factory settings", icon: Settings2 },
 	{ id: "chat", label: "Chat", icon: MessageSquare },
 ] as const;

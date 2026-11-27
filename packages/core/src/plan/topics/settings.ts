@@ -1,8 +1,9 @@
+import { learningText } from "../../factory/learning.js";
 import type { Factory, Limits } from "../../factory/types.js";
 import { wikiText } from "../../factory/wiki.js";
 import type { PlanTopic } from "./topic.js";
 
-// The factory's own settings: its name, repository and limits, the time zone, the signature, the wiki.
+// The factory's own settings: its name, repository and limits, the time zone, the signature, the wiki, learning.
 
 /** The fields that changed, as `field a → b`. */
 export function diffFields(pairs: [string, string, string][]): string[] {
@@ -97,4 +98,18 @@ export function wiki(before: Factory | undefined, after: Factory): PlanTopic {
 				wikiBefore === wikiAfter ? " (its pages changed)" : ""
 			}`;
 	return { security: [], settings: [line] };
+}
+
+/** Learning's agent is the engine's: plan says what it does in one line. */
+export function learning(
+	before: Factory | undefined,
+	after: Factory,
+): PlanTopic {
+	const was = before?.learning && learningText(before.learning);
+	const is = after.learning && learningText(after.learning);
+	if (was === is) return { security: [], settings: [] };
+	return {
+		security: [],
+		settings: [is ? `${was ? "~" : "+"} learning: ${is}` : "- learning: off"],
+	};
 }

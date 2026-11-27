@@ -21,13 +21,14 @@ export {
 	startable,
 } from "./engine/queue.js";
 export {
+	type EngineAutomation,
+	type EngineRun,
+	engineRun,
 	manualEvent,
 	type RunRequest,
+	requestEngineRun,
 	requestRun,
-	requestWikiRun,
 	takeRequests,
-	type WikiRun,
-	wikiRun,
 } from "./engine/requests.js";
 export * from "./exec.js";
 export * from "./files.js";
@@ -36,6 +37,25 @@ export * from "./github/gh.js";
 export * from "./github/github.js";
 export * from "./github/markers.js";
 export * from "./github/timeline.js";
+export {
+	diskEvidence,
+	lessonBlock,
+	projectFailures,
+} from "./learning/batch.js";
+export type { Failure, FailureKind } from "./learning/failures.js";
+export {
+	appliedAt,
+	awaitsImprovement,
+	cameBack,
+	failedRuns,
+	ignoredFailures,
+	type Lesson,
+	type LessonFailure,
+	type LessonStatus,
+	lessonAgents,
+	readLessons,
+	resolvedByPullRequest,
+} from "./learning/lessons.js";
 export * from "./run/execute.js";
 export * from "./run/harness.js";
 export type {

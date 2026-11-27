@@ -224,7 +224,7 @@ export const gh: GitHub = {
 
 	async subject(repository, number, isPullRequest) {
 		const fields = isPullRequest
-			? `${SUBJECT_FIELDS},reviews,headRefName,baseRefName,headRepositoryOwner,isCrossRepository,closingIssuesReferences,files,statusCheckRollup,headRefOid,changedFiles,mergeStateStatus`
+			? `${SUBJECT_FIELDS},reviews,headRefName,baseRefName,headRepositoryOwner,isCrossRepository,closingIssuesReferences,files,statusCheckRollup,headRefOid,changedFiles,mergeStateStatus,mergedAt,mergeCommit`
 			: SUBJECT_FIELDS;
 		const out = await run(repository, [
 			isPullRequest ? "pr" : "issue",

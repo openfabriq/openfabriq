@@ -1,4 +1,4 @@
 {
 	"title": "Deployment",
-	"pages": ["overview", "local", "docker", "coolify", "relay"]
+	"pages": ["overview", "local", "docker", "coolify", "relay", "backup"]
 }

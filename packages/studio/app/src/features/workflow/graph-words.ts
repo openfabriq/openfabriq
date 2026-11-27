@@ -3,7 +3,7 @@ import {
 	type WorkflowGraph,
 	type WorkflowNode,
 } from "@openfabriq/core";
-import { EVENT_SHORT, eventPhrase } from "../../lib/format.js";
+import { capitalized, EVENT_SHORT, eventPhrase } from "../../lib/format.js";
 
 // The workflow's boxes in words: what an event is, what an automation may write.
 
@@ -32,7 +32,7 @@ export const eventWords = (n: WorkflowNode) =>
 
 /** "An issue is labeled (ready-for-agent).": the event as a sentence. */
 export const eventSentence = (n: WorkflowNode) =>
-	`${eventPhrase(n.title).replace(/^./, (c) => c.toUpperCase())}${
+	`${capitalized(eventPhrase(n.title))}${
 		n.detail && n.detail !== "any label" ? ` (${n.detail})` : ""
 	}.`;
 

@@ -2,6 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	type Factory,
+	isEngineAgent,
+	LEARNING,
 	REVIEW_LABELS,
 	setupNetwork,
 	subjectOf,
@@ -12,11 +14,12 @@ import type { AgentLauncher } from "../agent/port.js";
 import type { QueuedRun } from "../engine/queue.js";
 import { errorText } from "../files.js";
 import type { GitHub } from "../github/github.js";
+import { prepareBatch } from "../learning/batch.js";
 import type { LinearAgent } from "../sources/linear/agent.js";
 import type { Sentry } from "../sources/sentry/client.js";
 import type { Slack } from "../sources/slack/client.js";
 import type { RunRecord } from "../state/journal.js";
-import { projectDir } from "../state/projects.js";
+import { projectDir, runDir } from "../state/projects.js";
 import { recordRefusals } from "../state/refusals.js";
 import type { RunJournal } from "../state/run-journal.js";
 import { withPatches } from "../workspace/diff.js";
@@ -82,6 +85,8 @@ export async function executeRun(
 
 /** Why a run that ended well wrote nothing: the agent proposed no output at all. */
 export const NO_OUTPUT = "the agent proposed no output";
+export const NOTHING_TO_LEARN =
+	"nothing to learn: no new failure, and no lesson waits for its improvement";
 export const NO_REWORK = "the review requested changes and the run pushed none";
 
 /** Where a run works: its folder in the project, the project's clone, and its own worktree. */
@@ -170,7 +175,7 @@ async function runToRecord(
 	if (source && !writer) return finish(record, "failed", notConnected(source));
 	let labeled = false;
 	const paths: RunPaths = {
-		runDir: join(projectDir(repo), "runs", run.id),
+		runDir: runDir(repo, run.id),
 		clone: join(projectDir(repo), "repo"),
 		worktree: join(projectDir(repo), "worktrees", run.id),
 	};
@@ -188,6 +193,12 @@ async function runToRecord(
 		record = titled(record, read);
 		const { ref, headRef } = read;
 		const data = await readLinked(run, factory, deps, read.data);
+		// Kept for learning: the failed checks' logs are read once, here.
+		if (data.failed_checks)
+			writeFileSync(
+				join(paths.runDir, "failed-checks.json"),
+				`${JSON.stringify(data.failed_checks)}\n`,
+			);
 		const gone = subjectGone(data);
 		if (gone) return finish(record, "skipped", gone);
 		deps.journal.append(record);
@@ -225,6 +236,21 @@ async function runToRecord(
 			);
 
 		await deps.workspace.create(paths.clone, paths.worktree, ref);
+		// Learning studies a batch the engine stages in its worktree: none, and nothing runs.
+		const isLearning = isEngineAgent(agent, LEARNING);
+		const learning = isLearning
+			? await prepareBatch({
+					repository: repo,
+					factory,
+					runs: deps.journal.read(repo),
+					github,
+					worktree: paths.worktree,
+					now,
+					...(deps.log ? { log: deps.log } : {}),
+				})
+			: undefined;
+		if (isLearning && !learning)
+			return finish(record, "skipped", NOTHING_TO_LEARN);
 		const env = runEnv(deps.identity, factory);
 		if (env.variables) record = { ...record, variables: env.variables };
 		const secrets = factorySecrets(factory, env.command);
@@ -277,6 +303,7 @@ async function runToRecord(
 				hide,
 				time,
 				now,
+				...(learning ? { tools: learning.tools } : {}),
 			});
 		// The agents are done: nothing they left running moves the commit that is judged and pushed.
 		const judged = await deps.workspace.settle(paths.clone, paths.worktree);
@@ -300,11 +327,12 @@ async function runToRecord(
 			: undefined;
 
 		// A failed run still gets its proposals checked and applied: what it wrote before failing is visible.
-		const reviewed = reviewProposals(
+		const asked = reviewProposals(
 			review ? withReview(proposals, review) : proposals,
 			automation,
 			subject,
 		);
+		const reviewed = learning ? learning.review(asked) : asked;
 		const checkFailure = await judgeCode({
 			run,
 			factory,
@@ -340,6 +368,7 @@ async function runToRecord(
 			},
 		});
 		record = { ...record, outputs: [...applied, ...refused] };
+		learning?.finish(record.outputs, run.id);
 		// Journaled before the labels and the merge that follow: a stop in between never writes them again.
 		deps.journal.append(record);
 		const pushed =

@@ -7,6 +7,7 @@ import {
 } from "@openfabriq/core";
 import { errorText, readJsonIfExists } from "../files.js";
 import { type Cursor, pollGitHub } from "../github/poll.js";
+import { applyMergedRules } from "../learning/apply.js";
 import type { RunDeps } from "../run/execute.js";
 import { type Relay, usesRelay } from "../sources/relay.js";
 import { sentryWatches } from "../sources/sentry/events.js";
@@ -42,6 +43,9 @@ export interface EngineDeps extends Omit<RunDeps, "journal"> {
 	relay?: Relay;
 }
 
+/** Polls in a row that may look again at learning's merged rules when GitHub or the clone does not answer. */
+const LOOKS_BEFORE_WAITING = 3;
+
 export function startEngine(given: EngineDeps) {
 	const deps = { ...given, journal: given.journal ?? diskJournal };
 	const now = deps.now ?? (() => new Date());
@@ -52,6 +56,20 @@ export function startEngine(given: EngineDeps) {
 	let lastMinute = "";
 	let timer: NodeJS.Timeout | undefined;
 	let ticking = false;
+	/** The projects whose merged rules of learning wait for a look, and those being looked at. */
+	const rulesToApply = new Set<string>();
+	const applyingRules = new Set<string>();
+	/** How many looks in a row GitHub or the clone did not answer: after a few, the next merge. */
+	const failedLooks = new Map<string, number>();
+	const lookAgain = (repo: string) => {
+		const looks = (failedLooks.get(repo) ?? 0) + 1;
+		failedLooks.set(repo, looks);
+		if (looks < LOOKS_BEFORE_WAITING) rulesToApply.add(repo);
+		else
+			deps.log(
+				`${repo}: learning's merged rules could not be read ${looks} times in a row: looked at again after the next merge`,
+			);
+	};
 	let stopped = false;
 	let lastSentryWatches = "";
 	const warned = new Set<string>();
@@ -124,15 +142,18 @@ export function startEngine(given: EngineDeps) {
 		factories.set(repo, { factory, defaultBranch });
 		// The clone fetches for runs; the studio reads the wiki there too, so it follows the
 		// default branch at start and after each merge, the engine's own included.
+		const clone = join(projectDir(repo), "repo");
 		const fetchClone = () =>
-			void deps.workspace
-				.fetch(join(projectDir(repo), "repo"))
-				.catch((error) =>
+			deps.workspace.fetch(clone).then(
+				() => true,
+				(error) => {
 					deps.log(
 						`${repo}: could not fetch the default branch: ${errorText(error)}`,
-					),
-				);
-		if (first && factory.wiki) fetchClone();
+					);
+					return false;
+				},
+			);
+		if (first && factory.wiki) void fetchClone();
 		const polled = await pollGitHub(repo, factory, defaultBranch, {
 			github: deps.github,
 			now,
@@ -146,7 +167,36 @@ export function startEngine(given: EngineDeps) {
 			);
 		for (const event of polled.events) queueFor(repo, factory, event);
 		writeCursor(cursorPath(repo), polled.cursor);
-		if (polled.headMoved && factory.wiki) fetchClone();
+		// After a merge, the wiki reads the default branch in the clone. Learning's merged rules apply
+		// from it too, each on its own: one look at a time per project, looked at again until GitHub
+		// and the clone answered.
+		if (polled.headMoved && factory.learning) {
+			rulesToApply.add(repo);
+			failedLooks.delete(repo);
+		}
+		if (rulesToApply.has(repo) && !applyingRules.has(repo)) {
+			rulesToApply.delete(repo);
+			applyingRules.add(repo);
+			void fetchClone()
+				.then(async (fetched) => {
+					const { unread } = fetched
+						? await applyMergedRules(repo, {
+								github: deps.github,
+								readAt: (commit, path) =>
+									deps.workspace.show(clone, commit, path),
+								log: deps.log,
+								now,
+							})
+						: { unread: true };
+					if (unread) lookAgain(repo);
+					else failedLooks.delete(repo);
+				})
+				.catch((error: unknown) => {
+					deps.log(`${repo}: learning's rules: ${errorText(error)}`);
+					lookAgain(repo);
+				})
+				.finally(() => applyingRules.delete(repo));
+		} else if (polled.headMoved && factory.wiki) void fetchClone();
 	}
 
 	async function tick() {

@@ -28,13 +28,13 @@ It holds everything the engine knows:
 | Path in the folder | Contents |
 | --- | --- |
 | `projects/<owner>/<repo>/factory/` | The applied factory: the copy made by `openfabriq apply`, the one that runs |
-| `projects/<owner>/<repo>/` | The engine's clone of the repository, the queue, the runs and their transcripts, and the chat history |
+| `projects/<owner>/<repo>/` | The engine's clone of the repository, the queue, the runs and their transcripts, the chat history, and learning's lessons |
 | `secrets.json` | The tokens saved by `openfabriq connect`, and the GitHub App's key (mode `0600`) |
 | `secrets/<owner>/<repo>.env` | The secret values saved by `openfabriq secret set` |
 
 `plan`, `apply`, `start`, `status`, `run`, `connect` and `secret set` must all see the same `OPENFABRIQ_HOME`: a command run without it reads and writes `~/.openfabriq` instead.
 
-To make the engine forget a project, stop `start` and delete `projects/<owner>/<repo>/`. Its secret values stay in `secrets/` until you delete them.
+What to save, and what rebuilds itself: [Back up the engine](/deployment/backup/). To make the engine forget a project, stop `start` and delete `projects/<owner>/<repo>/`. Its secret values stay in `secrets/` until you delete them.
 
 ## Service tokens
 

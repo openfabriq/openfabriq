@@ -26,6 +26,7 @@ import {
 	saveQueue,
 	writeApplied,
 } from "../../src/index.js";
+import { readLessons, saveLessons } from "../../src/learning/lessons.js";
 import type { Workspace } from "../../src/workspace/workspace.js";
 
 const ROOT = join(import.meta.dirname, "../../../..");
@@ -97,8 +98,10 @@ const workspace: Workspace = {
 	run: async () => ({ ok: true, output: "" }),
 	changed: async () => ({ uncommitted: false, ahead: 0 }),
 	touched: async () => [],
+	versions: async () => ({}),
 	commitsSince: async () => [],
 	fetch: async () => {},
+	show: async () => undefined,
 	contains: async () => true,
 	snapshot: async () => async () => {},
 	conflictMarkers: async () => [],
@@ -871,6 +874,142 @@ it("keeps the clone on the default branch for the studio's wiki: at start and af
 	clock = new Date(T0.getTime() + 240_000);
 	await quiet.tick();
 	expect(off).toEqual([]);
+});
+
+it("applies a rule of learning on its own once its pull request is merged, as its merge commit has it, and looks again a few times until GitHub answers", async () => {
+	const files = sdlc({
+		"factory.yaml": `${sdlc()["factory.yaml"]}learning: true\n`,
+	});
+	writeApplied(REPO, files);
+	const AGENT = "agents/implementer/agent.md";
+	const RULE = "Run the tests before you open the pull request.";
+	saveLessons(REPO, [
+		{
+			id: "L1",
+			cause: "the tests are not run",
+			rule: RULE,
+			target: `openfabriq/${AGENT}`,
+			failures: [],
+			status: "proposed",
+			improvement: {
+				url: "https://github.com/acme/task-app/pull/66",
+				number: 66,
+				run: "learning-1",
+				at: T0.toISOString(),
+			},
+			createdAt: T0.toISOString(),
+			updatedAt: T0.toISOString(),
+		},
+	]);
+	let head = "main1";
+	let githubDown = true;
+	const shown: string[] = [];
+	const e = engine(
+		0,
+		neverEnds,
+		{
+			branchHead: async () => head,
+			subject: async (_repo, number) => {
+				if (githubDown) throw new Error("GitHub is down");
+				return number === 66
+					? {
+							state: "MERGED",
+							mergedAt: "2026-11-02T10:01:00Z",
+							mergeCommit: { oid: "c0ffee" },
+						}
+					: { number };
+			},
+		},
+		{
+			workspace: {
+				...workspace,
+				// The file just before the merge, as applied, and at the merge commit, with the rule.
+				show: async (_clone, ref, path) => {
+					shown.push(`${ref}:${path}`);
+					if (path !== `openfabriq/${AGENT}`) return undefined;
+					return ref === "c0ffee^"
+						? files[AGENT]
+						: `${files[AGENT]?.trimEnd()}\n\n${RULE}\n`;
+				},
+			},
+		},
+	);
+	await e.tick();
+	head = "main2"; // the merge of the rule's pull request
+	clock = new Date(T0.getTime() + 120_000);
+	await e.tick();
+	await settle();
+	// GitHub did not answer: nothing applied, and the next poll looks again without a new merge.
+	expect(readLessons(REPO).map((l) => l.status)).toEqual(["proposed"]);
+	githubDown = false;
+	clock = new Date(T0.getTime() + 180_000);
+	await e.tick();
+	const line = `${REPO}: applied learning's rule L1 (#66) to openfabriq/${AGENT}`;
+	for (let i = 0; i < 50 && !logs.includes(line); i++) await settle();
+	expect(logs.filter((l) => l === line)).toHaveLength(1);
+	expect(shown).toEqual([
+		`c0ffee^:openfabriq/${AGENT}`,
+		`c0ffee:openfabriq/${AGENT}`,
+	]);
+	expect(readFactoryFolder(join(projectDir(REPO), "factory"))[AGENT]).toContain(
+		RULE,
+	);
+	expect(readLessons(REPO).map((l) => l.status)).toEqual(["promoted"]);
+	// Settled: later polls look no more.
+	clock = new Date(T0.getTime() + 240_000);
+	await e.tick();
+	await settle();
+	expect(logs.filter((l) => l === line)).toHaveLength(1);
+});
+
+it("stops looking at learning's merged rules after a few failed looks, until the next merge", async () => {
+	writeApplied(
+		REPO,
+		sdlc({ "factory.yaml": `${sdlc()["factory.yaml"]}learning: true\n` }),
+	);
+	saveLessons(REPO, [
+		{
+			id: "L1",
+			cause: "c",
+			rule: "r",
+			target: "openfabriq/agents/implementer/agent.md",
+			failures: [],
+			status: "proposed",
+			improvement: {
+				url: "https://github.com/acme/task-app/pull/66",
+				number: 66,
+				run: "learning-1",
+				at: T0.toISOString(),
+			},
+			createdAt: T0.toISOString(),
+			updatedAt: T0.toISOString(),
+		},
+	]);
+	let head = "main1";
+	let asked = 0;
+	const e = engine(0, neverEnds, {
+		branchHead: async () => head,
+		subject: async () => {
+			asked += 1;
+			throw new Error("GitHub cannot read this pull request");
+		},
+	});
+	await e.tick();
+	head = "main2";
+	for (let minute = 2; minute < 10; minute++) {
+		clock = new Date(T0.getTime() + minute * 60_000);
+		await e.tick();
+		await settle();
+	}
+	expect(asked).toBe(3);
+	expect(logs).toContain(
+		`${REPO}: learning's merged rules could not be read 3 times in a row: looked at again after the next merge`,
+	);
+	head = "main3"; // the next merge looks again
+	clock = new Date(T0.getTime() + 11 * 60_000);
+	await e.tick();
+	await settle();
+	expect(asked).toBe(4);
 });
 
 it("says why the applied factory does not load", async () => {

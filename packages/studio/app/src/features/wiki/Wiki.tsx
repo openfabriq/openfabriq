@@ -1,20 +1,21 @@
 import { BookOpen, ExternalLink } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { ConfirmRun, RunButton } from "../../components/engine-run.js";
 import { Empty, ErrorNote, PageSkeleton } from "../../components/feedback.js";
 import { PageHeader } from "../../components/page-layout.js";
 import { useApi } from "../../hooks/use-api.js";
+import { useEngineRun } from "../../hooks/use-engine-run.js";
 import { query } from "../../lib/api.js";
+import { isBusy } from "../../lib/engine-run.js";
 import { wikiHref } from "../../lib/route.js";
 import type { WikiAnswer } from "../../lib/types.js";
-import { askForWiki } from "./ask-for-wiki.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { Contents, Neighbors, PageNav, Sources } from "./WikiNav.js";
-import { ConfirmRun, RefreshButton, RunNotice } from "./WikiRun.js";
+import { RunNotice } from "./WikiRun.js";
 import { WikiPageText } from "./WikiText.js";
 import { InlineCode, PROSE_LINK } from "./wiki-ui.js";
 import {
 	githubUrl,
-	isBusy,
 	neighbors,
 	pageGroups,
 	pageTitle,
@@ -35,25 +36,16 @@ export function Wiki({
 	page?: string | undefined;
 	find?: string | undefined;
 }) {
-	const [justAsked, setJustAsked] = useState(false);
-	const [failure, setFailure] = useState<string>();
+	const { justAsked, failure, confirming, setConfirming, ask } = useEngineRun(
+		"/api/wiki/refresh",
+		project,
+	);
 	const { data, error, refetch } = useApi<WikiAnswer>(
 		project ? `/api/wiki${query({ project })}` : undefined,
 		// Read every 3 s while a run waits or works, so the page follows it.
 		(latest) => (justAsked || isBusy(latest?.run) ? 3000 : 10_000),
 	);
 	const busy = justAsked || isBusy(data?.run);
-	const ask = async () => {
-		if (!project) return;
-		setFailure(undefined);
-		setJustAsked(true);
-		const refused = await askForWiki(project);
-		if (refused) setFailure(refused);
-		// The server knows of the request once it answered: its next read holds the button from then.
-		else await refetch();
-		setJustAsked(false);
-	};
-	const [confirming, setConfirming] = useState(false);
 	// The search opens over the page, with ⌘K (Ctrl+K) like most tools.
 	const [searching, setSearching] = useState(false);
 	useEffect(() => {
@@ -115,21 +107,24 @@ export function Wiki({
 	const notGenerated = !view.pages.includes("index.md");
 	const refreshControls = (
 		<>
-			<RefreshButton
+			<RunButton
 				label={notGenerated ? "Generate the wiki" : "Update the wiki"}
+				busyLabel="Writing the wiki…"
 				busy={busy}
 				onClick={() => setConfirming(true)}
 			/>
 			<ConfirmRun
-				first={notGenerated}
 				open={confirming}
-				folder={view.folder}
+				title={notGenerated ? "Generate the wiki?" : "Update the wiki?"}
+				text={
+					notGenerated
+						? `An agent reads the whole repository, writes the pages in ${view.folder}/ and opens a pull request for you to review.`
+						: "An agent rewrites the pages that the latest commits made out of date, then opens a pull request for you to review."
+				}
+				confirm={notGenerated ? "Generate" : "Update"}
 				usdPerRun={data.usdPerRun}
 				onCancel={() => setConfirming(false)}
-				onConfirm={() => {
-					setConfirming(false);
-					void ask();
-				}}
+				onConfirm={() => void ask(refetch)}
 			/>
 		</>
 	);

@@ -29,6 +29,7 @@ const starts = [
 	"agents",
 	"workflow",
 	"wiki",
+	"learning",
 	"chat",
 	"settings",
 ].map((page) => `#/${page}${page.includes("?") ? "&" : "?"}${p}`);

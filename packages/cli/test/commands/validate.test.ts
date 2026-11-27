@@ -22,7 +22,10 @@ it("lists every problem and fails", () => {
 	expect(result.output).toContain(
 		"! agents/orphan/agent.md: no automation uses this agent",
 	);
-	expect(result.output).toMatch(/15 errors in .*many-problems\/openfabriq$/);
+	expect(result.output).toContain(
+		"✗ factory.yaml: learning.schedule: needs 5 fields (minute hour day month weekday), got 2",
+	);
+	expect(result.output).toMatch(/16 errors in .*many-problems\/openfabriq$/);
 });
 
 it("explains when there is no factory", () => {

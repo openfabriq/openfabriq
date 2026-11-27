@@ -27,12 +27,12 @@ import { threadsDir } from "./chat/threads.js";
 import { appChatTools } from "./chat/tools.js";
 import { connectorRoutes } from "./connector/routes.js";
 import { jsonAnswer, refuse, send, textAnswer } from "./http/answer.js";
+import { askEngineRun } from "./http/engine-run.js";
 import { staticFile } from "./http/static-files.js";
 import { answerRead, findWrite, readRoutes, writeRoutes } from "./routes.js";
 import { askSubject } from "./subjects/ask-subject.js";
 import { cachedStates } from "./subjects/cached-states.js";
 import type { AskSubject } from "./subjects/subject-state.js";
-import { refreshWiki } from "./wiki/wiki.js";
 
 /** A new token for the studio's address, in a file only this user reads: `start` prints it, the Vite dev server reads it. */
 function writeStudioToken(): string {
@@ -58,6 +58,11 @@ export function startStudio(
 		/** Asks whether a subject is still open; GitHub, Linear and Sentry by default. */
 		subjectState?: AskSubject;
 		access?: StudioAccess;
+		/** A pull request's diff; gh by default. */
+		pullDiff?: (
+			repository: string,
+			number: number,
+		) => Promise<string | undefined>;
 		/** Tells the engine a manual run was asked, so it takes it now rather than at its next tick. */
 		wake?: () => void;
 	} = {},
@@ -83,7 +88,7 @@ export function startStudio(
 		github: github !== undefined,
 	};
 	const subjectStates = cachedStates(deps.subjectState ?? askSubject());
-	const reads = readRoutes(subjectStates);
+	const reads = readRoutes(subjectStates, deps.pullDiff);
 	// The studio's sign-in and the connector's take the same password: one count of failures.
 	const failures = failedLogins();
 	// On the studio's https address only: Claude reaches it from Anthropic's cloud.
@@ -101,6 +106,11 @@ export function startStudio(
 					grantsPath: join(home(), "mcp-grants.json"),
 				})
 			: {};
+	const engineRunDeps = {
+		projects,
+		...(deps.wake ? { wake: deps.wake } : {}),
+		...(studioUrl ? { url: studioUrl } : {}),
+	};
 	const writes = writeRoutes({
 		login: password
 			? loginHandler({
@@ -124,12 +134,9 @@ export function startStudio(
 			threadsDir,
 			...(studioUrl ? { url: studioUrl } : {}),
 		}),
-		refreshWiki: (req, res) =>
-			refreshWiki(req, res, {
-				projects,
-				...(deps.wake ? { wake: deps.wake } : {}),
-				...(studioUrl ? { url: studioUrl } : {}),
-			}),
+		refreshWiki: (req, res) => askEngineRun("wiki", req, res, engineRunDeps),
+		runLearning: (req, res) =>
+			askEngineRun("learning", req, res, engineRunDeps),
 	});
 
 	const signOut =

@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+	appendFileSync,
 	chmodSync,
 	existsSync,
 	mkdirSync,
 	readdirSync,
+	readFileSync,
 	renameSync,
 	rmSync,
 	writeFileSync,
@@ -17,9 +19,11 @@ import {
 	loadFactory,
 	type Problem,
 	withAnswerMentions,
+	withLearning,
 	withWiki,
 } from "@openfabriq/core";
 import {
+	jsonLines,
 	readFactoryFolder,
 	readJsonIfExists,
 	writeFileAtomic,
@@ -51,6 +55,20 @@ export function projectDir(repository: string): string {
 	return join(home(), "projects", ...repository.split("/"));
 }
 
+/** The folder of what a run kept: its transcript, commands, reviews, changed files. */
+export const runDir = (repository: string, id: string) =>
+	join(projectDir(repository), "runs", id);
+
+/** A file a run kept, or undefined when it kept none. */
+export function readRunFile(
+	repository: string,
+	id: string,
+	name: string,
+): string | undefined {
+	const path = join(runDir(repository, id), name);
+	return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+}
+
 function readState(repository: string): ProjectState | undefined {
 	return readJsonIfExists<ProjectState>(
 		join(projectDir(repository), "state.json"),
@@ -64,7 +82,7 @@ export function readAppliedFiles(repository: string): FactoryFiles | undefined {
 }
 
 /**
- * The applied factory's files, the factory with the engine's wiki agent when its wiki is on and its
+ * The applied factory's files, the factory with the engine's wiki and learning agents when they are on and its
  * answer to mentions on the agents' pull requests, and
  * the problems found loading it; undefined when none is applied.
  */
@@ -75,7 +93,11 @@ export function loadApplied(
 	if (!files) return undefined;
 	const { factory, problems } = loadFactory(files);
 	return factory
-		? { files, factory: withAnswerMentions(withWiki(factory)), problems }
+		? {
+				files,
+				factory: withAnswerMentions(withLearning(withWiki(factory))),
+				problems,
+			}
 		: { files, problems };
 }
 
@@ -101,10 +123,19 @@ export function fingerprint(files: FactoryFiles): string {
 	return hash.digest("hex").slice(0, 12);
 }
 
+/** An apply of the factory: all of it by a person, or the rules of learning the engine applied on their own. */
+export interface Apply {
+	at: string;
+	/** The lessons whose rule the engine applied alone; none for a person's apply. */
+	lessons?: string[];
+}
+
 export function writeApplied(
 	repository: string,
 	files: FactoryFiles,
 	now = new Date(),
+	/** The engine applies learning's merged rules on their own: which lessons. */
+	lessons?: string[],
 ): ProjectState {
 	const dir = projectDir(repository);
 	const staging = join(dir, "factory.new");
@@ -127,7 +158,23 @@ export function writeApplied(
 		join(dir, "state.json"),
 		`${JSON.stringify(state, null, 2)}\n`,
 	);
+	// Every apply, kept: learning tells from it when a merged improvement started to run.
+	appendFileSync(
+		join(dir, "applies.jsonl"),
+		`${JSON.stringify({ at: state.appliedAt, fingerprint: state.fingerprint, ...(lessons ? { lessons } : {}) })}\n`,
+	);
 	return state;
+}
+
+/** When the factory of a project was applied, oldest first: since the engine keeps them. */
+export function readApplies(repository: string): Apply[] {
+	const file = join(projectDir(repository), "applies.jsonl");
+	return existsSync(file)
+		? jsonLines<Apply>(readFileSync(file, "utf8")).map((a) => ({
+				at: a.at,
+				...(a.lessons ? { lessons: a.lessons } : {}),
+			}))
+		: [];
 }
 
 export function listProjects(): ProjectState[] {
