@@ -4,6 +4,10 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- Learning: set `learning: true` in `factory.yaml` and the factory reads its failed work each week, then proposes by pull request the rules that would have avoided repeated mistakes, in skills, `agent.md` and `automation.md`. Nothing changes until a person merges. The studio has a new Learning page.
+
 ### Fixed
 
 - The studio shows a duration under half a second as "<1s" instead of "0s", so a run's log no longer reads as if nothing happened at each step.
