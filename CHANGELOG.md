@@ -4,6 +4,14 @@ All notable changes to openfabriq are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- Learning: set `learning: true` in `factory.yaml` and the factory studies its failed work each week (Monday 08:00, or your own `schedule`). It proposes a rule by pull request, as a sentence in a skill, an `agent.md` or an `automation.md`. Once you merge it, the engine applies that rule on its own. `openfabriq run learning` runs a batch now, and the studio has a Learning page, a page per lesson and a "Run learning now" button.
+
+### Changed
+
+- The studio shows relative times as `5m ago`, `3h ago` and `2d ago`.
+
 ### Fixed
 
 - The studio shows a duration under half a second as "<1s" instead of "0s", so a run's log no longer reads as if nothing happened at each step.
