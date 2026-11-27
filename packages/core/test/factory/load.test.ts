@@ -1174,6 +1174,12 @@ describe("integrations", () => {
 			'factory.yaml: integrations.linear: Unrecognized key: "teams"',
 		]);
 	});
+
+	it("suggests the closest key for a typo under limits", () => {
+		expect(messages(withFactory("limits:\n  usd_per_runs: 3\n"))).toEqual([
+			'factory.yaml: limits: unknown key "usd_per_runs". Did you mean "usd_per_run"?',
+		]);
+	});
 });
 
 describe("scripts", () => {

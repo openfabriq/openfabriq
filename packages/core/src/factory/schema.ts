@@ -57,12 +57,29 @@ export const FactoryShape = {
 	maintainers: z.array(z.string().min(1)).min(1),
 	model: z.string().min(1).default("sonnet"),
 	limits: z
-		.strictObject({
-			usd_per_run: z.number().positive().default(5),
-			usd_per_day: z.number().positive().default(30),
-			minutes_per_run: z.number().positive().default(45),
-			review_rounds: z.int().positive().default(3),
-		})
+		.strictObject(
+			{
+				usd_per_run: z.number().positive().default(5),
+				usd_per_day: z.number().positive().default(30),
+				minutes_per_run: z.number().positive().default(45),
+				review_rounds: z.int().positive().default(3),
+			},
+			{
+				error: (issue) =>
+					issue.code === "unrecognized_keys"
+						? issue.keys
+								.map((key) =>
+									unknownWord("key", key, [
+										"usd_per_run",
+										"usd_per_day",
+										"minutes_per_run",
+										"review_rounds",
+									]),
+								)
+								.join("; ")
+						: undefined,
+			},
+		)
 		.prefault({}),
 	// One line or a list of lines, always a list once read.
 	setup: z
